@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 from typing import Optional
 import uuid
 
@@ -65,38 +66,41 @@ async def ingest_and_parse_document(
     max_v = (await db.execute(stmt_v)).scalar() or 0
     next_v = max_v + 1
 
+    # Load candidate identity name for name-redaction if present
+    candidate_name = None
+    if doc.application.candidate_id:
+        from app.db.models.candidate import CandidateIdentity
+        stmt_ci = select(CandidateIdentity.name).where(
+            CandidateIdentity.candidate_id == doc.application.candidate_id
+        )
+        candidate_name = (await db.execute(stmt_ci)).scalar_one_or_none()
+
+    from app.services.sanitizer import build_source_spans_from_canonical, sanitize_text
+    sanitized_text, redactions, s_flags = sanitize_text(parse_result.canonical_text, candidate_name=candidate_name)
+    sanitized_sha256 = hashlib.sha256(sanitized_text.encode("utf-8")).hexdigest()
+
+    combined_flags = {
+        **(parse_result.quality_report or {}),
+        **s_flags,
+    }
+
     sanitized = SanitizedVersion(
         id=uuid.uuid4(),
         application_id=doc.application_id,
         document_id=doc.id,
         version_no=next_v,
         status=SanitizedVersionStatus.DRAFT,
-        canonical_text=parse_result.canonical_text,
-        sha256=parse_result.sha256,
-        quality_flags=parse_result.quality_report,
+        canonical_text=sanitized_text,
+        sha256=sanitized_sha256,
+        quality_flags=combined_flags,
         created_at=datetime.now(timezone.utc),
     )
     db.add(sanitized)
     await db.flush()
 
-    # Bulk insert registered spans
-    span_models = []
-    for s in parse_result.spans:
-        span_models.append(
-            SourceSpan(
-                span_id=s.span_id,
-                full_hash=s.full_hash,
-                sanitized_version_id=sanitized.id,
-                start_cp=s.start_cp,
-                end_cp=s.end_cp,
-                page_number=s.page_number,
-                section_label=s.section_label,
-                language=s.language,
-                text=s.text,
-                created_at=datetime.now(timezone.utc),
-            )
-        )
-    db.add_all(span_models)
+    # Bulk insert registered spans on the sanitized canonical text
+    spans = build_source_spans_from_canonical(sanitized.id, sanitized_text)
+    db.add_all(spans)
 
     # Point application to current sanitized version
     doc.application.current_sanitized_version_id = sanitized.id
