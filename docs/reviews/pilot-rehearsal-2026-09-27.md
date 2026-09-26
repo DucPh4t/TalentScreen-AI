@@ -46,7 +46,7 @@ To create a real-shadow batch, collect actual applications for one approved vaca
 | G1 | Pending | User-supplied key, live synthetic capability probe, account billing/limits, signed current rate card and cap. |
 | G2 | Pending HR/IT | Dated approval of actual JD, rubric anchors, weights, threshold and ownership. |
 | G3 | Pending | Representative real vi/en/mixed CV sanitization, raw access and egress audit. |
-| G4 | Partial | All 126 backend tests passed locally on migrated, isolated PostgreSQL/pgvector on 2026-09-27; this branch still needs clean-checkout CI and technical review. |
+| G4 | Partial | All 126 backend tests passed locally on migrated, isolated PostgreSQL/pgvector on 2026-09-27; [clean-checkout CI passed for code commit `dbb4d2e`](https://github.com/DucPh4t/TalentScreen-AI/actions/runs/36258196547). Technical review remains. |
 | G5 | Pending | Two independent human ratings, frozen evaluation set, recorded AI predictions, disagreement/error and language analysis, actual real-shadow cases. Synthetic rehearsal does not count. |
 | G6 | Partial | Basic encrypted backup/restore drill passed on synthetic DB/blob markers. Need deletion-after-backup zombie drill, rollback, load/SLO measurements, cost report, and operator sign-off. |
 | G7 | Pending HR | Backend-recorded sandbox walkthrough completion and HR UAT signature. |

@@ -47,7 +47,7 @@ Before moving from Sandbox $\rightarrow$ Real Shadow $\rightarrow$ Assisted Pilo
 | **G1** | Permissions & Config | DeepSeek permission, valid key, live capability probe, current rate card and budget cap | Merely having API key | **PENDING_EVIDENCE** |
 | **G2** | Business Policy | Dated HR Owner & IT approval of JD, six rubric criteria, weights and thresholds | Seed rubric only | **PENDING_HR_IT** |
 | **G3** | Privacy & Data | Sanitization review on representative vi/en/mixed CVs, raw grant and egress audit | Unit tests alone | **PENDING_EVIDENCE** |
-| **G4** | Technical Invariants | Clean-checkout CI and local test reports, including concurrency and recovery | Commit message claiming tests pass | **PARTIAL: 126 LOCAL TESTS PASS; NEW BRANCH CI/TECHNICAL REVIEW PENDING** |
+| **G4** | Technical Invariants | Clean-checkout CI and local test reports, including concurrency and recovery | Commit message claiming tests pass | **PARTIAL: 126 LOCAL TESTS + BRANCH CI PASS; TECHNICAL REVIEW PENDING** |
 | **G5** | Evaluation Quality | Independent HR labels, recorded AI predictions, frozen holdout of 30 families and real-shadow report. Draft targets for HR/IT approval: conditional MAE ≤0.75/4, human-assessable coverage ≥85%, linear weighted kappa ≥0.60, with error audit | Synthetic scenario expectations or self-comparison | **PENDING_DATA** |
 | **G6** | Operations | Measured load/SLO and cost report, dated restore/delete/rollback drill artifacts | Runbook text alone | **PARTIAL: SYNTHETIC BACKUP/RESTORE DRILL PASS; DELETE/ROLLBACK/LOAD PENDING** |
 | **G7** | User Training | Backend-recorded sandbox completion and HR UAT sign-off | Offline local state | **PENDING_HR** |
