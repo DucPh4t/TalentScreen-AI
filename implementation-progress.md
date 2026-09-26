@@ -14,8 +14,8 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
 | **B03** | Requisition và JD version | P0 | **COMPLETED** | Lifecycle, optimistic locking (409), JD immutability & egress approval, 28 tests pass |
 | **B04** | Rubric seed, editor, approval và policy | P0 | **COMPLETED** | Seed 6 criteria, sum=100, anchors 0..4, anti-bias policy, immutability, 32 tests pass |
 | **B05** | Intake upload và private storage | P0 | **COMPLETED** | Storage manager, path traversal guards, MIME/magic checks, idempotency, 38 tests pass |
-| **B06** | Parse PDF, normalization và provenance | P0 | *READY* | Sẵn sàng triển khai PDF Parser & Source Span Registry |
-| **B07** | Durable PostgreSQL worker | P0 | *PENDING* | Phụ thuộc B01, B05 |
+| **B06** | Parse PDF, normalization và provenance | P0 | **COMPLETED** | PDF/DOCX parser, NFC/LF normalization, Source Span Registry, 43 tests pass |
+| **B07** | Durable PostgreSQL worker | P0 | *READY* | Sẵn sàng triển khai PostgreSQL Queue Worker & Fencing |
 | **B08** | Sanitization, HR approval và source viewer | P0 | *PENDING* | Phụ thuộc B06, B07 |
 | **B09** | DeepSeek adapter, capabilities và cost ledger | P0 | *PENDING* | Phụ thuộc B07, B08 |
 | **B10** | Full-text assessment baseline & output validation | P0 | *PENDING* | Phụ thuộc B04, B08, B09 |
@@ -190,3 +190,30 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
   * `pytest services/backend/tests`: **38/38 tests PASS (100%)** trong 6.45s.
   * Next.js build: PASS.
 * **Bước tiếp theo:** B06 — Parse PDF, normalization và provenance (Bộ bóc tách text chuẩn hóa Unicode NFC/LF, trích xuất metadata trang, đăng ký Source Span Registry và kiểm tra chất lượng trích xuất).
+
+### B06 — Parse PDF, normalization và provenance
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `app/services/parser.py`: Bộ bóc tách đa định dạng (`parse_pdf_bytes` bằng `pypdf`, `parse_docx_bytes` bằng `python-docx`, `parse_document_content`).
+    * Chuẩn hóa văn bản `normalize_to_nfc_lf`: Khử ký tự điều khiển lạ, thống nhất xuống dòng LF (`\n`), chuyển đổi triệt để dạng phân tách (NFD) sang dạng tổ hợp chuẩn Unicode NFC.
+    * Bóc tách Source Spans (`build_spans_from_pages`): Chia văn bản thành các khối đoạn văn/câu có ý nghĩa, lưu lại số trang gốc (`page_number`), tự động nhận diện tiêu đề mục tiếng Việt (`section_label` như "Kinh nghiệm làm việc", "Dự án", "Kỹ năng chuyên môn", "Học vấn"), tính toán mã hash SHA-256 (`full_hash`) và sinh ID định dạng `spn_{24hex}`.
+    * Invariant bất biến tuyệt đối: Tọa độ codepoint `[start_cp:end_cp]` trong hệ trục `unicode_codepoints_nfc_lf` đối chiếu trực tiếp `canonical_text[start_cp:end_cp] == span.text` đạt 100% khớp, không phụ thuộc LLM để tái dựng trích dẫn.
+    * Chẩn đoán chất lượng văn bản `compute_quality_report`: Phát hiện PDF scan/ảnh (`suspected_scanned`), đếm trang trống, tính số ký tự trung bình/trang.
+    * Xử lý lỗi an toàn: Bắt lỗi PDF có mật khẩu (`ENCRYPTED_PDF`), PDF hỏng (`MALFORMED_PDF`) mà không gây crash tiến trình.
+  * `app/services/provenance.py`: Dịch vụ điều phối bóc tách và lưu trữ provenance (`ingest_and_parse_document`, `get_source_span`).
+    * Tạo `SanitizedVersion` ở trạng thái DRAFT từ nội dung bóc tách ban đầu.
+    * Lưu toàn bộ các spans vào bảng `source_spans`.
+    * Cập nhật `Document.ingestion_status = "parsed"`, `safety_status = DocumentSafetyStatus.PASSED`, và gán `Application.current_sanitized_version_id`.
+    * Truy vấn Source Span có bảo vệ phân quyền: Kiểm tra người dùng thuộc Requisition, nếu phiên bản bị REVOKED thì chỉ người có `RawAccessGrant` mới được xem.
+  * `app/schemas/intake.py`: Thêm `SourceSpanResponse` DTO phục vụ endpoint tra cứu evidence provenance.
+  * `app/api/v1/intake.py`: Thêm endpoint `GET /api/v1/source-spans/{span_id}`.
+  * `services/backend/pyproject.toml`: Bổ sung `pypdf>=5.0.0` và `python-docx>=1.1.0`.
+  * `services/backend/tests/test_parser.py`: 5 test cases bao quát: chuẩn hóa NFD sang NFC và đổi CRLF thành LF, bảo toàn chính xác tọa độ codepoints với tiếng Việt có dấu và emoji, phát hiện PDF có mật khẩu bảo vệ (`ENCRYPTED_PDF`), bóc tách DOCX, và luồng end-to-end lưu trữ + tra cứu Source Span qua REST API kèm phân quyền.
+* **Invariants được đáp ứng:**
+  * Toàn bộ tọa độ codepoint offsets trong `source_spans` đối chiếu khớp 100% với văn bản chuẩn hóa.
+  * Trích dẫn nguồn minh chứng không dựa vào việc LLM tự sinh offset hoặc tự nhớ lại.
+  * PDF được mã hóa không thể giải mã sẽ bị từ chối với mã lỗi an toàn, không rò rỉ dữ liệu hoặc crash worker.
+* **Tests đã chạy & Kết quả:**
+  * `pytest services/backend/tests`: **43/43 tests PASS (100%)** trong 6.70s.
+  * Next.js build: PASS.
+* **Bước tiếp theo:** B07 — Durable PostgreSQL worker (Hàng đợi tác vụ bất đồng bộ trên PostgreSQL, cơ chế claim/heartbeat/lease/fencing chống tranh chấp, retry schedule, cancellation và sweeper phục hồi).

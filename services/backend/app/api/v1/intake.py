@@ -14,6 +14,7 @@ from app.schemas.intake import (
     ApplicationResponse,
     DocumentSummaryDTO,
     DocumentUploadResponse,
+    SourceSpanResponse,
 )
 from app.services.intake import (
     create_application,
@@ -106,3 +107,14 @@ async def post_upload_document(
 
     response.status_code = status_code
     return result_dto
+
+
+@router.get("/source-spans/{span_id}", response_model=SourceSpanResponse)
+async def get_source_span_endpoint(
+    span_id: str,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """Retrieve an individual source span with exact codepoint coordinates and provenance metadata."""
+    from app.services.provenance import get_source_span
+    return await get_source_span(db, span_id, ctx)

@@ -54,3 +54,18 @@ class DocumentUploadResponse(BaseModel):
     job_id: uuid.UUID
     application_row_version: int
     application_generation: int
+
+
+class SourceSpanResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    span_id: str
+    sanitized_version_id: uuid.UUID
+    source_hash: str
+    coordinate_system: str = "unicode_codepoints_nfc_lf"
+    start_cp: int
+    end_cp: int
+    page_number: Optional[int] = None
+    section_label: Optional[str] = None
+    text: str
+    language: str = "vi"
