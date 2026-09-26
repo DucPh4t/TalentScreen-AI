@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from app.config import get_settings
 from app.api.v1.auth import router as auth_router
 from app.api.v1.intake import router as intake_router
+from app.api.v1.jobs import router as jobs_router
 from app.api.v1.requisitions import router as requisitions_router
 from app.api.v1.rubrics import router as rubrics_router
 
@@ -12,6 +13,8 @@ router.include_router(auth_router)
 router.include_router(requisitions_router)
 router.include_router(rubrics_router)
 router.include_router(intake_router)
+router.include_router(jobs_router)
+
 
 
 @router.get("/health", tags=["Health"])
