@@ -217,3 +217,33 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
   * `pytest services/backend/tests`: **43/43 tests PASS (100%)** trong 6.70s.
   * Next.js build: PASS.
 * **Bước tiếp theo:** B07 — Durable PostgreSQL worker (Hàng đợi tác vụ bất đồng bộ trên PostgreSQL, cơ chế claim/heartbeat/lease/fencing chống tranh chấp, retry schedule, cancellation và sweeper phục hồi).
+
+### B12 UI — Candidate Listing, Review Workspace, and Decision Flow
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `apps/web/src/lib/api.ts`: Typed client tương tác đầy đủ với FastAPI backend:
+    * Quản lý phiên cookie HttpOnly & tự động đính kèm `X-CSRF-Token` cho toàn bộ các phương thức thay đổi dữ liệu (`POST`, `PUT`, `PATCH`, `DELETE`).
+    * Endpoints: Requisitions (listing, creation, optimistic concurrency patch với `If-Match`), Applications (FIFO listing theo `received_at`, detail, CV upload FormData), Sanitization (detail, approve, revoke quarantine), Assessment (trigger run, fetch criteria & evidence), HR Revision (draft, update, finalize), Attested Hiring Decisions (ReviewAttestation checklist, immutable decision creation), Interview Guide (question bank, draft generation, follow-up revisions), Deletion Request (immediate tombstone, physical unlinking).
+  * `apps/web/src/app/globals.css`: Toàn bộ design system hiện đại theo chuẩn web: bảng màu dark mode chuyên nghiệp (accent glow `#6366f1`, emerald `#10b981`, amber `#f59e0b`, rose `#ef4444`), typography sắc nét, responsive tables, cards, tabs, badges, quote drawer modal, redaction span tokens.
+  * `apps/web/src/app/layout.tsx`: Layout gốc tích hợp environment banner, thanh điều hướng chính (Tổng quan, Đợt tuyển dụng, Hồ sơ ứng viên, Chính sách & Bảo mật).
+  * `apps/web/src/app/page.tsx`: Màn hình đăng nhập Argon2id, thống kê trực quan (đợt tuyển dụng, hồ sơ, bằng chứng đối chiếu, bảo vệ PII).
+  * `apps/web/src/app/requisitions/page.tsx`: Danh sách đợt tuyển dụng với bộ lọc trạng thái, modal tạo đợt tuyển dụng kèm JD và phân bổ phòng ban.
+  * `apps/web/src/app/requisitions/[id]/page.tsx`: Không gian quản lý đợt tuyển dụng:
+    * Tab 1: Danh sách hồ sơ ứng viên sắp xếp theo thời gian nộp tăng dần (FIFO per Spec 01) nhằm đảm bảo tính công bằng và không thiên vị điểm số. Modal tiếp nhận hồ sơ CV hỗ trợ PDF/DOCX tối đa 10MB kèm kiểm tra nhanh client-side.
+    * Tab 2: Hiển thị văn bản Job Description chuẩn hóa và bảng 6 tiêu chí Rubric chuẩn (trọng số, ngưỡng sàn 2.0, anchors 0..4). Nút khởi tạo Rubric mẫu và phê duyệt chính thức dành cho Owner.
+  * `apps/web/src/app/applications/[id]/page.tsx`: Không gian xét duyệt hồ sơ ứng viên (Candidate Review Workspace) tuân thủ nghiêm ngặt Spec 01:
+    * Không có banner điểm số lớn (No Hero Score).
+    * Tab 1: Khử định danh PII (Sanitization Viewer hiển thị các token `[REDACTED_...]`, xác nhận cam kết và nút phê duyệt/thu hồi của Owner).
+    * Tab 2: Đánh giá & Bằng chứng thực tế (Evidence-First Assessment, bảng 6 tiêu chí chuẩn, rationale chi tiết, trích dẫn nguyên văn kèm mã span và codepoint offsets; bấm vào trích dẫn mở Quote Drawer đối chiếu). Bảng tổng hợp tính toán điểm quan sát/so sánh có thể thu gọn.
+    * Tab 3: Hiệu chỉnh HR & Quyết định tuyển dụng chính thức (HR Revision form cho phép override điểm và ghi rõ lý do; Attested Hiring Decision form yêu cầu Owner cam kết đủ 3 điều khoản ký duyệt trước khi ban hành).
+    * Tab 4: Kế hoạch phỏng vấn & Đào sâu (Bộ câu hỏi chuẩn từ Ngân hàng Rubric + tối đa 3 câu hỏi đào sâu do AI gợi ý hướng tới các lỗ hổng bằng chứng).
+    * Modal yêu cầu xóa dữ liệu vĩnh viễn (Data Deletion B17) thực thi tombstone tức thì và hủy tệp an toàn.
+  * `.gitignore`: Điều chỉnh `/lib/` và `!apps/web/src/lib/` để không bỏ sót thư viện TypeScript của frontend.
+* **Invariants được đáp ứng:**
+  * Thứ tự hiển thị hồ sơ mặc định là FIFO (thời gian tiếp nhận), không bao giờ sắp xếp theo điểm AI để tránh định kiến ban đầu.
+  * Giao diện hoàn toàn không có Hero Score hay điểm AI hiển thị áp đảo; bảng bằng chứng và trích dẫn nguyên văn luôn được đặt ở vị trí trọng tâm.
+  * Phê duyệt Rubric, phê duyệt Khử định danh và Ký ban hành quyết định tuyển dụng bắt buộc phải có vai trò Owner và bản cam kết ReviewAttestation được ký.
+* **Tests đã chạy & Kết quả:**
+  * `npm run build` (Next.js 15.5): **Compiled successfully in 1.2s**, 5/5 static & dynamic pages sinh ra thành công không có bất kỳ lỗi TypeScript hay đóng gói nào.
+  * `pytest services/backend/tests`: **86/86 tests PASS (100%)** trong 23.95s.
+* **Bước tiếp theo:** B15 & B16 — Local OCR fallbacks và Local multilingual embeddings & hybrid retrieval.
