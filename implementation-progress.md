@@ -12,8 +12,8 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
 | **B01** | Data model, migration và domain enums | P0 | **COMPLETED** | 35 tables created, Alembic migrations pass, 6 integration tests on real PostgreSQL pass |
 | **B02** | Authentication, session, CSRF và authorization | P0 | **COMPLETED** | Argon2id, HttpOnly session, CSRF check, RBAC & Requisition guards, 21 tests pass |
 | **B03** | Requisition và JD version | P0 | **COMPLETED** | Lifecycle, optimistic locking (409), JD immutability & egress approval, 28 tests pass |
-| **B04** | Rubric seed, editor, approval và policy | P0 | *READY* | Sẵn sàng triển khai Rubric seed, editor & policy |
-| **B05** | Intake upload và private storage | P0 | *PENDING* | Phụ thuộc B02, B03 |
+| **B04** | Rubric seed, editor, approval và policy | P0 | **COMPLETED** | Seed 6 criteria, sum=100, anchors 0..4, anti-bias policy, immutability, 32 tests pass |
+| **B05** | Intake upload và private storage | P0 | *READY* | Sẵn sàng triển khai Candidate Application Intake & Storage |
 | **B06** | Parse PDF, normalization và provenance | P0 | *PENDING* | Phụ thuộc B05 |
 | **B07** | Durable PostgreSQL worker | P0 | *PENDING* | Phụ thuộc B01, B05 |
 | **B08** | Sanitization, HR approval và source viewer | P0 | *PENDING* | Phụ thuộc B06, B07 |
@@ -141,3 +141,27 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
   * `pytest services/backend/tests`: **28/28 tests PASS (100%)** trong 3.55s.
   * Next.js build: Static pages generated thành công (4/4) trong 462ms.
 * **Bước tiếp theo:** B04 — Rubric seed, editor, approval và policy (Import seed 6 criterion chuẩn, kiểm tra weights=100, anchors 0..4, policy threshold 70, core floor 2, kiểm tra cấm tiêu chí phân biệt đối xử).
+
+### B04 — Rubric seed, editor, approval và policy
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `app/domain/rubric_policy.py`: Validator nghiệp vụ cho Rubric: kiểm tra danh sách 6 tiêu chí hợp lệ (`python_backend`, `api_design`, `sql_data`, `testing_debugging`, `security_privacy`, `delivery_ops`), kiểm tra tổng trọng số bắt buộc đúng 100%, kiểm tra anchors 0..4, và thuật toán quét cấm tiêu chí phân biệt đối xử (`FORBIDDEN_CRITERION_DETECTED` phát hiện tuổi, giới tính, hôn nhân, tôn giáo, quê quán, ảnh, danh tiếng trường top, năm tốt nghiệp).
+  * `app/schemas/rubric.py`: DTOs Pydantic typed cho Rubric, Criteria, Scoring Anchors 0..4, Source Requirement Citations, Recommendation Policy và payload Approve Rubric.
+  * `app/services/rubric.py`:
+    * Import seed draft từ `talentscreen-mvp-plan/examples/rubric-backend-python.v1.json`, tạo Rubric version ở trạng thái DRAFT (bảo đảm invariant: seed/AI draft không bao giờ tự động được coi là approved).
+    * Hỗ trợ tạo rubric qua 3 cơ chế: `seed`, `clone` từ bản rubric cũ, hoặc `manual`.
+    * Tính toán mã hash nội dung `content_hash` (SHA-256) chuẩn hóa để phát hiện thay đổi.
+    * Editor chỉnh sửa Rubric DRAFT: Validate toàn vẹn cấu trúc và chống phân biệt đối xử trước khi ghi nhận.
+    * Invariant bất biến: Rubric sau khi đã APPROVED hoặc SUPERSEDED tuyệt đối không thể chỉnh sửa (`RUBRIC_IMMUTABLE`). Muốn sửa phải clone hoặc tạo version mới.
+    * Phê duyệt Rubric (`approve`): Kiểm tra con trỏ JD version hiện tại của Requisition khớp với Rubric, kiểm tra `expected_requisition_version` (optimistic locking), bắt buộc HR xác nhận ngưỡng điểm (`acknowledge_thresholds=True` cho threshold 70 và core floor 2). Tự động chuyển rubric đã duyệt trước đó sang `SUPERSEDED`, chuyển rubric này sang `APPROVED`, trỏ `current_rubric_version_id` của Requisition và tăng `row_version`.
+  * `app/api/v1/rubrics.py`: REST endpoints (`POST /requisitions/{id}/rubrics`, `GET /rubrics/{id}`, `PUT /rubrics/{id}`, `POST /rubrics/{id}/approve`).
+  * `services/backend/tests/test_rubrics.py`: 4 test cases kiểm thử import seed 6 tiêu chí chuẩn, phân quyền chặn Reviewer duyệt/sửa rubric, kiểm tra các lỗi validation (thiếu tiêu chí, trùng lặp, tổng trọng số != 100%, phát hiện tiêu chí phân biệt đối xử), và luồng approve rubric kèm tính bất biến sau khi duyệt.
+* **Invariants được đáp ứng:**
+  * AI/Seed draft không bao giờ được coi là approved tự động; phải có HR Owner duyệt.
+  * Đúng 6 criterion IDs cố định; tổng trọng số đúng 100%; đủ anchor 0..4.
+  * Cấm tuyệt đối các tiêu chí và anchor chứa yếu tố thiên vị, nhân khẩu học hoặc phân biệt đối xử.
+  * Rubric đã APPROVED là bất biến (immutable).
+* **Tests đã chạy & Kết quả:**
+  * `pytest services/backend/tests`: **32/32 tests PASS (100%)** trong 4.86s.
+  * Next.js build: PASS.
+* **Bước tiếp theo:** B05 — Intake upload và private storage (Tiếp nhận hồ sơ ứng viên, lưu trữ an toàn trong private storage, MIME/magic byte checks, quarantine, hạn chế dung lượng, idempotency).
