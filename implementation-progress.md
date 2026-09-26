@@ -11,8 +11,8 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
 | **B00** | Khởi tạo monorepo, doctor và cấu hình | P0 | **COMPLETED** | `make doctor`, `make test-backend`, Next.js build pass |
 | **B01** | Data model, migration và domain enums | P0 | **COMPLETED** | 35 tables created, Alembic migrations pass, 6 integration tests on real PostgreSQL pass |
 | **B02** | Authentication, session, CSRF và authorization | P0 | **COMPLETED** | Argon2id, HttpOnly session, CSRF check, RBAC & Requisition guards, 21 tests pass |
-| **B03** | Requisition và JD version | P0 | *READY* | Sẵn sàng triển khai Requisition & JD lifecycle |
-| **B04** | Rubric seed, editor, approval và policy | P0 | *PENDING* | Phụ thuộc B03 |
+| **B03** | Requisition và JD version | P0 | **COMPLETED** | Lifecycle, optimistic locking (409), JD immutability & egress approval, 28 tests pass |
+| **B04** | Rubric seed, editor, approval và policy | P0 | *READY* | Sẵn sàng triển khai Rubric seed, editor & policy |
 | **B05** | Intake upload và private storage | P0 | *PENDING* | Phụ thuộc B02, B03 |
 | **B06** | Parse PDF, normalization và provenance | P0 | *PENDING* | Phụ thuộc B05 |
 | **B07** | Durable PostgreSQL worker | P0 | *PENDING* | Phụ thuộc B01, B05 |
@@ -112,3 +112,32 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
   * `pytest services/backend/tests`: **21/21 tests PASS (100%)** trong 1.58s.
   * CLI bootstrap admin và list-users: Thành công.
 * **Bước tiếp theo:** B03 — Requisition và JD version (Tạo & quản lý yêu cầu tuyển dụng, quản lý phiên bản JD Draft -> In Review -> Approved -> Archived, kiểm tra vai trò OWNER/REVIEWER).
+
+### B03 — Requisition và JD version
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `app/services/audit.py`: Helper `record_audit_event()` lưu vết bất biến mọi hành động nghiệp vụ vào `audit_events` (action, entity_id, actor, version, safe_metadata).
+  * `app/schemas/requisition.py`: Pydantic DTOs cho Requisition, Membership, JD Version, Egress Approval với type safety và validation.
+  * `app/services/requisition.py`:
+    * Nghiệp vụ Requisition: Tạo mới (mặc định DRAFT, recruiter tự thành OWNER), xem chi tiết kèm các số liệu đếm (counts: applications, jd_versions, rubric_versions, members), phân quyền truy cập Requisition (cô lập giữa các recruiter/reviewer, admin có quyền xem tổng thể).
+    * Phân quyền & Thành viên Requisition: Thêm/cập nhật vai trò (OWNER/REVIEWER), xóa thành viên, thu hồi toàn bộ raw grants liên quan khi xóa thành viên, bảo vệ không cho phép xóa OWNER duy nhất cuối cùng (`CANNOT_REMOVE_LAST_OWNER`).
+    * State machine Requisition (Section 5.1):
+      * `DRAFT -> OPEN`: Bắt buộc có JD và Rubric phiên bản hiện hành đã APPROVED và khớp với JD hiện tại; ghi nhận `opened_at`.
+      * `OPEN -> PAUSED`: Bắt buộc cung cấp lý do (`reason`).
+      * `PAUSED -> OPEN`: Kiểm tra rubric hiện hành hợp lệ.
+      * `OPEN|PAUSED -> CLOSED`: Bắt buộc lý do; ghi nhận `closed_at`.
+      * `CLOSED -> PAUSED`: Bắt buộc lý do mở lại; chặn nhảy trực tiếp từ `CLOSED -> OPEN`.
+    * Optimistic Locking: Kiểm tra `row_version` qua body `expected_version` hoặc HTTP header `If-Match`; trả mã HTTP 409 Conflict (`VERSION_CONFLICT`) khi có tranh chấp sửa đổi đồng thời.
+    * Quản lý JD Version bất biến (Immutable): Chuẩn hóa Unicode NFC, tính mã SHA-256 `text_hash`, tự động bóc tách requirement citations (`JD-PY-01`, `JD-API-01`,...) vào `source_refs`, tăng số phiên bản `version_no`, cập nhật con trỏ `current_jd_version_id`. Chỉ OWNER mới có quyền cập nhật JD.
+    * Kiểm duyệt JD trước khi gửi LLM (`approve-egress`): OWNER phê duyệt kiểm tra nội dung JD với xác nhận `acknowledged=True` và đối soát mã hash `expected_text_hash == jd.text_hash`.
+  * `app/api/v1/requisitions.py`: REST API endpoints đầy đủ (`GET/POST /requisitions`, `GET/PATCH /requisitions/{id}`, `GET/PUT/DELETE /requisitions/{id}/members`, `POST/GET /requisitions/{id}/jd-versions`, `GET /jd-versions/{id}`, `POST /jd-versions/{id}/approve-egress`).
+  * `services/backend/tests/test_requisitions.py`: 7 test cases tích hợp trên PostgreSQL thật kiểm tra cô lập phân quyền, guard không cho xóa last owner, trích xuất requirements từ markdown tiếng Việt, kiểm tra optimistic locking trả 409 Conflict, state machine chuyển trạng thái và luồng approve egress.
+* **Invariants được đáp ứng:**
+  * Chỉ OWNER mới có quyền thay đổi JD hoặc duyệt approve-egress.
+  * Lịch sử các phiên bản JD được lưu bất biến, các lần chạy đánh giá cũ vẫn giữ nguyên liên kết tham chiếu tới JD version tương ứng.
+  * Phản hồi lỗi 409 Conflict khi phát hiện sửa đổi đồng thời.
+  * Luôn duy trì ít nhất một OWNER cho mỗi Requisition.
+* **Tests đã chạy & Kết quả:**
+  * `pytest services/backend/tests`: **28/28 tests PASS (100%)** trong 3.55s.
+  * Next.js build: Static pages generated thành công (4/4) trong 462ms.
+* **Bước tiếp theo:** B04 — Rubric seed, editor, approval và policy (Import seed 6 criterion chuẩn, kiểm tra weights=100, anchors 0..4, policy threshold 70, core floor 2, kiểm tra cấm tiêu chí phân biệt đối xử).
