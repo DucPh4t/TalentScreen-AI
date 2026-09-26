@@ -360,4 +360,35 @@ export const api = {
       body: JSON.stringify({ scope, target_id: targetId, reason_category }),
     });
   },
+
+  // Onboarding & Sandbox (Task B21)
+  async getOnboardingStatus(): Promise<any> {
+    return apiRequest<any>("/onboarding");
+  },
+
+  async completeOnboardingStep(stepId: string, exerciseResult?: any): Promise<any> {
+    return apiRequest<any>("/onboarding/step", {
+      method: "POST",
+      body: JSON.stringify({ step_id: stepId, exercise_result: exerciseResult }),
+    });
+  },
+
+  async resetOnboarding(): Promise<any> {
+    return apiRequest<any>("/onboarding/reset", {
+      method: "POST",
+    });
+  },
+
+  async getSandboxScenarios(): Promise<any[]> {
+    return apiRequest<any[]>("/onboarding/scenarios");
+  },
+
+  // Admin & Observability (Task B23)
+  async getAdminMetrics(): Promise<any> {
+    return apiRequest<any>("/admin/metrics");
+  },
+
+  async getSystemReadiness(): Promise<any> {
+    return apiRequest<any>("/admin/readiness");
+  },
 };

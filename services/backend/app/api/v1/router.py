@@ -2,14 +2,16 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter
 from app.config import get_settings
+from app.api.v1.admin import router as admin_router
 from app.api.v1.assessment import router as assessment_router
+from app.api.v1.auth import router as auth_router
 from app.api.v1.decision import router as decision_router
 from app.api.v1.deletion import router as deletion_router
-from app.api.v1.interview import router as interview_router
-from app.api.v1.auth import router as auth_router
 from app.api.v1.intake import router as intake_router
+from app.api.v1.interview import router as interview_router
 from app.api.v1.jobs import router as jobs_router
 from app.api.v1.llm import router as llm_router
+from app.api.v1.onboarding import router as onboarding_router
 from app.api.v1.requisitions import router as requisitions_router
 from app.api.v1.rubrics import router as rubrics_router
 from app.api.v1.sanitization import router as sanitization_router
@@ -26,6 +28,8 @@ router.include_router(assessment_router)
 router.include_router(decision_router)
 router.include_router(interview_router)
 router.include_router(deletion_router)
+router.include_router(onboarding_router)
+router.include_router(admin_router)
 
 
 

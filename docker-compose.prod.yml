@@ -1,0 +1,113 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: talentscreen-prod-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-talentscreen}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password required}
+      POSTGRES_DB: ${POSTGRES_DB:-talentscreen_prod}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - talentscreen-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-talentscreen} -d ${POSTGRES_DB:-talentscreen_prod}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+
+  backend:
+    build:
+      context: ./services/backend
+      dockerfile: Dockerfile
+    container_name: talentscreen-prod-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-talentscreen}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-talentscreen_prod}
+      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-talentscreen}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-talentscreen_prod}
+      PRIVATE_STORAGE_ROOT: /app/private_storage
+      SECRET_KEY: ${SECRET_KEY:?Production SECRET_KEY required}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+      LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+    volumes:
+      - storage_data:/app/private_storage
+    networks:
+      - talentscreen-internal
+      - talentscreen-edge
+    ports:
+      - "127.0.0.1:8000:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+
+  worker:
+    build:
+      context: ./services/backend
+      dockerfile: Dockerfile
+    container_name: talentscreen-prod-worker
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    command: ["python", "-m", "app.cli", "run-worker"]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-talentscreen}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-talentscreen_prod}
+      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-talentscreen}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-talentscreen_prod}
+      PRIVATE_STORAGE_ROOT: /app/private_storage
+      SECRET_KEY: ${SECRET_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+    volumes:
+      - storage_data:/app/private_storage
+    networks:
+      - talentscreen-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: talentscreen-prod-web
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    networks:
+      - talentscreen-edge
+    ports:
+      - "127.0.0.1:3000:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+
+networks:
+  talentscreen-internal:
+    internal: true
+  talentscreen-edge:
+
+volumes:
+  pg_data:
+  storage_data:

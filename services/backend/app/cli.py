@@ -145,6 +145,34 @@ async def list_users() -> None:
         print("-" * 75)
 
 
+async def run_worker_command(once: bool = False) -> None:
+    """Run background worker loop."""
+    from app.services.worker import run_worker_once
+    factory = get_session_factory()
+    w_id = f"cli_worker_{uuid.uuid4().hex[:8]}"
+    print(f"[OK] Starting background worker '{w_id}' (once={once})...")
+
+    while True:
+        async with factory() as session:
+            processed = await run_worker_once(session, worker_id=w_id)
+        if once:
+            print(f"[OK] Worker finished single pass. Processed job: {processed}")
+            break
+        if not processed:
+            await asyncio.sleep(2.0)
+
+
+async def apply_deletion_ledger_command() -> None:
+    """Re-apply deletion ledger sweep (SEC-11 invariant)."""
+    from app.services.deletion import apply_deletion_ledger
+    factory = get_session_factory()
+    async with factory() as session:
+        print("[INFO] Scanning deletion ledger for zombie records...")
+        report = await apply_deletion_ledger(session)
+        await session.commit()
+        print(f"[OK] Deletion ledger applied. Re-purged applications: {report.get('re_purged_applications_count', 0)}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="TalentScreen AI Admin CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -162,6 +190,13 @@ def main():
     # list-users
     subparsers.add_parser("list-users", help="List all users")
 
+    # run-worker
+    worker_parser = subparsers.add_parser("run-worker", help="Run background worker process")
+    worker_parser.add_argument("--once", action="store_true", help="Process one job and exit")
+
+    # apply-deletion-ledger
+    subparsers.add_parser("apply-deletion-ledger", help="Re-apply deletion ledger sweep (SEC-11 invariant)")
+
     args = parser.parse_args()
 
     if args.command == "create-admin":
@@ -170,6 +205,10 @@ def main():
         asyncio.run(disable_user(args.login))
     elif args.command == "list-users":
         asyncio.run(list_users())
+    elif args.command == "run-worker":
+        asyncio.run(run_worker_command(args.once))
+    elif args.command == "apply-deletion-ledger":
+        asyncio.run(apply_deletion_ledger_command())
 
 
 if __name__ == "__main__":

@@ -35,6 +35,7 @@ export default function RootLayout({
             </a>
             <nav className="nav-links">
               <a href="/requisitions" className="nav-link">Đợt tuyển dụng</a>
+              <a href="/sandbox" className="nav-link">Sandbox Huấn Luyện</a>
               <a href="/retention" className="nav-link">Chính sách lưu trữ</a>
             </nav>
           </div>
