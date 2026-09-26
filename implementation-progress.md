@@ -10,8 +10,8 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
 |---|---|---|---|---|
 | **B00** | Khởi tạo monorepo, doctor và cấu hình | P0 | **COMPLETED** | `make doctor`, `make test-backend`, Next.js build pass |
 | **B01** | Data model, migration và domain enums | P0 | **COMPLETED** | 35 tables created, Alembic migrations pass, 6 integration tests on real PostgreSQL pass |
-| **B02** | Authentication, session, CSRF và authorization | P0 | *READY* | Sẵn sàng triển khai Auth & RBAC |
-| **B03** | Requisition và JD version | P0 | *PENDING* | Phụ thuộc B02 |
+| **B02** | Authentication, session, CSRF và authorization | P0 | **COMPLETED** | Argon2id, HttpOnly session, CSRF check, RBAC & Requisition guards, 21 tests pass |
+| **B03** | Requisition và JD version | P0 | *READY* | Sẵn sàng triển khai Requisition & JD lifecycle |
 | **B04** | Rubric seed, editor, approval và policy | P0 | *PENDING* | Phụ thuộc B03 |
 | **B05** | Intake upload và private storage | P0 | *PENDING* | Phụ thuộc B02, B03 |
 | **B06** | Parse PDF, normalization và provenance | P0 | *PENDING* | Phụ thuộc B05 |
@@ -91,3 +91,24 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
   * `make test`: **14/14 tests PASS (100%)** trong 0.49s.
   * Next.js build: PASS.
 * **Bước tiếp theo:** B02 — Authentication, session, CSRF và authorization (Argon2id, HttpOnly session cookie, RBAC + Requisition Membership, Raw CV grant guards).
+
+### B02 — Authentication, session, CSRF và authorization
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `app/domain/security.py`: Argon2id password hasher với constant-time verification, cryptographic token generation (32 bytes) và SHA-256 digest hashing.
+  * `app/services/auth.py`: Nghiệp vụ xác thực người dùng, tạo phiên (session cookie + CSRF token), kiểm tra thời hạn idle (30m), thời hạn tuyệt đối (8h), kiểm tra `session_generation` ngăn chặn session cũ sau khi đổi mật khẩu/đăng xuất toàn cầu, thu hồi phiên đơn lẻ và thu hồi toàn bộ phiên của người dùng.
+  * `app/domain/authorization.py`: Model `AuthenticatedContext`, dependency FastAPI `get_current_context` tự động phân giải session cookie và xác thực CSRF trên mutation methods (POST, PUT, PATCH, DELETE). Factory `require_role(role)` bảo vệ endpoint. Hàm `check_requisition_membership()` kiểm tra quyền trên Requisition (OWNER/REVIEWER). Hàm `check_raw_access_grant()` bắt buộc có `RawAccessGrant` còn hạn chưa bị thu hồi để đọc raw CV, áp dụng tuyệt đối cho cả Admin lẫn Recruiter.
+  * `app/api/v1/auth.py`: Endpoints `/api/v1/auth/login`, `/api/v1/auth/logout`, `/api/v1/auth/me`. Cookie session thiết lập `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=8h`.
+  * `app/cli.py`: CLI quản trị hệ thống (`create-admin`, `disable-user`, `list-users`) có guard bảo vệ không bao giờ được vô hiệu hóa admin duy nhất cuối cùng.
+  * `services/backend/tests/test_auth.py`: 7 tests bao quát bảo mật: hashing Argon2id, luồng đăng nhập + HttpOnly cookie, thông báo lỗi generic chống dò quét tài khoản, bắt buộc CSRF trên mutation, thu hồi phiên và đăng xuất toàn cầu, bảo vệ Raw Access Grant, phân quyền Requisition Membership.
+* **Invariants được đáp ứng:**
+  * SEC-01: Mật khẩu lưu dưới dạng Argon2id, không lưu plain text.
+  * SEC-02: Session ID sinh ngẫu nhiên 32 bytes cryptographically secure, chỉ lưu SHA-256 hash trong DB.
+  * SEC-03: Cookie `HttpOnly` ngăn chặn XSS đánh cắp session.
+  * SEC-04: CSRF token bắt buộc trên tất cả mutation requests (POST/PUT/PATCH/DELETE).
+  * SEC-05: Raw CV Access Grant bắt buộc cho mọi vai trò (kể cả Admin) khi muốn truy cập tài liệu gốc chưa ẩn danh.
+  * SEC-06: Bảo vệ tài khoản Admin cuối cùng khỏi bị disable hoặc xóa vai trò.
+* **Tests đã chạy & Kết quả:**
+  * `pytest services/backend/tests`: **21/21 tests PASS (100%)** trong 1.58s.
+  * CLI bootstrap admin và list-users: Thành công.
+* **Bước tiếp theo:** B03 — Requisition và JD version (Tạo & quản lý yêu cầu tuyển dụng, quản lý phiên bản JD Draft -> In Review -> Approved -> Archived, kiểm tra vai trò OWNER/REVIEWER).
