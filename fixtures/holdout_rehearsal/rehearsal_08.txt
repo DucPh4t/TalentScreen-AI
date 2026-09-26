@@ -1,0 +1,1 @@
+Nhóm xây dựng cổng dịch vụ với API, SQL và CI/CD. Sản phẩm có kiểm thử và phân quyền. CV không nêu tôi đã trực tiếp làm phần nào.

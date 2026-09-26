@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import get_settings
 from app.db.models.assessment import AssessmentRun, CriterionAssessment, CriterionEvidence
 from app.db.models.candidate import Application
 from app.db.models.document import Document, SanitizedVersion, SourceSpan
@@ -255,7 +256,7 @@ async def execute_assessment_job(
             task_kind="assessment",
             system_prompt=system_prompt,
             user_prompt=current_prompt,
-            model="deepseek-chat",
+            model=get_settings().DEEPSEEK_MODEL,
             max_output_tokens=4096,
         )
 

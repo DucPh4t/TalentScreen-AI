@@ -1,0 +1,10 @@
+{
+  "family_id": "rehearsal_22",
+  "split": "holdout_rehearsal",
+  "language": "mixed",
+  "scenario_type": "en_api_vi_test",
+  "origin_kind": "synthetic",
+  "label_origin": "unlabeled",
+  "evaluation_eligibility": "workflow_rehearsal_only",
+  "raw_text": "Project: I built a Flask search API with pagination and a stable response schema. Kiểm thử: tôi viết test cho trang rỗng và tham số sai; phần triển khai do nhóm hạ tầng phụ trách."
+}

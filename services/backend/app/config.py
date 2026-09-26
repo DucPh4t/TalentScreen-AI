@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     )
     DEEPSEEK_BASE_URL: str = Field(default="https://api.deepseek.com")
     DEEPSEEK_MODEL: str = Field(
-        default="deepseek-chat",
+        default="deepseek-flash",
         description="Model identifier configured by user; verified via probe",
     )
     DEEPSEEK_API_KEY: Optional[str] = Field(

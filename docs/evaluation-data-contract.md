@@ -5,7 +5,7 @@ Use `scripts/eval_harness.py` only with two separately recorded files: AI predic
 Example AI prediction (`ai_predictions.jsonl`):
 
 ```json
-{"sample_id":"sample-001","run_id":"assessment-run-uuid","prompt_version":"assessment-v1","model":"deepseek-chat","criterion_scores":{"python_backend":3,"api_design":2,"sql_data":2,"testing_debugging":null,"security_privacy":1,"delivery_ops":2},"recommendation":"needs_clarification","input_tokens":1900,"output_tokens":450,"observed_cost_usd":0.0008}
+{"sample_id":"sample-001","run_id":"assessment-run-uuid","prompt_version":"assessment-v1","model":"deepseek-flash","criterion_scores":{"python_backend":3,"api_design":2,"sql_data":2,"testing_debugging":null,"security_privacy":1,"delivery_ops":2},"recommendation":"needs_clarification","input_tokens":1900,"output_tokens":450,"observed_cost_usd":0.0008}
 ```
 
 Example independent label (`hr_blind_labels.jsonl`):
@@ -16,7 +16,7 @@ Example independent label (`hr_blind_labels.jsonl`):
 
 All six rubric IDs are required; a `null` anchor means insufficient comparable evidence, never zero. Recommendation values are `consider_next_round`, `needs_clarification`, `review_required`. Languages are `vi`, `en`, `mixed`. Splits are `smoke`, `dev`, `holdout`, `real_shadow`. `design_expected` labels may be used for engineering diagnostics but do not qualify as independent HR ratings. Capture `run_id`, prompt version and model from the persisted assessment, not from memory.
 
-The initial 12 synthetic scenarios in `fixtures/` are **unlabeled smoke/dev cases**. They cannot produce G5 MAE or kappa. The 30-family holdout, HR blind labels and real shadow batch still need to be collected. Freeze the holdout and verify its source/consent before scoring. The CLI reports missing predictions and undefined metrics explicitly and leaves the gate pending human sign-off.
+The initial 12 synthetic scenarios in `fixtures/` are **unlabeled smoke/dev cases**. `fixtures/holdout_rehearsal/` contains 30 distinct, hash-frozen, **unlabeled synthetic** families (10 per language group) for workflow rehearsal. Neither set can produce a G5 MAE or kappa until independent labels and recorded predictions exist, and neither substitutes for the actual real-shadow batch. Freeze any operational holdout and verify its source/consent before scoring. The CLI reports missing predictions and undefined metrics explicitly and leaves the gate pending human sign-off.
 
 For prompt A/B testing, record both variants on **the same** frozen sample IDs and use the same labels:
 

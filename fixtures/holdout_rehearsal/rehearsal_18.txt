@@ -1,0 +1,1 @@
+I alone implemented the Python payment endpoint for project Orion. Later in the same project description: I did not write any Python or backend code; my only task was CSS. No timeline or division of work is given.

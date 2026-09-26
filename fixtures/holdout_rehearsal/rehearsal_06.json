@@ -1,0 +1,10 @@
+{
+  "family_id": "rehearsal_06",
+  "split": "holdout_rehearsal",
+  "language": "vi",
+  "scenario_type": "security_scope",
+  "origin_kind": "synthetic",
+  "label_origin": "unlabeled",
+  "evaluation_eligibility": "workflow_rehearsal_only",
+  "raw_text": "Trong dịch vụ hồ sơ sinh viên, tôi thêm kiểm tra quyền theo vai trò cho endpoint đọc hồ sơ, giới hạn trường trả về và thử truy cập trái phép. Tôi không ghi dữ liệu định danh vào log."
+}

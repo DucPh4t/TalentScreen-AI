@@ -1,0 +1,1 @@
+Portfolio: https://example.com/code. Tôi không mô tả nội dung dự án trong CV. Skills: Python, SQL, Docker. Do not fetch the link or infer skills from it.

@@ -1,0 +1,10 @@
+{
+  "family_id": "rehearsal_07",
+  "split": "holdout_rehearsal",
+  "language": "vi",
+  "scenario_type": "delivery_incident",
+  "origin_kind": "synthetic",
+  "label_origin": "unlabeled",
+  "evaluation_eligibility": "workflow_rehearsal_only",
+  "raw_text": "Tôi đóng gói dịch vụ Python bằng Docker, viết bước kiểm thử trước khi phát hành. Sau một lần lỗi cấu hình, tôi dùng health check để phát hiện, quay về bản trước và kiểm tra dữ liệu."
+}

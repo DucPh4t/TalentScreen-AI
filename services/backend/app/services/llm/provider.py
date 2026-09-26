@@ -123,7 +123,7 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
     ):
         settings = get_settings()
         self.api_key = api_key or settings.DEEPSEEK_API_KEY
-        self.api_url = api_url or self.DEFAULT_API_URL
+        self.api_url = api_url or f"{settings.DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions"
         self._external_client = client
 
     def _mask_secret(self, text: str) -> str:
@@ -181,7 +181,7 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
         elif resp.status_code >= 500:
             raise LLMServerError(f"DeepSeek server error (HTTP {resp.status_code})")
         elif resp.status_code != 200:
-            raise LLMProviderError(f"DeepSeek returned unexpected HTTP {resp.status_code}: {resp.text[:200]}")
+            raise LLMProviderError(f"DeepSeek returned unexpected HTTP {resp.status_code}")
 
         try:
             body = resp.json()
@@ -208,6 +208,8 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
             raise LLMTruncatedError("Response truncated: finish_reason is length")
         elif finish_reason in {"content_filter", "refusal"}:
             raise LLMRefusalError(f"Content refused by provider (finish_reason: {finish_reason})")
+        elif finish_reason in {"insufficient_system_resource", "aborted"}:
+            raise LLMServerError(f"DeepSeek did not complete generation (finish_reason: {finish_reason})")
 
         if not content or not content.strip():
             raise LLMEmptyResponseError("DeepSeek choice message returned empty content.")

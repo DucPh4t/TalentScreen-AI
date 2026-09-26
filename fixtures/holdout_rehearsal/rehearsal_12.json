@@ -1,0 +1,10 @@
+{
+  "family_id": "rehearsal_12",
+  "split": "holdout_rehearsal",
+  "language": "en",
+  "scenario_type": "sql_query",
+  "origin_kind": "synthetic",
+  "label_origin": "unlabeled",
+  "evaluation_eligibility": "workflow_rehearsal_only",
+  "raw_text": "I wrote a PostgreSQL query to summarize open tickets and added an index after checking its execution plan. I did not describe API work or deployment responsibility."
+}

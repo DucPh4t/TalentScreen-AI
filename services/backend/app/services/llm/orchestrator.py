@@ -168,7 +168,7 @@ async def execute_bounded_llm_call(
         actual_cost = calculate_actual_cost(
             input_tokens=result.input_tokens or estimated_input_tokens,
             output_tokens=result.output_tokens or 0,
-            model=result.reported_model or request.model,
+            model=request.model,
         )
 
         inv_record.status = LLMInvocationStatus.SUCCEEDED

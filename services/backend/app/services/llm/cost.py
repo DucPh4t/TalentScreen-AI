@@ -6,14 +6,21 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Optional
 
-RATE_CARD_VERSION = "deepseek-2024-11"
+RATE_CARD_VERSION = "deepseek-2026-09-26-peak"
 
 # Prices per 1,000,000 tokens in USD
 RATE_CARD_PRICING = {
-    "deepseek-chat": {
-        "input_cache_miss_per_million": Decimal("0.14"),
-        "input_cache_hit_per_million": Decimal("0.014"),
-        "output_per_million": Decimal("0.28"),
+    # Published peak prices. Billing may be lower off-peak; using peak
+    # prices keeps reservations conservative. Recheck before each pilot.
+    "deepseek-flash": {
+        "input_cache_miss_per_million": Decimal("0.30"),
+        "input_cache_hit_per_million": Decimal("0.006"),
+        "output_per_million": Decimal("1.20"),
+    },
+    "deepseek-v4-pro": {
+        "input_cache_miss_per_million": Decimal("1.32"),
+        "input_cache_hit_per_million": Decimal("0.044"),
+        "output_per_million": Decimal("3.96"),
     },
     "mock": {
         "input_cache_miss_per_million": Decimal("0.00"),
@@ -26,10 +33,10 @@ RATE_CARD_PRICING = {
 def estimate_request_cost(
     input_tokens: int,
     max_output_tokens: int,
-    model: str = "deepseek-chat",
+    model: str = "deepseek-flash",
 ) -> Decimal:
     """Calculate upper-bound estimated cost in USD for budget reservation (assuming cache miss)."""
-    pricing = RATE_CARD_PRICING.get(model, RATE_CARD_PRICING["deepseek-chat"])
+    pricing = RATE_CARD_PRICING[model]
 
     input_cost = (Decimal(input_tokens) / Decimal(1_000_000)) * pricing["input_cache_miss_per_million"]
     output_cost = (Decimal(max_output_tokens) / Decimal(1_000_000)) * pricing["output_per_million"]
@@ -41,10 +48,10 @@ def calculate_actual_cost(
     input_tokens: int,
     output_tokens: int,
     cached_input_tokens: int = 0,
-    model: str = "deepseek-chat",
+    model: str = "deepseek-flash",
 ) -> Decimal:
-    """Calculate precise actual cost in USD based on provider reported usage."""
-    pricing = RATE_CARD_PRICING.get(model, RATE_CARD_PRICING["deepseek-chat"])
+    """Estimate peak-rate spend from reported usage; provider billing is authoritative."""
+    pricing = RATE_CARD_PRICING[model]
 
     miss_tokens = max(0, input_tokens - cached_input_tokens)
     miss_cost = (Decimal(miss_tokens) / Decimal(1_000_000)) * pricing["input_cache_miss_per_million"]

@@ -1,0 +1,10 @@
+{
+  "family_id": "rehearsal_05",
+  "split": "holdout_rehearsal",
+  "language": "vi",
+  "scenario_type": "backend_narrow",
+  "origin_kind": "synthetic",
+  "label_origin": "unlabeled",
+  "evaluation_eligibility": "workflow_rehearsal_only",
+  "raw_text": "Tôi sửa hàm Python chuẩn hóa mã đơn vị trong dịch vụ backend và thêm kiểm tra đầu vào rỗng. Chưa tự triển khai endpoint hoặc thiết kế bảng dữ liệu."
+}

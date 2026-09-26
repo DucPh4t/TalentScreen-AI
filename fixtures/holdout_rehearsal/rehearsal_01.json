@@ -1,0 +1,10 @@
+{
+  "family_id": "rehearsal_01",
+  "split": "holdout_rehearsal",
+  "language": "vi",
+  "scenario_type": "backend_api_sql",
+  "origin_kind": "synthetic",
+  "label_origin": "unlabeled",
+  "evaluation_eligibility": "workflow_rehearsal_only",
+  "raw_text": "Dự án quản lý yêu cầu hỗ trợ nội bộ. Tôi viết API FastAPI nhận yêu cầu, kiểm tra dữ liệu và trả mã 400 khi thiếu trường bắt buộc. Tôi thiết kế bảng yêu cầu và giao dịch khi cập nhật trạng thái; viết pytest cho luồng thành công và lỗi."
+}

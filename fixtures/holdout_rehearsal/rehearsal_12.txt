@@ -1,0 +1,1 @@
+I wrote a PostgreSQL query to summarize open tickets and added an index after checking its execution plan. I did not describe API work or deployment responsibility.

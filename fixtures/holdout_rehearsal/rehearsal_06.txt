@@ -1,0 +1,1 @@
+Trong dịch vụ hồ sơ sinh viên, tôi thêm kiểm tra quyền theo vai trò cho endpoint đọc hồ sơ, giới hạn trường trả về và thử truy cập trái phép. Tôi không ghi dữ liệu định danh vào log.

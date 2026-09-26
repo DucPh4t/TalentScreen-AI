@@ -1,0 +1,1 @@
+I used Git branches, ran unit tests, and deployed a course project to a local VM. I set environment variables from a template; I did not own monitoring or rollback.

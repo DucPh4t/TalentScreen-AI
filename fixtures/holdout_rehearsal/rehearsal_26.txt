@@ -1,0 +1,1 @@
+I traced a 500 response to an unhandled null value and added a regression test. Tôi sửa endpoint trả mã 404 khi không tìm thấy bản ghi, giữ nguyên hợp đồng JSON cho client.

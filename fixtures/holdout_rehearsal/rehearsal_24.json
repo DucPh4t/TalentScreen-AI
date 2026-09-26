@@ -1,0 +1,10 @@
+{
+  "family_id": "rehearsal_24",
+  "split": "holdout_rehearsal",
+  "language": "mixed",
+  "scenario_type": "skills_only_bilingual",
+  "origin_kind": "synthetic",
+  "label_origin": "unlabeled",
+  "evaluation_eligibility": "workflow_rehearsal_only",
+  "raw_text": "Skills: Python, SQL, FastAPI, Docker. Kỹ năng: kiểm thử, bảo mật, triển khai. Experience: worked with an engineering team; không nêu phần việc cá nhân."
+}

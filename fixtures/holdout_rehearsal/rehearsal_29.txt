@@ -1,0 +1,1 @@
+Tôi viết API FastAPI tạo phiếu hỗ trợ, kiểm tra trường bắt buộc. I implemented a FastAPI ticket-creation API and validated required fields. Hai câu mô tả cùng một tác vụ, không phải hai dự án.

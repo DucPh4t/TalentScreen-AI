@@ -1,0 +1,10 @@
+{
+  "family_id": "rehearsal_25",
+  "split": "holdout_rehearsal",
+  "language": "mixed",
+  "scenario_type": "sql_vi_python_en",
+  "origin_kind": "synthetic",
+  "label_origin": "unlabeled",
+  "evaluation_eligibility": "workflow_rehearsal_only",
+  "raw_text": "Tôi thiết kế bảng lịch hẹn, thêm unique constraint và kiểm tra giao dịch đồng thời. Backend: wrote a Python validation helper used by another engineer's API; no endpoint ownership claimed."
+}

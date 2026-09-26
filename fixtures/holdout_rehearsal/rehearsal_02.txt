@@ -1,0 +1,1 @@
+Ở đồ án đặt lịch, tôi thiết kế endpoint tạo lịch với schema đầu vào/đầu ra và mã 409 khi trùng khung giờ. Tôi kiểm tra hành vi bằng integration test; bạn cùng nhóm phụ trách cơ sở dữ liệu và triển khai.

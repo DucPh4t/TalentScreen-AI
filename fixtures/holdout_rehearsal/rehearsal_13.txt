@@ -1,0 +1,1 @@
+I implemented a Flask endpoint for creating bookings, validated required fields, returned 422 on malformed requests, and documented request/response examples. I tested duplicate submissions manually.

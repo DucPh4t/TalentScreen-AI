@@ -1,0 +1,1 @@
+In a support API, I removed customer identifiers from request logs, restricted access to case records by role, and checked unauthorized responses. I left test and deployment tasks to the platform team.

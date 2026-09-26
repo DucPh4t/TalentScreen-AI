@@ -19,13 +19,14 @@ logger = logging.getLogger(__name__)
 
 async def run_capability_probe(
     provider: BaseLLMProvider | None = None,
-    model: str = "deepseek-chat",
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Execute synthetic preflight capability probe.
     Does NOT use candidate data or egress real CVs.
     """
     settings = get_settings()
     llm = provider or get_llm_provider()
+    model = model or settings.DEEPSEEK_MODEL
 
     system_prompt = "You are a synthetic diagnostic agent. You must respond strictly in JSON."
     user_prompt = "Generate a JSON object with key 'status' equal to 'ok' and key 'timestamp' with current time."

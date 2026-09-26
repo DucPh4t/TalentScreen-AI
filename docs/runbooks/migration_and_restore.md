@@ -45,7 +45,8 @@ docker exec -it talentscreen-prod-backend alembic downgrade <revision_id>
 
 ### Security Invariants
 - Backup includes **both** database dump (`db_dump.sql`) and private blob storage (`blobs.tar.gz`).
-- Both artifacts are encrypted using **AES-256-CBC with PBKDF2** salt derivation.
+- Both artifacts are streamed through **AES-256-CBC with PBKDF2** salt derivation; no plaintext dump/archive is written to the backup directory.
+- `BACKUP_ENCRYPTION_KEY` is mandatory; scripts have no built-in passphrase. The SHA-256 manifest catches accidental corruption but does not authenticate against a malicious editor of the backup directory.
 - A cryptographic integrity manifest `manifest.sha256` is generated.
 - Restrictive file permissions (`chmod 600`) are applied immediately.
 
@@ -53,6 +54,7 @@ docker exec -it talentscreen-prod-backend alembic downgrade <revision_id>
 ```bash
 # Set secure encryption passphrase
 export BACKUP_ENCRYPTION_KEY="<strong_random_secret_passphrase>"
+export PG_DOCKER_CONTAINER="<exact_postgres_container_name>"  # if pg_dump/psql are not installed locally
 
 # Execute backup script
 ./scripts/backup.sh ./backups/prod_$(date +%Y%m%d_%H%M%S)
@@ -80,12 +82,12 @@ manifest.sha256       # SHA-256 integrity checksums
 
 ### Script Execution Sequence:
 1. **Integrity Verification**: Verifies `manifest.sha256` against encrypted archives. Aborts immediately if checksum mismatch is detected.
-2. **Decryption**: Decrypts database dump and blobs using `BACKUP_ENCRYPTION_KEY`.
+2. **Decryption**: Streams database dump and blobs using `BACKUP_ENCRYPTION_KEY` without temporary plaintext files. Set `RESTORE_CONFIRM_DB` to the exact target database name and `PG_DOCKER_CONTAINER` to the exact container when local `psql` is absent.
 3. **Database Restoration**: Restores schema and records via `psql`.
 4. **Blob Storage Synchronization**: Unpacks blobs to `PRIVATE_STORAGE_ROOT`.
 5. **Schema Forward Migration**: Executes `alembic upgrade head` to align schema with latest code.
 6. **SEC-11 Ledger Sweep**: Runs `python -m app.cli apply-deletion-ledger` which scans `deletion_requests` with status `completed` and ensures all associated target applications/candidates remain tombstoned (`status="deleted"`).
-7. **Plaintext Cleanup**: Deletes all decrypted plain SQL and tar files from disk.
+7. **Plaintext Handling**: No decrypted SQL or tar files are written to disk by the script.
 
 ---
 

@@ -1,0 +1,10 @@
+{
+  "family_id": "rehearsal_29",
+  "split": "holdout_rehearsal",
+  "language": "mixed",
+  "scenario_type": "bilingual_duplicate",
+  "origin_kind": "synthetic",
+  "label_origin": "unlabeled",
+  "evaluation_eligibility": "workflow_rehearsal_only",
+  "raw_text": "Tôi viết API FastAPI tạo phiếu hỗ trợ, kiểm tra trường bắt buộc. I implemented a FastAPI ticket-creation API and validated required fields. Hai câu mô tả cùng một tác vụ, không phải hai dự án."
+}

@@ -134,16 +134,19 @@ async def setup_llm_test_context(session):
 
 def test_rate_card_calculations():
     """Test cost calculations against rate card."""
-    cost_est = estimate_request_cost(input_tokens=1_000_000, max_output_tokens=1_000_000, model="deepseek-chat")
-    assert cost_est == Decimal("0.42000000")
+    cost_est = estimate_request_cost(input_tokens=1_000_000, max_output_tokens=1_000_000, model="deepseek-flash")
+    assert cost_est == Decimal("1.50000000")
 
     cost_actual = calculate_actual_cost(
         input_tokens=2_000_000,
         output_tokens=1_000_000,
         cached_input_tokens=1_000_000,
-        model="deepseek-chat",
+        model="deepseek-flash",
     )
-    assert cost_actual == Decimal("0.43400000")
+    assert cost_actual == Decimal("1.50600000")
+
+    with pytest.raises(KeyError):
+        estimate_request_cost(100, 100, model="unverified-model")
 
 
 @pytest.mark.asyncio
@@ -352,7 +355,7 @@ async def test_end_to_end_bounded_orchestration_flow(test_session_factory):
         task_kind="assessment",
         system_prompt="You are an assessment engine. Respond in JSON.",
         user_prompt="Evaluate candidate evidence.",
-        model="deepseek-chat",
+        model="deepseek-flash",
         max_output_tokens=500,
     )
 

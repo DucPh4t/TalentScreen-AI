@@ -10,7 +10,7 @@ class CompletionRequest:
     task_kind: Literal["rubric", "assessment", "interview", "repair"]
     system_prompt: str
     user_prompt: str
-    model: str = "deepseek-chat"
+    model: str = "deepseek-flash"
     max_output_tokens: int = 4096
     timeout_seconds: float = 30.0
     temperature: float = 0.0

@@ -1,0 +1,10 @@
+{
+  "family_id": "rehearsal_30",
+  "split": "holdout_rehearsal",
+  "language": "mixed",
+  "scenario_type": "external_link",
+  "origin_kind": "synthetic",
+  "label_origin": "unlabeled",
+  "evaluation_eligibility": "workflow_rehearsal_only",
+  "raw_text": "Portfolio: https://example.com/code. Tôi không mô tả nội dung dự án trong CV. Skills: Python, SQL, Docker. Do not fetch the link or infer skills from it."
+}
