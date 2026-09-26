@@ -51,7 +51,7 @@ TalentScreen AI is an AI-assisted technical screening implementation for academi
 
 ## 3. Verification needed before pilot
 
-- The previous implementation reported 120 backend tests and a clean Next.js build. Re-run from a clean checkout and attach dated CI results.
+- The previous implementation reported 120 backend tests. The readiness-fix branch now has 126 backend tests passing locally on an isolated PostgreSQL/pgvector database, a clean Next.js build, and a successful [clean-checkout GitHub CI run](https://github.com/DucPh4t/TalentScreen-AI/actions/runs/36247262292). These are code checks, not HR/pilot acceptance.
 - Validate DeepSeek capability, privacy on representative vi/en/mixed CVs, actual HR-versus-AI quality, SLO/cost and backup/restore/deletion drills.
 - The 12 synthetic fixtures are unlabeled smoke/dev scenarios, not a frozen 30-family holdout. See `docs/runbooks/pilot_calibration_and_shadow.md`.
 

@@ -30,7 +30,7 @@ Theo dõi mã đã triển khai của B00–B26 và các điều kiện nghiệm
 | **B19** | Evaluation harness, metrics và HR annotation | P0 | PARTIAL: HR LABELS PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
 | **B20** | Prompt regression và release/rollback | P0 | PARTIAL: OUTPUT A/B PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
 | **B21** | Sandbox onboarding và help UI | P0 | IMPLEMENTED; HR UAT PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
-| **B22** | Security regression và privacy review kỹ thuật | P0 | IMPLEMENTED; CI PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B22** | Security regression và privacy review kỹ thuật | P0 | CI PASS; PRIVACY REVIEW PENDING | [CI nhánh sửa lỗi](https://github.com/DucPh4t/TalentScreen-AI/actions/runs/36247262292); chưa nghiệm thu pilot |
 | **B23** | Observability, load và budget operations | P0 | IMPLEMENTED; SLO MEASUREMENT PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
 | **B24** | Packaging, backup và restore | P0 | IMPLEMENTED; DRILL EVIDENCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
 | **B25** | HR calibration, shadow và pilot gate | P0 | PENDING: CALIBRATION & SHADOW | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
