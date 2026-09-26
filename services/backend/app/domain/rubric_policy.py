@@ -29,14 +29,22 @@ class RubricValidationError(Exception):
     pass
 
 
-def validate_anti_discrimination(text: str, field_name: str) -> None:
-    """Invariant: Check that no forbidden discriminatory attribute is evaluated in criteria or anchors."""
+def scan_forbidden_criteria(text: str) -> str | None:
+    """Check if text contains any forbidden demographic attribute. Returns matched string or None."""
     for pattern in FORBIDDEN_DISCRIMINATION_PATTERNS:
         match = pattern.search(text)
         if match:
-            raise RubricValidationError(
-                f"FORBIDDEN_CRITERION_DETECTED: Phát hiện tiêu chí/thuộc tính cấm phân biệt đối xử ('{match.group(0)}') trong {field_name}."
-            )
+            return match.group(0)
+    return None
+
+
+def validate_anti_discrimination(text: str, field_name: str) -> None:
+    """Invariant: Check that no forbidden discriminatory attribute is evaluated in criteria or anchors."""
+    match = scan_forbidden_criteria(text)
+    if match:
+        raise RubricValidationError(
+            f"FORBIDDEN_CRITERION_DETECTED: Phát hiện tiêu chí/thuộc tính cấm phân biệt đối xử ('{match}') trong {field_name}."
+        )
 
 
 def validate_canonical_rubric(rubric_data: dict[str, Any]) -> None:

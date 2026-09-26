@@ -236,6 +236,7 @@ async def sweep_stale_jobs(db: AsyncSession) -> int:
 
 async def execute_job_handler(
     db: AsyncSession,
+    job_id: uuid.UUID,
     job_type: JobType,
     target_id: uuid.UUID,
     payload_ref: dict[str, Any],
@@ -244,6 +245,9 @@ async def execute_job_handler(
     if job_type == JobType.INGEST_DOCUMENT:
         from app.services.provenance import ingest_and_parse_document
         await ingest_and_parse_document(db, target_id)
+    elif job_type == JobType.ASSESS_APPLICATION:
+        from app.services.assessment.service import execute_assessment_job
+        await execute_assessment_job(db, job_id=job_id)
     else:
         logger.info(f"Handler for job type {job_type} executed (mock or pending).")
 
@@ -270,7 +274,7 @@ async def run_worker_once(
 
     try:
         # 2. Execute handler in clean transaction
-        await execute_job_handler(db, job_type, target_id, payload_ref)
+        await execute_job_handler(db, job_id, job_type, target_id, payload_ref)
         success = True
     except Exception as e:
         logger.exception(f"Job {job_id} handler failed: {e}")
