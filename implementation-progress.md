@@ -13,8 +13,8 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
 | **B02** | Authentication, session, CSRF và authorization | P0 | **COMPLETED** | Argon2id, HttpOnly session, CSRF check, RBAC & Requisition guards, 21 tests pass |
 | **B03** | Requisition và JD version | P0 | **COMPLETED** | Lifecycle, optimistic locking (409), JD immutability & egress approval, 28 tests pass |
 | **B04** | Rubric seed, editor, approval và policy | P0 | **COMPLETED** | Seed 6 criteria, sum=100, anchors 0..4, anti-bias policy, immutability, 32 tests pass |
-| **B05** | Intake upload và private storage | P0 | *READY* | Sẵn sàng triển khai Candidate Application Intake & Storage |
-| **B06** | Parse PDF, normalization và provenance | P0 | *PENDING* | Phụ thuộc B05 |
+| **B05** | Intake upload và private storage | P0 | **COMPLETED** | Storage manager, path traversal guards, MIME/magic checks, idempotency, 38 tests pass |
+| **B06** | Parse PDF, normalization và provenance | P0 | *READY* | Sẵn sàng triển khai PDF Parser & Source Span Registry |
 | **B07** | Durable PostgreSQL worker | P0 | *PENDING* | Phụ thuộc B01, B05 |
 | **B08** | Sanitization, HR approval và source viewer | P0 | *PENDING* | Phụ thuộc B06, B07 |
 | **B09** | DeepSeek adapter, capabilities và cost ledger | P0 | *PENDING* | Phụ thuộc B07, B08 |
@@ -165,3 +165,28 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
   * `pytest services/backend/tests`: **32/32 tests PASS (100%)** trong 4.86s.
   * Next.js build: PASS.
 * **Bước tiếp theo:** B05 — Intake upload và private storage (Tiếp nhận hồ sơ ứng viên, lưu trữ an toàn trong private storage, MIME/magic byte checks, quarantine, hạn chế dung lượng, idempotency).
+
+### B05 — Intake upload và private storage
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `app/services/storage.py`: Trình quản lý lưu trữ blob riêng tư an toàn (`get_storage_base_dir`, `resolve_blob_path`, `detect_and_validate_file_type`, `sanitize_filename`, `save_private_blob`, `read_private_blob`, `delete_private_blob`).
+    * Chống tấn công Path Traversal: Khử `..`, `\`, `/`, ký tự điều khiển và null bytes; ép buộc mọi đường dẫn phải nằm bên trong `PRIVATE_STORAGE_ROOT`.
+    * Kiểm tra định dạng theo Magic Bytes và phần mở rộng: Chỉ chấp nhận PDF (`%PDF-` và `.pdf`) hoặc DOCX (`PK\x03\x04` và `.docx`). Chặn đứng tập tin giả mạo phần mở rộng (fake extension).
+    * Giới hạn kích thước tập tin: Chặn tập tin rỗng 0 bytes (`EMPTY_FILE` 422) và tập tin vượt quá 10MB (`FILE_TOO_LARGE` 413).
+  * `app/services/idempotency.py`: Cơ chế idempotency an toàn (`get_or_start_idempotency`, `complete_idempotency`). Sử dụng bảng `idempotency_records` với unique key `(actor_id, method, route_scope, key)` và hash SHA-256 nội dung request. Khi resubmit cùng Idempotency-Key, hệ thống trả lại kết quả đã cache mà không tạo bản ghi trùng lặp hoặc tăng generation.
+  * `app/schemas/intake.py`: DTOs Pydantic cho tạo Application, danh sách hồ sơ (chỉ lộ `public_label` như `CAND-XXXXXX`), upload document và chi tiết Application.
+  * `app/services/intake.py`:
+    * Nghiệp vụ tiếp nhận hồ sơ: Tạo Candidate mới với nhãn ẩn danh tự sinh (`public_label`), gắn Application vào Requisition, chặn tạo đơn trùng cho cùng Candidate trên Requisition (`APPLICATION_ALREADY_EXISTS`), chặn tạo đơn khi Requisition đã đóng.
+    * Tải lên tài liệu ứng viên: Lưu trữ vào `private_storage/documents/{application_id}/{doc_id}.bin`, tính mã hash SHA-256 chống trùng lặp trong cùng hồ sơ (`DOCUMENT_ALREADY_CURRENT`), tăng `generation` và `row_version` của Application, xóa con trỏ `current_sanitized_version_id` (buộc phải kiểm duyệt ẩn danh lại tài liệu mới), đưa Job vào hàng đợi bền vững `Job(type=JobType.INGEST_DOCUMENT, status=JobStatus.QUEUED)`.
+    * Quyền riêng tư: Tên tập tin gốc (`original_filename`) chỉ được trả về khi người dùng có `RawAccessGrant` còn hiệu lực mang scope `raw_cv`.
+  * `app/api/v1/intake.py`: REST API endpoints (`GET /requisitions/{id}/applications`, `POST /requisitions/{id}/applications`, `GET /applications/{id}`, `GET /applications/{id}/documents`, `POST /applications/{id}/documents` trả HTTP 202 Accepted).
+  * `services/backend/tests/test_intake.py`: 6 integration test cases kiểm thử tạo Application với public label, upload PDF & DOCX thành công và sinh Job hàng đợi, từ chối file rỗng, quá cỡ và fake extension, kiểm tra Idempotency-Key không tạo đơn lặp, bảo vệ che giấu tên file gốc khi thiếu RawAccessGrant, và path traversal guards.
+* **Invariants được đáp ứng:**
+  * File CV gốc được lưu trữ trong thư mục private riêng biệt, không có URL công khai, không serialize blob_key ra API response thông thường.
+  * Tên và thông tin cá nhân ứng viên hoàn toàn tách biệt khỏi luồng đánh giá thông qua nhãn ẩn danh `public_label`.
+  * Cơ chế Idempotency đảm bảo tính một lần (exactly-once) khi mạng bị chập chờn.
+  * Job xử lý ingestion được ghi bền vững vào cơ sở dữ liệu trước khi trả về HTTP 202 cho client.
+* **Tests đã chạy & Kết quả:**
+  * `pytest services/backend/tests`: **38/38 tests PASS (100%)** trong 6.45s.
+  * Next.js build: PASS.
+* **Bước tiếp theo:** B06 — Parse PDF, normalization và provenance (Bộ bóc tách text chuẩn hóa Unicode NFC/LF, trích xuất metadata trang, đăng ký Source Span Registry và kiểm tra chất lượng trích xuất).
