@@ -76,7 +76,7 @@ async def create_assessment_run(
         .where(Application.id == application_id)
     )
     app_obj = (await db.execute(stmt_app)).scalar_one_or_none()
-    if not app_obj:
+    if not app_obj or app_obj.status == "deleted":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hồ sơ ứng viên không tồn tại.")
 
     # Membership check
@@ -208,6 +208,17 @@ async def execute_assessment_job(
     run.started_at = now
     await db.flush()
 
+    # SEC-10 Initial Tombstone / Deletion check
+    stmt_app_check = select(Application.status, Application.generation).where(Application.id == run.application_id)
+    app_check = (await db.execute(stmt_app_check)).first()
+    if not app_check or app_check[0] == "deleted" or app_check[1] > run.application.generation:
+        logger.warning(f"Application {run.application_id} is deleted or generation bumped. Aborting assessment.")
+        run.status = "failed"
+        run.failure_code = "APPLICATION_TOMBSTONED"
+        run.completed_at = now
+        await db.flush()
+        return
+
     # 2. Load Rubric criteria and Sanitized Source Spans
     stmt_crit = (
         select(RubricCriterion)
@@ -274,6 +285,17 @@ async def execute_assessment_job(
     if not validated_output:
         run.status = "failed"
         run.failure_code = "OUTPUT_VALIDATION_FAILED"
+        run.completed_at = datetime.now(timezone.utc)
+        await db.flush()
+        return
+
+    # SEC-10 Late Arrival / Deletion Check
+    stmt_app_check = select(Application.status, Application.generation).where(Application.id == run.application_id)
+    app_check = (await db.execute(stmt_app_check)).first()
+    if not app_check or app_check[0] == "deleted" or app_check[1] > run.application.generation:
+        logger.warning(f"Application {run.application_id} was deleted or generation incremented during LLM call. Discarding output.")
+        run.status = "failed"
+        run.failure_code = "APPLICATION_TOMBSTONED"
         run.completed_at = datetime.now(timezone.utc)
         await db.flush()
         return
@@ -353,7 +375,7 @@ async def get_assessment_run_detail(
         .where(AssessmentRun.id == run_id)
     )
     run = (await db.execute(stmt)).scalar_one_or_none()
-    if not run:
+    if not run or run.application.status == "deleted":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kết quả đánh giá không tồn tại.")
 
     # Membership check

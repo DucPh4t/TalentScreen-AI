@@ -597,6 +597,15 @@ async def execute_interview_job(
         )
         validated_output = validate_interview_output(llm_resp2.content, valid_span_ids)
 
+    # SEC-10 Late arrival / Deletion check
+    stmt_app_check = select(Application.status, Application.generation).where(Application.id == draft.application_id)
+    app_check = (await db.execute(stmt_app_check)).first()
+    if not app_check or app_check[0] == "deleted" or app_check[1] > snapshot.get("application_generation", 1):
+        logger.warning(f"Application {draft.application_id} was deleted or tombstoned during interview LLM call. Discarding output.")
+        draft.status = "failed"
+        await db.flush()
+        return
+
     # 6. Save validated followups
     draft.questions_payload = {
         "followups": [f.model_dump() for f in validated_output.followups]

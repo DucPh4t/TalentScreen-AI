@@ -251,6 +251,9 @@ async def execute_job_handler(
     elif job_type == JobType.DRAFT_INTERVIEW:
         from app.services.interview import execute_interview_job
         await execute_interview_job(db, job_id=job_id)
+    elif job_type == JobType.PURGE_DATA:
+        from app.services.deletion import execute_purge_job
+        await execute_purge_job(db, job_id=job_id)
     else:
         logger.info(f"Handler for job type {job_type} executed (mock or pending).")
 

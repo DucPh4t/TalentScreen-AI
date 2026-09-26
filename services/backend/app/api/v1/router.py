@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from app.config import get_settings
 from app.api.v1.assessment import router as assessment_router
 from app.api.v1.decision import router as decision_router
+from app.api.v1.deletion import router as deletion_router
 from app.api.v1.interview import router as interview_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.intake import router as intake_router
@@ -24,6 +25,7 @@ router.include_router(llm_router)
 router.include_router(assessment_router)
 router.include_router(decision_router)
 router.include_router(interview_router)
+router.include_router(deletion_router)
 
 
 

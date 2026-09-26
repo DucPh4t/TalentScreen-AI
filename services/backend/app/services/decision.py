@@ -80,7 +80,7 @@ async def _verify_application_and_membership(
         .where(Application.id == application_id)
     )
     app_obj = (await db.execute(stmt_app)).scalar_one_or_none()
-    if not app_obj:
+    if not app_obj or app_obj.status == "deleted":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Đơn ứng tuyển không tồn tại.")
 
     stmt_mem = select(RequisitionMembership).where(

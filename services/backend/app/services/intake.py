@@ -162,7 +162,7 @@ async def list_applications(
     stmt = (
         select(Application, Candidate.public_label)
         .join(Candidate, Application.candidate_id == Candidate.id)
-        .where(Application.requisition_id == requisition_id)
+        .where(Application.requisition_id == requisition_id, Application.status != "deleted")
         .order_by(Application.received_at.desc())
     )
     res = await db.execute(stmt)
@@ -208,6 +208,8 @@ async def get_application_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Đơn ứng tuyển không tồn tại.")
 
     app_obj, public_label = row
+    if app_obj.status == "deleted":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Đơn ứng tuyển không tồn tại.")
     await check_requisition_access(db, app_obj.requisition_id, ctx)
 
     # Check for active raw grant
@@ -266,7 +268,7 @@ async def upload_application_document(
     """
     stmt_app = select(Application).where(Application.id == application_id).with_for_update()
     app_obj = (await db.execute(stmt_app)).scalar_one_or_none()
-    if not app_obj:
+    if not app_obj or app_obj.status == "deleted":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Đơn ứng tuyển không tồn tại.")
 
     # Guard: Member or Admin

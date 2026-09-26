@@ -50,6 +50,11 @@ async def _verify_membership_and_grant(
     """
     is_admin = AccountRole.ADMIN in ctx.roles
 
+    stmt_app = select(Application.status).where(Application.id == application_id)
+    app_status = (await db.execute(stmt_app)).scalar_one_or_none()
+    if not app_status or app_status == "deleted":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy tài nguyên.")
+
     stmt_mem = select(RequisitionMembership).where(
         RequisitionMembership.requisition_id == requisition_id,
         RequisitionMembership.user_id == ctx.user.id,
