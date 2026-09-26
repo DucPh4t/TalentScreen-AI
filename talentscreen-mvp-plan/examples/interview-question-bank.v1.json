@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0.0",
+  "bank_id": "BANK-BACKEND-PYTHON-001",
+  "version": 1,
+  "status": "draft_seed",
+  "rubric_id": "RUBRIC-BACKEND-PYTHON-001",
+  "rubric_version": 1,
+  "approval": {
+    "approved_by": null,
+    "approved_at": null
+  },
+  "usage_note": "Ngân hàng câu hỏi mẫu do người lập plan soạn. HR/IT duyệt trước sử dụng; indicators là gợi ý quan sát, không phải đáp án duy nhất hoặc điểm phỏng vấn tự động. Hỏi nhất quán và cho ứng viên làm rõ; không yêu cầu tiết lộ bí mật/dữ liệu cá nhân.",
+  "questions": [
+    {
+      "question_id": "CORE-01",
+      "criterion_id": "python_backend",
+      "question_vi": "Bạn hãy chọn một chức năng backend Python mình trực tiếp làm, giải thích cách tổ chức mã, xử lý đầu vào lỗi và kiểm tra chức năng sau khi sửa.",
+      "purpose_vi": "Làm rõ phần đóng góp cá nhân và cách giữ hành vi của chức năng.",
+      "answer_indicators": [
+        "Phân biệt việc cá nhân với việc của nhóm",
+        "Giải thích trách nhiệm các phần mã",
+        "Nêu lỗi cụ thể và cách kiểm tra"
+      ]
+    },
+    {
+      "question_id": "CORE-02",
+      "criterion_id": "api_design",
+      "question_vi": "Với API đăng ký phòng học, bạn sẽ thiết kế request, response và xử lý hai yêu cầu đặt trùng giờ như thế nào? Bạn có thể liên hệ với một API mình đã làm.",
+      "purpose_vi": "Kiểm tra lập luận về hợp đồng API và tình huống lỗi trong cùng một bài toán.",
+      "answer_indicators": [
+        "Nêu cấu trúc dữ liệu đầu vào/đầu ra",
+        "Phân biệt kiểm tra đầu vào và xung đột nghiệp vụ",
+        "Giải thích status code và xử lý cạnh tranh"
+      ]
+    },
+    {
+      "question_id": "CORE-03",
+      "criterion_id": "sql_data",
+      "question_vi": "Bạn sẽ lưu phòng và lượt đặt bằng cơ sở dữ liệu quan hệ như thế nào, và giữ dữ liệu đúng khi hai người đặt đồng thời ra sao?",
+      "purpose_vi": "Làm rõ mô hình dữ liệu, ràng buộc và transaction.",
+      "answer_indicators": [
+        "Giải thích bảng/khóa/quan hệ",
+        "Nêu ranh giới transaction và điều kiện toàn vẹn",
+        "Mô tả cách kiểm chứng tình huống đồng thời"
+      ]
+    },
+    {
+      "question_id": "CORE-04",
+      "criterion_id": "testing_debugging",
+      "question_vi": "Hãy kể một lỗi backend bạn trực tiếp xử lý: tái hiện lỗi thế nào, xác định nguyên nhân ra sao và kiểm tra để lỗi không tái diễn bằng cách nào?",
+      "purpose_vi": "Xác minh quy trình debugging và kiểm thử bằng một ví dụ cụ thể.",
+      "answer_indicators": [
+        "Có các bước tái hiện rõ",
+        "Phân biệt triệu chứng và nguyên nhân",
+        "Nêu kiểm tra trước/sau bản sửa"
+      ]
+    },
+    {
+      "question_id": "CORE-05",
+      "criterion_id": "security_privacy",
+      "question_vi": "Với API chỉ cho người phụ trách xem dữ liệu của đơn vị mình, bạn kiểm tra quyền ở đâu và kiểm thử truy cập sai phạm vi thế nào?",
+      "purpose_vi": "Kiểm tra ranh giới phân quyền và bảo vệ dữ liệu.",
+      "answer_indicators": [
+        "Kiểm quyền tại backend gắn tài nguyên cụ thể",
+        "Nêu cả trường hợp được phép và bị từ chối",
+        "Tránh đưa secret/dữ liệu cá nhân vào log"
+      ]
+    },
+    {
+      "question_id": "CORE-06",
+      "criterion_id": "delivery_ops",
+      "question_vi": "Bạn sẽ đưa một thay đổi backend lên môi trường dùng thử và xử lý khi health check sau triển khai thất bại như thế nào?",
+      "purpose_vi": "Làm rõ quy trình thay đổi, cấu hình, quan sát và khôi phục.",
+      "answer_indicators": [
+        "Nêu bước kiểm tra trước triển khai",
+        "Tách cấu hình khỏi mã/secret",
+        "Có kiểm tra dịch vụ và hướng khôi phục"
+      ]
+    }
+  ]
+}

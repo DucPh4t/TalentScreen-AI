@@ -1,0 +1,14 @@
+{
+  "followups": [
+    {
+      "criterion_id": "testing_debugging",
+      "question_vi": "Bạn có thể mô tả một lỗi API mình trực tiếp xử lý và cách kiểm tra bản sửa?",
+      "purpose_vi": "Làm rõ kinh nghiệm debugging và kiểm thử còn thiếu trong CV.",
+      "source_span_ids": [],
+      "answer_indicators": [
+        "Nêu bước tái hiện",
+        "Giải thích kiểm thử tránh tái phát"
+      ]
+    }
+  ]
+}

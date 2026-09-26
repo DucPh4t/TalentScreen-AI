@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://talentscreen.local/contracts/interview-output/1.0.0",
+  "title": "Interview followups model output v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "followups"
+  ],
+  "properties": {
+    "followups": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "criterion_id",
+          "question_vi",
+          "purpose_vi",
+          "source_span_ids",
+          "answer_indicators"
+        ],
+        "properties": {
+          "criterion_id": {
+            "type": "string",
+            "enum": [
+              "python_backend",
+              "api_design",
+              "sql_data",
+              "testing_debugging",
+              "security_privacy",
+              "delivery_ops"
+            ]
+          },
+          "question_vi": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          },
+          "purpose_vi": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "source_span_ids": {
+            "type": "array",
+            "maxItems": 6,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^spn_[0-9a-f]{24}$"
+            }
+          },
+          "answer_indicators": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          }
+        }
+      }
+    }
+  }
+}

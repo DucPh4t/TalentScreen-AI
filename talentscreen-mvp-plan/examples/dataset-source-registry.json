@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "checked_at": "2026-09-26",
+  "status": "planning_only_not_imported",
+  "sources": [
+    {
+      "source_id": "candidate_matching_synthetic",
+      "dataset_id": "michaelozon/candidate-matching-synthetic",
+      "source_url": "https://huggingface.co/datasets/michaelozon/candidate-matching-synthetic",
+      "license_id_reported": "MIT",
+      "origin_kind_reported": "synthetic",
+      "revision": null,
+      "license_snapshot_hash": null,
+      "import_enabled": false,
+      "selection": "preferred_external_bootstrap_after_revision_and_license_check",
+      "role_filter": ["Backend Engineer", "Software Engineer", "Full Stack Engineer"],
+      "max_records": 100,
+      "sample_seed": 42,
+      "allowed_use": ["sandbox_import_test", "retrieval_exploration"],
+      "label_origin": "source_heuristic",
+      "external_processing_allowed": false,
+      "activation_requires": ["pin_revision", "save_license_snapshot", "inspect_actual_schema", "confirm_synthetic_origin", "scan_sample_for_pii", "record_import_review"]
+    },
+    {
+      "source_id": "datasetmaster_resumes",
+      "dataset_id": "datasetmaster/resumes",
+      "source_url": "https://huggingface.co/datasets/datasetmaster/resumes",
+      "license_id_reported": "MIT",
+      "origin_kind_reported": "mixed",
+      "revision": null,
+      "import_enabled": false,
+      "selection": "quarantine_until_real_vs_synthetic_provenance_review",
+      "allowed_use": [],
+      "external_processing_allowed": false
+    },
+    {
+      "source_id": "opensporks_resumes_mirror",
+      "dataset_id": "opensporks/resumes",
+      "source_url": "https://huggingface.co/datasets/opensporks/resumes",
+      "upstream_url": "https://www.kaggle.com/datasets/snehaanbhawal/resume-dataset",
+      "license_id_reported": "CC0-1.0",
+      "origin_kind_reported": "scraped_resume_examples",
+      "revision": null,
+      "import_enabled": false,
+      "selection": "not_selected_for_mvp_default",
+      "allowed_use": [],
+      "external_processing_allowed": false
+    }
+  ]
+}
