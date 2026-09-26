@@ -152,10 +152,46 @@ def build_spans_from_pages(pages_text: list[tuple[int, str]]) -> tuple[str, list
     return full_canonical_text, spans
 
 
+import os
+import shutil
+from PIL import Image
+
+try:
+    import pytesseract
+    # Auto-discover tesseract executable path
+    _tess_cmd = shutil.which("tesseract") or "/opt/homebrew/bin/tesseract"
+    if os.path.exists(_tess_cmd):
+        pytesseract.pytesseract.tesseract_cmd = _tess_cmd
+    HAVE_TESSERACT = True
+except ImportError:
+    HAVE_TESSERACT = False
+
+
+def run_ocr_on_image_bytes(img_bytes: bytes, lang: str = "vie+eng") -> str:
+    """Run local Tesseract OCR on image bytes with Vietnamese and English recognition."""
+    if not HAVE_TESSERACT:
+        return ""
+    try:
+        with Image.open(io.BytesIO(img_bytes)) as pil_img:
+            # Convert to grayscale if not RGB for optimal OCR contrast
+            if pil_img.mode not in ("RGB", "L"):
+                pil_img = pil_img.convert("RGB")
+            try:
+                text = pytesseract.image_to_string(pil_img, lang=lang)
+            except Exception:
+                # Fallback to English only if combined model fails
+                text = pytesseract.image_to_string(pil_img, lang="eng")
+            return text.strip()
+    except Exception:
+        return ""
+
+
 def compute_quality_report(
     pages_text: list[tuple[int, str]],
     total_text_length: int,
     total_pages: int,
+    ocr_applied: bool = False,
+    ocr_pages: Optional[list[int]] = None,
 ) -> dict[str, Any]:
     """Calculate quality metrics and diagnostics on parsed document text."""
     empty_pages = 0
@@ -167,11 +203,16 @@ def compute_quality_report(
         if char_count == 0:
             empty_pages += 1
         elif char_count < 25:
-            # High probability of being a scanned image page without embedded text
             scanned_pages += 1
 
     suspected_scanned = total_pages > 0 and (scanned_pages + empty_pages) == total_pages
     avg_chars_per_page = total_chars / max(1, total_pages)
+
+    status = "ok"
+    if ocr_applied:
+        status = "ok_ocr_recovered"
+    elif suspected_scanned:
+        status = "warning_scanned"
 
     return {
         "total_pages": total_pages,
@@ -179,13 +220,15 @@ def compute_quality_report(
         "empty_pages": empty_pages,
         "scanned_suspected_pages": scanned_pages,
         "suspected_scanned": suspected_scanned,
+        "ocr_applied": ocr_applied,
+        "ocr_pages": ocr_pages or [],
         "average_chars_per_page": round(avg_chars_per_page, 1),
-        "quality_status": "warning_scanned" if suspected_scanned else "ok",
+        "quality_status": status,
     }
 
 
 def parse_pdf_bytes(pdf_bytes: bytes) -> ParseResult:
-    """Parse PDF file bytes into canonical text, page metadata, and registered spans."""
+    """Parse PDF file bytes into canonical text, page metadata, and registered spans with OCR fallback."""
     try:
         reader = PdfReader(io.BytesIO(pdf_bytes))
     except Exception as e:
@@ -193,7 +236,6 @@ def parse_pdf_bytes(pdf_bytes: bytes) -> ParseResult:
 
     if reader.is_encrypted:
         try:
-            # Try empty password
             decrypt_res = reader.decrypt("")
             if decrypt_res == 0:
                 raise DocumentParsingError("ENCRYPTED_PDF", "Tệp PDF có mật khẩu bảo vệ, không thể giải mã.")
@@ -205,17 +247,43 @@ def parse_pdf_bytes(pdf_bytes: bytes) -> ParseResult:
         raise DocumentParsingError("EMPTY_PDF", "Tệp PDF không có trang nào.")
 
     pages_text: list[tuple[int, str]] = []
+    ocr_applied = False
+    ocr_pages: list[int] = []
+
     for page_idx, page in enumerate(reader.pages):
         page_num = page_idx + 1
         try:
             p_text = page.extract_text() or ""
         except Exception:
             p_text = ""
+
+        # Task B15 OCR Fallback: If page text is empty or very sparse (< 25 chars), attempt OCR on embedded images
+        if len(p_text.strip()) < 25 and hasattr(page, "images") and len(page.images) > 0:
+            ocr_text_accum = []
+            for img in page.images:
+                try:
+                    ocr_res = run_ocr_on_image_bytes(img.data, lang="vie+eng")
+                    if ocr_res:
+                        ocr_text_accum.append(ocr_res)
+                except Exception:
+                    continue
+
+            if ocr_text_accum:
+                p_text = "\n\n".join(ocr_text_accum)
+                ocr_applied = True
+                ocr_pages.append(page_num)
+
         pages_text.append((page_num, p_text))
 
     canonical_text, spans = build_spans_from_pages(pages_text)
     sha256 = hashlib.sha256(canonical_text.encode("utf-8")).hexdigest()
-    quality = compute_quality_report(pages_text, len(canonical_text), total_pages)
+    quality = compute_quality_report(
+        pages_text,
+        len(canonical_text),
+        total_pages,
+        ocr_applied=ocr_applied,
+        ocr_pages=ocr_pages,
+    )
     lang = detect_language_vi_or_en(canonical_text)
 
     return ParseResult(
@@ -244,21 +312,32 @@ def parse_docx_bytes(docx_bytes: bytes) -> ParseResult:
         for row in t.rows:
             row_texts = [cell.text.strip() for cell in row.cells if cell.text.strip()]
             if row_texts:
-                paragraphs.append(" | ".join(row_texts))
+                # Deduplicate adjacent duplicate cells from merged table cells
+                deduped: list[str] = []
+                for cell_txt in row_texts:
+                    if not deduped or cell_txt != deduped[-1]:
+                        deduped.append(cell_txt)
+                paragraphs.append(" | ".join(deduped))
 
-    raw_text = "\n\n".join(paragraphs)
-    # DOCX does not have explicit physical pages, treat as single page or estimate by length
+    raw_text = "\n\n".join(paragraphs).strip()
+
+    # Estimate page count: roughly 2,000 characters per standard CV page
+    estimated_pages = max(1, (len(raw_text) + 1999) // 2000)
     pages_text = [(1, raw_text)]
 
     canonical_text, spans = build_spans_from_pages(pages_text)
     sha256 = hashlib.sha256(canonical_text.encode("utf-8")).hexdigest()
-    quality = compute_quality_report(pages_text, len(canonical_text), total_pages=1)
+    quality = compute_quality_report(pages_text, len(canonical_text), total_pages=estimated_pages)
+    # Add page limit check per Spec 05 (max 10 pages for CV)
+    quality["estimated_pages"] = estimated_pages
+    quality["excessive_page_count"] = estimated_pages > 10
+
     lang = detect_language_vi_or_en(canonical_text)
 
     return ParseResult(
         canonical_text=canonical_text,
         sha256=sha256,
-        page_count=1,
+        page_count=estimated_pages,
         spans=spans,
         quality_report=quality,
         detected_language=lang,

@@ -247,3 +247,44 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
   * `npm run build` (Next.js 15.5): **Compiled successfully in 1.2s**, 5/5 static & dynamic pages sinh ra thành công không có bất kỳ lỗi TypeScript hay đóng gói nào.
   * `pytest services/backend/tests`: **86/86 tests PASS (100%)** trong 23.95s.
 * **Bước tiếp theo:** B15 & B16 — Local OCR fallbacks và Local multilingual embeddings & hybrid retrieval.
+
+### B15 — Local OCR và DOCX rendering fallbacks
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `app/services/parser.py`: Bổ sung cơ chế OCR cục bộ và nâng cấp phân tích cấu trúc DOCX:
+    * Tích hợp Tesseract OCR đa ngôn ngữ (`vie+eng`) qua PIL và `pytesseract` với khả năng tự động dò tìm đường dẫn thực thi của tesseract.
+    * Khi bóc tách PDF, nếu trang không có text hoặc text dưới 25 ký tự nhưng có hình ảnh nhúng (`page.images`), hệ thống tự động chạy OCR trên ảnh, chuẩn hóa kết quả qua `normalize_to_nfc_lf`, xây dựng `SourceSpan` với tọa độ codepoints nguyên bản và gắn cờ `ocr_applied = True`, `quality_status = "ok_ocr_recovered"`.
+    * Nâng cấp bóc tách DOCX: bảo toàn cấu trúc bảng/nhiều cột thông qua ký tự phân cách ` | `, khử trùng lặp các ô gộp (merged cells), ước tính số trang thực tế (~2000 ký tự/trang) và phát hiện vi phạm giới hạn độ dài CV (`excessive_page_count` vượt quá 10 trang theo Spec 05).
+    * Quản lý lỗi kỹ thuật an toàn: Bắt lỗi tệp hỏng (`MALFORMED_PDF`, `MALFORMED_DOCX`), mã hóa có mật khẩu (`ENCRYPTED_PDF`), MIME không hỗ trợ (`UNSUPPORTED_MIME`). Văn bản scan hoàn toàn rỗng hoặc lỗi kỹ thuật không bao giờ bị biến thành "thiếu bằng chứng năng lực" (insufficient evidence), mà được ghi nhận lỗi kỹ thuật rõ ràng để HR xử lý thủ công hoặc yêu cầu thông tin lại.
+  * `services/backend/pyproject.toml`: Bổ sung dependencies `pillow>=10.0.0` và `pytesseract>=0.3.10`.
+  * `services/backend/tests/test_ocr_parser.py`: 6 test cases bao quát: phục hồi text từ PDF scan qua OCR và kiểm tra tính toàn vẹn của span offsets, phát hiện cảnh báo PDF rỗng/scan, bóc tách bảng và cột trong DOCX, xử lý DOCX rỗng, từ chối MIME không hỗ trợ, và chạy OCR an toàn trên dữ liệu nhị phân không hợp lệ mà không crash.
+* **Invariants được đáp ứng:**
+  * Toàn bộ trích dẫn phục hồi từ OCR đều tuân thủ 100% đẳng thức codepoints `canonical_text[start_cp:end_cp] == span.text`.
+  * Lỗi bóc tách tài liệu không bao giờ tự động chuyển hóa thành điểm đánh giá năng lực của ứng viên.
+  * Bộ nhớ đệm xử lý ảnh được giải phóng trong bộ nhớ mà không để lại tệp tạm trên đĩa.
+* **Tests đã chạy & Kết quả:**
+  * `pytest services/backend/tests/test_ocr_parser.py`: **6/6 tests PASS (100%)** trong 0.64s.
+
+### B16 — Local multilingual embeddings và hybrid retrieval
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `app/services/embedding.py`: Dịch vụ sinh vector embeddings cục bộ và phân mảnh (chunking) tài liệu:
+    * Mô hình chuẩn hóa: Multilingual E5-base (768 chiều), chuẩn hóa L2 norm=1.0, hỗ trợ tiền tố E5 (`query: ` cho truy vấn và `passage: ` cho đoạn văn).
+    * Phân mảnh ngữ nghĩa `build_chunks_from_spans`: Gom các spans lân cận trong cùng một mục (section) thành các khối ~250–350 tokens, giới hạn cứng 480 tokens, bảo toàn trọn vẹn danh sách `span_ids` để duy trì chuỗi kiểm chứng.
+    * Đánh chỉ mục bền vững vào `RetrievalChunk` trong PostgreSQL thông qua `pgvector`, xóa bản ghi cũ trước khi nạp để bảo đảm tính idempotent.
+  * `app/services/retrieval.py`: Dịch vụ truy vấn lai ghép (Hybrid Retrieval) kết hợp Dense + Lexical + RRF:
+    * Phân lập dữ liệu nghiêm ngặt: Mọi câu truy vấn bắt buộc phải lọc theo `sanitized_version_id` và `embedding_config_id`. Nghiêm cấm đọc chéo giữa các ứng viên.
+    * Dense Search: Tìm kiếm ngữ nghĩa chính xác qua toán tử khoảng cách cosine của pgvector (`cosine_distance`), lấy top 10 cho mỗi tiêu chí.
+    * Lexical Search: Tìm kiếm từ khóa kỹ thuật theo `ilike` trên các chunk văn bản, lấy top 10 cho mỗi tiêu chí.
+    * Hợp nhất thứ hạng RRF (Reciprocal Rank Fusion): Áp dụng công thức chuẩn $RRF(c) = \sum \frac{1}{60 + rank}$, giải quyết xung đột thứ hạng một cách xác định (deterministic tie-breaking: RRF giảm dần, sau đó theo `chunk_index` tăng dần).
+    * Đóng gói bằng chứng có giới hạn: Lấy tối đa 4 chunk/tiêu chí, deterministic packing tối đa 8.000 tokens, tự động chuyển về chiến lược `fulltext_fallback` khi tài liệu không có vector hoặc không tìm thấy bằng chứng phù hợp.
+  * `services/backend/tests/test_hybrid_retrieval.py`: 4 integration test cases kiểm thử: vector properties (độ dài 768, unit norm, phân biệt ngữ nghĩa), thuật toán phân mảnh spans theo section, nạp và lưu trữ `RetrievalChunk` trong pgvector, truy vấn lai ghép Dense + Lexical + RRF cho tiêu chí kỹ thuật, và cơ chế phát hiện fallback tự động.
+* **Invariants được đáp ứng:**
+  * Truy vấn embedding được cô lập 100% trong phạm vi hồ sơ ứng viên; không có hiện tượng rò rỉ hoặc truy vấn chéo giữa các ứng viên khác nhau.
+  * Điểm tương đồng cosine và điểm RRF chỉ đóng vai trò độ phù hợp trích xuất, tuyệt đối không được coi là điểm năng lực của ứng viên.
+  * Toàn bộ mã định danh `span_ids` được lưu trữ đầy đủ trong mỗi retrieval chunk.
+* **Tests đã chạy & Kết quả:**
+  * `pytest services/backend/tests`: **96/96 tests PASS (100%)** trong 23.97s.
+  * Next.js build: **Compiled successfully in 0.5s**.
+* **Bước tiếp theo:** B18, B19, B20 — Dataset bootstrap & fixture factory, Evaluation harness & metrics, Prompt regression runner.
+
