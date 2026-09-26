@@ -9,8 +9,8 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
 | Task | Tên tác vụ | Ưu tiên | Trạng thái | Ghi chú & Lệnh kiểm thử |
 |---|---|---|---|---|
 | **B00** | Khởi tạo monorepo, doctor và cấu hình | P0 | **COMPLETED** | `make doctor`, `make test-backend`, Next.js build pass |
-| **B01** | Data model, migration và domain enums | P0 | *READY* | Sẵn sàng triển khai SQLAlchemy 2 models + Alembic |
-| **B02** | Authentication, session, CSRF và authorization | P0 | *PENDING* | Phụ thuộc B01 |
+| **B01** | Data model, migration và domain enums | P0 | **COMPLETED** | 35 tables created, Alembic migrations pass, 6 integration tests on real PostgreSQL pass |
+| **B02** | Authentication, session, CSRF và authorization | P0 | *READY* | Sẵn sàng triển khai Auth & RBAC |
 | **B03** | Requisition và JD version | P0 | *PENDING* | Phụ thuộc B02 |
 | **B04** | Rubric seed, editor, approval và policy | P0 | *PENDING* | Phụ thuộc B03 |
 | **B05** | Intake upload và private storage | P0 | *PENDING* | Phụ thuộc B02, B03 |
@@ -61,3 +61,33 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
   * `npm run build` (apps/web): Biên dịch tĩnh Next.js PASS trong 1.4s.
   * Khởi động Docker DB & verify extension: `uuid-ossp` và `vector` hoạt động chính xác.
 * **Bước tiếp theo:** B01 — Xây dựng Data model (SQLAlchemy 2 models) và migration Alembic cho toàn bộ entities trong `03-data-api-state-machines.md`.
+
+### B01 — Data model, migration và domain enums
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `app/db/base.py`: DeclarativeBase, `PrimaryKeyMixin` (UUID v4), `TimestampMixin` (UTC `DateTime`), `RowVersionMixin` (optimistic locking).
+  * `app/db/models/org_user.py`: `Organization`, `User`, `UserAccountRole`, `SessionRecord`, `OnboardingProgress`.
+  * `app/db/models/requisition.py`: `Requisition`, `RequisitionMembership`, `JDVersion`, `RubricVersion`, `RubricCriterion`.
+  * `app/db/models/candidate.py`: `Candidate`, `CandidateIdentity`, `Application`, `RawAccessGrant`.
+  * `app/db/models/document.py`: `Document`, `SanitizedVersion`, `SourceSpan`, `RetrievalChunk` (tích hợp `pgvector.sqlalchemy.Vector(768)`).
+  * `app/db/models/assessment.py`: `AssessmentRun`, `CriterionAssessment`, `CriterionEvidence`, `HRRevision`.
+  * `app/db/models/decision.py`: `ReviewAttestation`, `Decision`.
+  * `app/db/models/interview.py`: `InterviewQuestionBank`, `InterviewDraft`, `InterviewRevision`.
+  * `app/db/models/ops.py`: `Job` (queue), `LLMInvocation`, `BudgetPeriod`, `BudgetReservation`, `IdempotencyRecord`, `AuditEvent`, `DeletionRequest`.
+  * `app/db/models/__init__.py`: Export toàn bộ 35 models phục vụ Alembic autogenerate và queries.
+  * `app/db/session.py`: Async engine, sessionmaker và FastAPI dependency `get_db`.
+  * `alembic.ini` & `services/backend/alembic/`: Cấu hình async migrations, template `script.py.mako` tự động import `pgvector`, sinh migration `43bc71851f0e_initial_schema.py`.
+  * `services/backend/tests/conftest.py`: Fixture `test_session_factory` với `NullPool` kiểm thử cô lập trên PostgreSQL.
+  * `services/backend/tests/test_db_models.py`: Bộ kiểm thử tích hợp trên PostgreSQL thật với pgvector query.
+* **Invariants được đáp ứng:**
+  * Toàn bộ 35 bảng nghiệp vụ được thiết lập đầy đủ khóa chính UUID, FK, indexes và ràng buộc unique.
+  * `Candidate` và `CandidateIdentity` tách rời; danh tính cá nhân không đưa vào candidate hay tiêu chí chấm điểm.
+  * Ràng buộc Unique `(requisition_id, candidate_id)` ngăn trùng lặp đơn ứng tuyển.
+  * Ràng buộc Unique `(actor_id, method, route_scope, key)` cho bảng Idempotency.
+  * Ràng buộc Unique `(requisition_id, version_no)` cho JD and Rubric versions.
+  * Tích hợp cột vector 768 chiều cho `RetrievalChunk` và truy vấn khoảng cách cosine của `pgvector`.
+* **Tests đã chạy & Kết quả:**
+  * `alembic upgrade head`: Áp dụng thành công toàn bộ 35 bảng vào cơ sở dữ liệu PostgreSQL 16 + pgvector container.
+  * `make test`: **14/14 tests PASS (100%)** trong 0.49s.
+  * Next.js build: PASS.
+* **Bước tiếp theo:** B02 — Authentication, session, CSRF và authorization (Argon2id, HttpOnly session cookie, RBAC + Requisition Membership, Raw CV grant guards).
