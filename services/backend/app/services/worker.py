@@ -248,6 +248,9 @@ async def execute_job_handler(
     elif job_type == JobType.ASSESS_APPLICATION:
         from app.services.assessment.service import execute_assessment_job
         await execute_assessment_job(db, job_id=job_id)
+    elif job_type == JobType.DRAFT_INTERVIEW:
+        from app.services.interview import execute_interview_job
+        await execute_interview_job(db, job_id=job_id)
     else:
         logger.info(f"Handler for job type {job_type} executed (mock or pending).")
 
