@@ -205,6 +205,9 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       if (!effectiveId) {
         throw new Error("Chưa có kết quả đánh giá hoặc bản sửa đổi HR hợp lệ để làm cơ sở ra quyết định.");
       }
+      if (!rubric?.criteria || rubric.criteria.length !== 6) {
+        throw new Error("Không tải được 6 tiêu chí từ rubric đã duyệt. Vui lòng tải lại trước khi ký duyệt.");
+      }
 
       const attestation = await api.createReviewAttestation(id, {
         decision_basis: "assessment_review",
@@ -212,14 +215,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
           kind: effectiveKind,
           id: effectiveId,
         },
-        reviewed_criterion_ids: [
-          "technical_competence",
-          "system_design_architecture",
-          "problem_solving_debugging",
-          "code_quality_testing",
-          "communication_collaboration",
-          "domain_expertise",
-        ],
+        reviewed_criterion_ids: rubric.criteria.map((criterion: { id: string }) => criterion.id),
         acknowledged: true,
       });
 

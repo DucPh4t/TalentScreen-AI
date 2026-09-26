@@ -27,6 +27,7 @@ from app.schemas.intake import (
 )
 from app.services.audit import record_audit_event
 from app.services.idempotency import complete_idempotency, get_or_start_idempotency
+from app.services.parser import docx_renderer_available
 from app.services.storage import (
     detect_and_validate_file_type,
     sanitize_filename,
@@ -163,7 +164,7 @@ async def list_applications(
         select(Application, Candidate.public_label)
         .join(Candidate, Application.candidate_id == Candidate.id)
         .where(Application.requisition_id == requisition_id, Application.status != "deleted")
-        .order_by(Application.received_at.desc())
+        .order_by(Application.received_at.asc(), Application.id.asc())
     )
     res = await db.execute(stmt)
 
@@ -304,6 +305,11 @@ async def upload_application_document(
 
     # Validate file type and size
     mime = detect_and_validate_file_type(file_bytes, original_filename)
+    if mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" and not docx_renderer_available():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="DOCX_RENDERER_UNAVAILABLE: Hệ thống chưa hỗ trợ xác minh số trang DOCX; vui lòng nộp PDF.",
+        )
     clean_filename = sanitize_filename(original_filename)
     file_sha256 = hashlib.sha256(file_bytes).hexdigest()
 

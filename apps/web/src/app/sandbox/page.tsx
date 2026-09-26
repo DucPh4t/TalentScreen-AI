@@ -115,7 +115,7 @@ const FALLBACK_SCENARIOS: Scenario[] = [
       overall_comparable_score: 78.5,
       core_floor_passed: true,
       coverage_pct: 100.0,
-      recommendation: "advance",
+      recommendation: "consider_next_round",
     },
     instructions: [
       "1. Đọc biên bản cam kết thẩm định (ReviewAttestation) và snapshot hash.",
@@ -152,6 +152,7 @@ export default function SandboxPage() {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [serverAvailable, setServerAvailable] = useState(false);
 
   // Quote Drawer State (Scenario 1)
   const [isQuoteDrawerOpen, setIsQuoteDrawerOpen] = useState(false);
@@ -179,14 +180,9 @@ export default function SandboxPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [scenariosData, statusData] = await Promise.all([
-        api.getSandboxScenarios().catch(() => FALLBACK_SCENARIOS),
-        api.getOnboardingStatus().catch(() => ({
-          completed_steps: {},
-          is_completed: false,
-          remaining_steps: stepKeys,
-        })),
-      ]);
+      const statusData = await api.getOnboardingStatus();
+      const scenariosData = await api.getSandboxScenarios().catch(() => FALLBACK_SCENARIOS);
+      setServerAvailable(true);
       setScenarios(scenariosData?.length ? scenariosData : FALLBACK_SCENARIOS);
       setOnboardingStatus(statusData);
 
@@ -197,7 +193,8 @@ export default function SandboxPage() {
         setActiveStepIndex(firstIncomplete);
       }
     } catch (err: any) {
-      console.warn("Fallback to offline sandbox simulation:", err);
+      console.warn("Sandbox server unavailable; showing read-only examples:", err);
+      setServerAvailable(false);
       setScenarios(FALLBACK_SCENARIOS);
       setOnboardingStatus({
         completed_steps: {},
@@ -210,22 +207,16 @@ export default function SandboxPage() {
   }
 
   async function completeStep(stepId: string, resultData: any) {
+    if (!serverAvailable) {
+      setActionMessage("Chưa kết nối backend. Bạn có thể xem ví dụ, nhưng tiến độ huấn luyện chưa được ghi nhận.");
+      return;
+    }
     try {
       const updated = await api.completeOnboardingStep(stepId, resultData);
       setOnboardingStatus(updated);
-    } catch {
-      // Local fallback for offline/sandbox mode
-      setOnboardingStatus((prev: any) => {
-        const steps = { ...(prev?.completed_steps || {}) };
-        steps[stepId] = { completed: true, completed_at: new Date().toISOString() };
-        const remaining = stepKeys.filter((k) => !steps[k]);
-        return {
-          ...prev,
-          completed_steps: steps,
-          is_completed: remaining.length === 0,
-          remaining_steps: remaining,
-        };
-      });
+    } catch (err: any) {
+      setActionMessage(`Không lưu được tiến độ: ${err.message || String(err)}. Vui lòng thử lại.`);
+      return;
     }
     setActionMessage(`Đã hoàn thành bước: ${stepId}`);
     if (activeStepIndex < 4) {
@@ -287,6 +278,12 @@ export default function SandboxPage() {
             Làm lại từ đầu
           </button>
         </div>
+
+        {!serverAvailable && (
+          <div role="status" style={{ background: "#78350f", color: "#fef3c7", padding: "0.75rem 1rem", borderRadius: "0.375rem" }}>
+            Chế độ xem ví dụ offline: chưa ghi nhận hoàn thành onboarding. Kết nối backend và đăng nhập để lưu tiến độ.
+          </div>
+        )}
 
         {actionMessage && (
           <div

@@ -149,7 +149,7 @@ SANDBOX_TRAINING_SCENARIOS: list[dict[str, Any]] = [
             "overall_comparable_score": 78.5,
             "core_floor_passed": True,
             "coverage_pct": 100.0,
-            "recommendation": "advance",
+            "recommendation": "consider_next_round",
         },
         "instructions": [
             "1. Đọc biên bản cam kết thẩm định (ReviewAttestation) và snapshot hash.",

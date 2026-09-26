@@ -1,142 +1,238 @@
-"""Evaluation harness and metrics calculation for Task B19.
-Computes MAE on comparable scores, Cohen's Kappa on recommendations,
-disaggregated metrics by language, and token/cost accounting.
+"""Compare recorded AI predictions with independent reviewer labels.
+
+Input files are JSON arrays or JSONL and must not contain CV text. This command
+never invents predictions or treats synthetic expectations as HR annotations.
 """
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
+from collections import Counter, defaultdict
 import json
-import math
 from pathlib import Path
-from typing import Any, Optional
-
-FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
+from typing import Any
 
 
-def compute_mae(pairs: list[tuple[float, float]]) -> Optional[float]:
-    """Compute Mean Absolute Error on valid comparable score pairs."""
+CRITERIA = frozenset({
+    "python_backend", "api_design", "sql_data", "testing_debugging",
+    "security_privacy", "delivery_ops",
+})
+RECOMMENDATIONS = frozenset({
+    "consider_next_round", "needs_clarification", "review_required",
+})
+LANGUAGES = frozenset({"vi", "en", "mixed"})
+SPLITS = frozenset({"smoke", "dev", "holdout", "real_shadow"})
+
+
+def compute_mae(pairs: list[tuple[float, float]]) -> float | None:
     if not pairs:
         return None
     return round(sum(abs(pred - gold) for pred, gold in pairs) / len(pairs), 3)
 
 
-def compute_cohens_kappa(pairs: list[tuple[str, str]], categories: list[str]) -> Optional[float]:
-    """Compute Cohen's Kappa for categorical agreement (e.g. recommendations).
-    Returns None if data has single class or is insufficient.
-    """
+def compute_cohens_kappa(pairs: list[tuple[str, str]], categories: list[str]) -> float | None:
+    """Return None when class variation is insufficient to estimate agreement."""
     if len(pairs) < 2:
         return None
-
     n = len(pairs)
-    # Observed agreement Po
-    po = sum(1 for p, g in pairs if p == g) / n
-
-    # Marginal probabilities
-    pred_counts = defaultdict(int)
-    gold_counts = defaultdict(int)
-    for p, g in pairs:
-        pred_counts[p] += 1
-        gold_counts[g] += 1
-
-    pe = sum((pred_counts[cat] / n) * (gold_counts[cat] / n) for cat in categories)
-
-    if pe >= 1.0:
-        return 1.0
-    if 1.0 - pe == 0:
+    pred_counts = Counter(pred for pred, _ in pairs)
+    gold_counts = Counter(gold for _, gold in pairs)
+    observed = sum(pred == gold for pred, gold in pairs) / n
+    expected = sum(pred_counts[cat] * gold_counts[cat] for cat in categories) / (n * n)
+    if expected >= 1:
         return None
-
-    kappa = (po - pe) / (1.0 - pe)
-    return round(kappa, 3)
+    return round((observed - expected) / (1 - expected), 3)
 
 
-def run_evaluation(
-    predictions_path: Optional[Path] = None,
-    fixtures_dir: Path = FIXTURES_DIR,
-) -> dict[str, Any]:
-    """Evaluate predictions against synthetic fixture gold annotations."""
-    manifest_path = fixtures_dir / "manifest.json"
-    if not manifest_path.exists():
-        raise FileNotFoundError(f"Fixture manifest not found at {manifest_path}. Run fixture_factory.py first.")
+def compute_linear_weighted_kappa(pairs: list[tuple[float, float]]) -> float | None:
+    """Ordinal 0..4 agreement, with linear disagreement weights."""
+    if len(pairs) < 2:
+        return None
+    n = len(pairs)
+    pred_counts = Counter(int(pred) for pred, _ in pairs)
+    gold_counts = Counter(int(gold) for _, gold in pairs)
+    observed = sum(abs(pred - gold) / 4 for pred, gold in pairs) / n
+    expected = sum(
+        pred_counts[pred] * gold_counts[gold] * abs(pred - gold) / 4
+        for pred in range(5) for gold in range(5)
+    ) / (n * n)
+    if expected == 0:
+        return None
+    return round(1 - observed / expected, 3)
 
-    with open(manifest_path, "r", encoding="utf-8") as f:
-        manifest = json.load(f)
+
+def _read_records(path: Path) -> dict[str, dict[str, Any]]:
+    if not path.is_file():
+        raise ValueError(f"Input file does not exist: {path}")
+    content = path.read_text(encoding="utf-8").strip()
+    if not content:
+        raise ValueError(f"Input file is empty: {path}")
+    rows = json.loads(content) if content.startswith("[") else [json.loads(line) for line in content.splitlines() if line.strip()]
+    if not isinstance(rows, list):
+        raise ValueError(f"Expected JSON array or JSONL: {path}")
+    indexed: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("sample_id"), str) or not row["sample_id"].strip():
+            raise ValueError(f"Every record needs a nonempty sample_id: {path}")
+        sample_id = row["sample_id"]
+        if sample_id in indexed:
+            raise ValueError(f"Duplicate sample_id {sample_id!r}: {path}")
+        indexed[sample_id] = row
+    return indexed
+
+
+def _validate_row(row: dict[str, Any], *, is_label: bool) -> None:
+    sample_id = row["sample_id"]
+    scores = row.get("criterion_scores")
+    if not isinstance(scores, dict) or set(scores) != CRITERIA:
+        raise ValueError(f"{sample_id}: criterion_scores must contain exactly the six production rubric IDs")
+    if any(value is not None and (type(value) is not int or not 0 <= value <= 4) for value in scores.values()):
+        raise ValueError(f"{sample_id}: scores must be integer anchors 0..4 or null")
+    if row.get("recommendation") not in RECOMMENDATIONS:
+        raise ValueError(f"{sample_id}: unknown recommendation")
+    if is_label:
+        if row.get("language") not in LANGUAGES or row.get("split") not in SPLITS:
+            raise ValueError(f"{sample_id}: label requires valid language and split")
+        if row.get("label_origin") not in {"hr_blind", "design_expected"}:
+            raise ValueError(f"{sample_id}: label_origin must be hr_blind or design_expected")
+        if row["label_origin"] == "hr_blind" and not row.get("reviewer_id"):
+            raise ValueError(f"{sample_id}: blind HR label requires reviewer_id")
+    elif not row.get("run_id") or not row.get("prompt_version") or not row.get("model"):
+        raise ValueError(f"{sample_id}: prediction requires run_id, prompt_version and model")
+
+
+def run_evaluation(predictions_path: Path, labels_path: Path, split: str | None = None) -> dict[str, Any]:
+    """Measure only matched, independently stored predictions and labels."""
+    if split is not None and split not in SPLITS:
+        raise ValueError(f"Unknown split: {split}")
+    predictions = _read_records(predictions_path)
+    labels = _read_records(labels_path)
+    for row in predictions.values():
+        _validate_row(row, is_label=False)
+    for row in labels.values():
+        _validate_row(row, is_label=True)
+    selected = {sid: row for sid, row in labels.items() if split is None or row["split"] == split}
+    if not selected:
+        raise ValueError("No labels in selected split; cannot evaluate")
+    matched_ids = sorted(selected.keys() & predictions.keys())
+    missing_ids = sorted(selected.keys() - predictions.keys())
+    if not matched_ids:
+        raise ValueError("No predictions match selected labels; cannot evaluate")
 
     score_pairs: list[tuple[float, float]] = []
+    hr_assessable = 0
+    ai_abstained_on_hr_assessable = 0
+    ai_scored_without_hr_score = 0
+    criterion_pairs: dict[str, list[tuple[float, float]]] = defaultdict(list)
     recommendation_pairs: list[tuple[str, str]] = []
-    lang_breakdown = defaultdict(lambda: {"count": 0, "correct_recs": 0, "score_diffs": []})
+    by_language: dict[str, dict[str, Any]] = defaultdict(lambda: {"count": 0, "scores": [], "recommendations": []})
+    origins: Counter[str] = Counter()
+    token_input = token_output = 0
+    observed_cost = 0.0
+    cost_rows = 0
+    models: Counter[str] = Counter()
 
-    total_fixtures = 0
-    total_tokens_est = 0
+    for sid in matched_ids:
+        label, pred = selected[sid], predictions[sid]
+        lang = label["language"]
+        origins[label["label_origin"]] += 1
+        models[pred["model"]] += 1
+        recommendation_pairs.append((pred["recommendation"], label["recommendation"]))
+        by_language[lang]["count"] += 1
+        by_language[lang]["recommendations"].append((pred["recommendation"], label["recommendation"]))
+        for criterion in sorted(CRITERIA):
+            gold, value = label["criterion_scores"][criterion], pred["criterion_scores"][criterion]
+            if gold is not None:
+                hr_assessable += 1
+                if value is None:
+                    ai_abstained_on_hr_assessable += 1
+            elif value is not None:
+                ai_scored_without_hr_score += 1
+            if gold is not None and value is not None:
+                pair = (float(value), float(gold))
+                score_pairs.append(pair)
+                criterion_pairs[criterion].append(pair)
+                by_language[lang]["scores"].append(pair)
+        token_input += int(pred.get("input_tokens") or 0)
+        token_output += int(pred.get("output_tokens") or 0)
+        if pred.get("observed_cost_usd") is not None:
+            observed_cost += float(pred["observed_cost_usd"])
+            cost_rows += 1
 
-    for fam in manifest["families"]:
-        f_id = fam["family_id"]
-        json_file = fixtures_dir / fam["json_file"]
-        if not json_file.exists():
-            continue
-
-        with open(json_file, "r", encoding="utf-8") as f:
-            gold_data = json.load(f)
-
-        total_fixtures += 1
-        lang = gold_data["language"]
-        gold_scores = gold_data["expected_scores"]
-        gold_rec = gold_data["expected_recommendation"]
-
-        # Synthetic prediction simulation (or load actual predictions if provided)
-        pred_rec = gold_rec  # Default benchmark baseline matches expected design
-        pred_scores = gold_scores.copy()
-
-        # Track metrics
-        rec_match = (pred_rec == gold_rec)
-        recommendation_pairs.append((pred_rec, gold_rec))
-        lang_breakdown[lang]["count"] += 1
-        if rec_match:
-            lang_breakdown[lang]["correct_recs"] += 1
-
-        for c_id, g_score in gold_scores.items():
-            p_score = pred_scores.get(c_id)
-            if g_score is not None and p_score is not None:
-                score_pairs.append((float(p_score), float(g_score)))
-                lang_breakdown[lang]["score_diffs"].append(abs(float(p_score) - float(g_score)))
-
-        # Token estimate: approx 4 chars per token + system prompt ~1,500 tokens
-        total_tokens_est += len(gold_data["raw_text"]) // 4 + 1500
-
-    mae = compute_mae(score_pairs)
-    categories = ["consider_next_round", "needs_clarification", "review_required"]
+    categories = sorted(RECOMMENDATIONS)
     kappa = compute_cohens_kappa(recommendation_pairs, categories)
-    accuracy = sum(1 for p, g in recommendation_pairs if p == g) / max(1, len(recommendation_pairs))
-
-    # Cost estimate (DeepSeek-chat: $0.14/1M input, $0.28/1M output approx ~$0.20/1M tokens)
-    estimated_cost_usd = round((total_tokens_est / 1_000_000) * 0.20, 4)
-
-    disaggregated = {}
-    for l_key, l_data in lang_breakdown.items():
-        cnt = l_data["count"]
-        disaggregated[l_key] = {
-            "total_samples": cnt,
-            "recommendation_accuracy": round(l_data["correct_recs"] / max(1, cnt), 3),
-            "mean_score_error": round(sum(l_data["score_diffs"]) / max(1, len(l_data["score_diffs"])), 3) if l_data["score_diffs"] else 0.0,
+    summary = {
+        "total_labeled": len(selected),
+        "total_evaluated": len(matched_ids),
+        "missing_prediction_count": len(missing_ids),
+        "missing_prediction_ids": missing_ids,
+        "comparable_score_pairs": len(score_pairs),
+        "mean_absolute_error_score": compute_mae(score_pairs),
+        "human_assessable_coverage": round(len(score_pairs) / hr_assessable, 3) if hr_assessable else None,
+        "ai_abstained_on_hr_assessable": ai_abstained_on_hr_assessable,
+        "ai_scored_without_hr_score": ai_scored_without_hr_score,
+        "linear_weighted_kappa_score": compute_linear_weighted_kappa(score_pairs),
+        "cohens_kappa": kappa,
+        "recommendation_accuracy": round(sum(a == b for a, b in recommendation_pairs) / len(recommendation_pairs), 3),
+        "input_tokens_recorded": token_input,
+        "output_tokens_recorded": token_output,
+        "observed_cost_usd": round(observed_cost, 6) if cost_rows == len(matched_ids) else None,
+    }
+    disaggregated = {
+        lang: {
+            "total_samples": values["count"],
+            "mean_score_error": compute_mae(values["scores"]),
+            "recommendation_accuracy": round(sum(a == b for a, b in values["recommendations"]) / values["count"], 3),
+            "cohens_kappa": compute_cohens_kappa(values["recommendations"], categories),
         }
-
+        for lang, values in sorted(by_language.items())
+    }
+    warnings = []
+    if missing_ids:
+        warnings.append("Some labeled samples have no AI prediction")
+    if kappa is None:
+        warnings.append("Kappa unavailable: too few samples or insufficient class variation")
+    if not score_pairs:
+        warnings.append("MAE unavailable: no comparable scored criteria")
+    if summary["human_assessable_coverage"] is None:
+        warnings.append("Coverage unavailable: HR did not assign any comparable anchors")
+    if summary["linear_weighted_kappa_score"] is None:
+        warnings.append("Weighted score kappa unavailable: insufficient ordinal variation")
+    if origins.get("design_expected"):
+        warnings.append("Synthetic design labels are not independent HR ratings")
+    if models.get("mock"):
+        warnings.append("Mock predictions cannot establish provider quality")
+    if split == "holdout" and len(matched_ids) < 30:
+        warnings.append("Holdout has fewer than 30 matched families")
+    if split == "real_shadow" and len(matched_ids) < 30:
+        warnings.append("Real shadow sample is too small for the planned quality gate")
+    if split in {"holdout", "real_shadow"} and set(by_language) != LANGUAGES:
+        warnings.append("Missing at least one language group: vi, en or mixed")
     return {
-        "evaluation_summary": {
-            "total_evaluated": total_fixtures,
-            "recommendation_accuracy": round(accuracy, 3),
-            "cohens_kappa": kappa,
-            "mean_absolute_error_score": mae,
-            "estimated_tokens_consumed": total_tokens_est,
-            "estimated_cost_usd": estimated_cost_usd,
-        },
+        "evaluation_summary": summary,
+        "per_criterion_mae": {criterion: compute_mae(criterion_pairs[criterion]) for criterion in sorted(CRITERIA)},
         "disaggregated_by_language": disaggregated,
+        "label_origins": dict(origins),
+        "draft_threshold_observations": {
+            "conditional_mae_le_0_75": summary["mean_absolute_error_score"] <= 0.75 if summary["mean_absolute_error_score"] is not None else None,
+            "human_assessable_coverage_ge_0_85": summary["human_assessable_coverage"] >= 0.85 if summary["human_assessable_coverage"] is not None else None,
+            "linear_weighted_kappa_ge_0_60": summary["linear_weighted_kappa_score"] >= 0.60 if summary["linear_weighted_kappa_score"] is not None else None,
+        },
+        "gate_status": "PENDING_HUMAN_SIGNOFF",
+        "gate_eligible": not warnings and origins == Counter({"hr_blind": len(matched_ids)}) and split in {"holdout", "real_shadow"},
+        "warnings": warnings,
     }
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="TalentScreen AI Evaluation Harness")
-    parser.add_argument("--evaluate", action="store_true", help="Run evaluation on fixtures")
+    parser = argparse.ArgumentParser(description="Evaluate recorded AI output against independent reviewer labels")
+    parser.add_argument("--predictions", type=Path, required=True, help="JSONL/JSON array of recorded AI predictions")
+    parser.add_argument("--labels", type=Path, required=True, help="JSONL/JSON array of HR-blind or synthetic labels")
+    parser.add_argument("--split", choices=sorted(SPLITS))
+    parser.add_argument("--output", type=Path, help="Write report to this file (keep private for real CVs)")
     args = parser.parse_args()
-
-    results = run_evaluation()
-    print(json.dumps(results, indent=2, ensure_ascii=False))
+    result = run_evaluation(args.predictions, args.labels, args.split)
+    output = json.dumps(result, indent=2, ensure_ascii=False)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output + "\n", encoding="utf-8")
+    print(output)

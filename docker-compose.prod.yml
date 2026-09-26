@@ -33,13 +33,14 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-sandbox}
+      PILOT_STAGE: ${PILOT_STAGE:-}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-talentscreen}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-talentscreen_prod}
       DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-talentscreen}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-talentscreen_prod}
       PRIVATE_STORAGE_ROOT: /app/private_storage
       SECRET_KEY: ${SECRET_KEY:?Production SECRET_KEY required}
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
-      LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
     volumes:
       - storage_data:/app/private_storage
@@ -65,12 +66,13 @@ services:
         condition: service_healthy
     command: ["python", "-m", "app.cli", "run-worker"]
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-sandbox}
+      PILOT_STAGE: ${PILOT_STAGE:-}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-talentscreen}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-talentscreen_prod}
       DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-talentscreen}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-talentscreen_prod}
       PRIVATE_STORAGE_ROOT: /app/private_storage
       SECRET_KEY: ${SECRET_KEY}
-      LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
     volumes:
       - storage_data:/app/private_storage

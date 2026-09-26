@@ -1,20 +1,12 @@
 {
   "family_id": "family_08_negative_explicit",
-  "split": "smoke",
+  "split": "dev",
+  "smoke": true,
   "persona_label": "Ứng viên 08 — Tự xác nhận chưa từng thực hiện tiêu chí",
   "language": "vi",
   "category": "backend_python",
   "scenario_type": "negative_explicit",
   "raw_text": "Kinh nghiệm làm việc\nLập trình viên ứng dụng (2022 - 2025)\n- Phát triển giao diện web Frontend với React và TailwindCSS.\n- Tôi chưa từng lập trình backend hay thiết kế cơ sở dữ liệu quan hệ SQL.\n",
-  "expected_scores": {
-    "technical_competence": 0,
-    "system_design_architecture": 0,
-    "problem_solving_debugging": 1,
-    "code_quality_testing": 1,
-    "communication_collaboration": 2,
-    "domain_expertise": 0
-  },
-  "expected_recommendation": "review_required",
   "source_registry": {
     "source_id": "syn_src_family_08_negative_explicit",
     "dataset_id": "talentscreen-synthetic-seed-v1",
@@ -22,7 +14,7 @@
     "license_id": "MIT",
     "revision": "git_pinned_b18",
     "approved_use": "testing_evaluation",
-    "label_origin": "design_expected",
+    "label_origin": "unlabeled_synthetic",
     "created_at": "2026-09-26T00:00:00Z"
   }
 }

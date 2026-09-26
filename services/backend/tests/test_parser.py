@@ -37,10 +37,21 @@ from app.services.auth import create_session
 from app.services.parser import (
     DocumentParsingError,
     build_spans_from_pages,
+    detect_language_vi_or_en,
     normalize_to_nfc_lf,
     parse_docx_bytes,
     parse_pdf_bytes,
 )
+
+
+def test_mixed_language_detected_per_section_without_scoring_technical_terms():
+    vi = "Kinh nghiệm làm việc. Phụ trách thiết kế và tối ưu hệ thống Python SQL."
+    en = "Work Experience. Built backend services with PostgreSQL and Redis."
+    assert detect_language_vi_or_en(vi) == "vi"
+    assert detect_language_vi_or_en(en) == "en"
+    assert detect_language_vi_or_en(vi + "\n" + en) == "mixed"
+    _, spans = build_spans_from_pages([(1, vi + "\n\n" + en)])
+    assert [span.language for span in spans] == ["vi", "en"]
 from app.services.provenance import ingest_and_parse_document
 from app.services.storage import save_private_blob
 

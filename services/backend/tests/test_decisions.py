@@ -261,6 +261,23 @@ async def setup_test_context(session, sample_docx_cv):
 
 
 @pytest.mark.asyncio
+async def test_closed_requisition_keeps_review_history_readable(test_session_factory, sample_docx_cv):
+    async with test_session_factory() as session:
+        ctx = await setup_test_context(session, sample_docx_cv)
+        req = (await session.execute(select(Requisition).where(Requisition.id == ctx["req_id"]))).scalar_one()
+        req.status = RequisitionStatus.CLOSED
+        await session.commit()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", cookies={SESSION_COOKIE_NAME: ctx["o_token"]}, headers={"X-CSRF-Token": ctx["o_csrf"]}) as client:
+        decisions = await client.get(f"/api/v1/applications/{ctx['app_id']}/decisions")
+        revisions = await client.get(f"/api/v1/applications/{ctx['app_id']}/hr-revisions")
+        assert decisions.status_code == 200
+        assert decisions.json() == []
+        assert revisions.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_create_and_update_hr_revision_with_recalculated_scores(test_session_factory, sample_docx_cv):
     """Reviewer creates draft HR revision, system calculates scores server-side, reviewer updates draft."""
     async with test_session_factory() as session:
@@ -917,4 +934,3 @@ async def test_attestation_mismatch_and_concurrency_conflict(test_session_factor
         )
         assert d2.status_code == 409
         assert "DECISION_CONFLICT" in d2.json()["detail"]
-

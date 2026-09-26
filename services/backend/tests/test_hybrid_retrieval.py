@@ -186,14 +186,14 @@ async def test_index_and_hybrid_retrieval(test_session_factory):
 
         # 4. Build hybrid assessment pack for 6 standard criteria
         criteria_list = [
-            {"id": "technical_competence", "name": "Năng lực kỹ thuật Golang", "description": "Lập trình backend"},
+            {"id": "python_backend", "name": "Năng lực backend", "description": "Lập trình backend"},
             {"id": "sql_data", "name": "Cơ sở dữ liệu", "description": "PostgreSQL và lưu trữ"},
         ]
         pack = await build_hybrid_assessment_pack(session, san.id, criteria_list)
         assert pack["strategy"] == "hybrid"
         assert pack["fallback_needed"] is False
         assert pack["packed_chunks_count"] >= 1
-        assert "technical_competence" in pack["criteria_retrieval_map"]
+        assert "python_backend" in pack["criteria_retrieval_map"]
         assert "sql_data" in pack["criteria_retrieval_map"]
 
 

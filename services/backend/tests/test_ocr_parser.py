@@ -93,12 +93,35 @@ async def test_docx_table_and_columns_parsing():
     assert "Kinh nghiệm làm việc" in res.canonical_text
     assert "Golang | Chuyên sâu" in res.canonical_text
     assert "PostgreSQL | Nâng cao" in res.canonical_text
-    assert res.quality_report["estimated_pages"] >= 1
+    assert res.quality_report["rendered_page_count"] >= 1
+    assert res.quality_report["docx_pages_verified"] is True
     assert res.quality_report["excessive_page_count"] is False
 
     # Codepoint invariant check
     for s in res.spans:
         assert res.canonical_text[s.start_cp : s.end_cp] == s.text
+
+
+def test_docx_uses_rendered_pages_for_multpage_provenance():
+    doc = docx.Document()
+    doc.add_paragraph("First page backend Python experience.")
+    doc.add_page_break()
+    doc.add_paragraph("Second page database PostgreSQL project.")
+    buf = io.BytesIO()
+    doc.save(buf)
+    result = parse_docx_bytes(buf.getvalue())
+    assert result.page_count == 2
+    assert result.quality_report["docx_pages_verified"] is True
+    assert {span.page_number for span in result.spans} == {1, 2}
+    assert all(result.canonical_text[span.start_cp:span.end_cp] == span.text for span in result.spans)
+
+
+def test_docx_missing_renderer_is_technical_error(monkeypatch):
+    from app.services import parser
+    monkeypatch.setattr(parser.shutil, "which", lambda _: None)
+    with pytest.raises(DocumentParsingError) as exc:
+        parse_docx_bytes(create_test_docx(["Backend experience"]))
+    assert exc.value.error_code == "DOCX_RENDERER_UNAVAILABLE"
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,7 @@ import re
 from typing import Any, Optional
 import uuid
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.document import RetrievalChunk, SanitizedVersion
@@ -49,20 +49,24 @@ async def hybrid_retrieve_for_criterion(
     dense_res = (await db.execute(dense_stmt)).scalars().all()
     dense_rank_map = {chunk.id: idx + 1 for idx, chunk in enumerate(dense_res)}
 
-    # 3. Lexical search via keyword matching (top 10)
+    # 3. Lexical search with PostgreSQL simple full-text ranking (top 10).
+    # Technical tokens such as FastAPI and PostgreSQL remain searchable without
+    # language-specific stemming. Restrict scope before ranking.
     keywords = [w for w in re.findall(r"\w+", query_str.lower()) if len(w) > 2]
     lexical_rank_map: dict[uuid.UUID, int] = {}
     all_chunks_by_id = {c.id: c for c in dense_res}
 
     if keywords:
-        like_clauses = [RetrievalChunk.text.ilike(f"%{kw}%") for kw in keywords[:8]]
+        vector = func.to_tsvector("simple", RetrievalChunk.text)
+        query = func.to_tsquery("simple", " | ".join(keywords[:8]))
         lex_stmt = (
             select(RetrievalChunk)
             .where(
                 RetrievalChunk.sanitized_version_id == sanitized_version_id,
                 RetrievalChunk.embedding_config_id == EMBEDDING_CONFIG_ID,
-                or_(*like_clauses),
+                vector.op("@@")(query),
             )
+            .order_by(func.ts_rank_cd(vector, query).desc(), RetrievalChunk.chunk_index.asc())
             .limit(10)
         )
         lex_res = (await db.execute(lex_stmt)).scalars().all()

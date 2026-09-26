@@ -115,11 +115,15 @@ async def test_create_application_with_pseudonymized_label(test_session_factory)
         assert data["row_version"] == 1
         app_id = data["id"]
 
-        # List shows application with public label
+        second_res = await client.post(f"/api/v1/requisitions/{req_id}/applications", json={})
+        assert second_res.status_code == 201
+        second_id = second_res.json()["id"]
+
+        # The reviewer sees oldest applications first (FIFO), not newest first.
         list_res = await client.get(f"/api/v1/requisitions/{req_id}/applications")
         assert list_res.status_code == 200
         apps = list_res.json()
-        assert any(a["id"] == app_id for a in apps)
+        assert [a["id"] for a in apps if a["id"] in {app_id, second_id}] == [app_id, second_id]
 
 
 @pytest.mark.asyncio

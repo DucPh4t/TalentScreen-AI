@@ -7,7 +7,7 @@ This script provides an 8-minute demonstration script for showcasing the TalentS
 ## Act 1: Intake & PII Sanitization (2 minutes)
 
 1. **Open Dashboard**: Navigate to `http://localhost:3000`.
-   - Log in using an Admin/Recruiter account (`admin` / `Password123!`).
+   - Log in using a dedicated sandbox Recruiter account provisioned locally; never reuse demo credentials for a pilot.
    - Notice the dark palette, environment banner ("Local Sandbox"), and absence of any external tracking.
 2. **Requisition Overview**: Click **Đợt tuyển dụng** $\rightarrow$ select `Senior Python Backend Engineer`.
    - Highlight the FIFO ordering of applications (strictly ordered by `received_at`, not scores).
@@ -71,4 +71,4 @@ This script provides an 8-minute demonstration script for showcasing the TalentS
 
 ## Concluding Message
 
-> *"TalentScreen AI empowers hiring committees to screen hundreds of technical applications in minutes without sacrificing fairness, privacy, or human oversight. The AI serves as an objective evidence extractor, while human experts retain 100% of the hiring authority."*
+> *"TalentScreen AI shows an evidence-first workflow for HR review. Throughput, fairness, privacy and agreement with HR still require measured pilot evidence; human reviewers retain final decision authority."*

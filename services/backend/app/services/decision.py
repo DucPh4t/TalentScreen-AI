@@ -70,8 +70,9 @@ async def _verify_application_and_membership(
     application_id: uuid.UUID,
     ctx: AuthenticatedContext,
     require_owner: bool = False,
+    require_open: bool = True,
 ) -> tuple[Application, RequisitionMembership]:
-    """Verify application exists, requisition is active, and caller has required role."""
+    """Verify access; closed requisitions remain readable for audit history."""
     stmt_app = (
         select(Application)
         .options(
@@ -101,7 +102,7 @@ async def _verify_application_and_membership(
             detail="Chỉ Owner của Requisition mới có quyền thực hiện hành động này.",
         )
 
-    if app_obj.requisition.status == RequisitionStatus.CLOSED:
+    if require_open and app_obj.requisition.status == RequisitionStatus.CLOSED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="REQUISITION_CLOSED: Requisition đã đóng, không thể thực hiện thao tác.",
@@ -252,7 +253,7 @@ async def get_hr_revision_detail(
     if not rev:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bản chỉnh sửa HR không tồn tại.")
 
-    await _verify_application_and_membership(db, rev.application_id, ctx)
+    await _verify_application_and_membership(db, rev.application_id, ctx, require_open=False)
 
     # Check staleness
     app_obj = rev.application
@@ -422,7 +423,7 @@ async def list_hr_revisions(
     ctx: AuthenticatedContext,
 ) -> list[HRRevisionResponse]:
     """List all HR revisions for an application ordered by revision_no desc."""
-    await _verify_application_and_membership(db, application_id, ctx)
+    await _verify_application_and_membership(db, application_id, ctx, require_open=False)
     stmt = (
         select(HRRevision)
         .where(HRRevision.application_id == application_id)
@@ -776,7 +777,7 @@ async def list_decisions(
     ctx: AuthenticatedContext,
 ) -> list[DecisionResponse]:
     """List historical decisions for an application ordered by sequence_no desc."""
-    await _verify_application_and_membership(db, application_id, ctx)
+    await _verify_application_and_membership(db, application_id, ctx, require_open=False)
     stmt = (
         select(Decision)
         .where(Decision.application_id == application_id)

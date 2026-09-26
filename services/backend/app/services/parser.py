@@ -5,6 +5,10 @@ from dataclasses import dataclass, field
 import hashlib
 import io
 import re
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 from typing import Any, Optional
 import unicodedata
 import uuid
@@ -68,10 +72,51 @@ def normalize_to_nfc_lf(raw_text: str) -> str:
 
 
 def detect_language_vi_or_en(text: str) -> str:
-    """Heuristic language detection: check for Vietnamese specific diacritics."""
-    vi_chars = set("àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐ")
-    count_vi = sum(1 for c in text if c in vi_chars)
-    return "vi" if count_vi > 5 else "en"
+    """Conservative vi/en/mixed heuristic per span and document.
+
+    Technical terms such as Python or SQL alone do not make a Vietnamese CV
+    mixed-language. This is metadata for evaluation grouping, never scoring.
+    """
+    lower = text.lower()
+    vi_chars = set("àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ")
+    vi_diacritics = sum(char in vi_chars for char in lower)
+    vi_terms = len(re.findall(r"\b(?:kinh nghiệm|làm việc|dự án|phụ trách|xây dựng|thiết kế|tối ưu|và|học vấn|kỹ năng)\b", lower))
+    en_terms = len(re.findall(r"\b(?:work experience|projects?|built|implemented|developed|designed|improved|responsible|using|with|and|skills|education|at the)\b", lower))
+    has_vi = vi_diacritics >= 2 or vi_terms >= 2
+    has_en = en_terms >= 2
+    if has_vi and has_en:
+        return "mixed"
+    return "vi" if has_vi else "en"
+
+
+def docx_renderer_available() -> bool:
+    return shutil.which("soffice") is not None or shutil.which("libreoffice") is not None
+
+
+def render_docx_to_pdf(docx_bytes: bytes) -> bytes:
+    """Render in a private temporary directory; never infer pages from length."""
+    binary = shutil.which("soffice") or shutil.which("libreoffice")
+    if not binary:
+        raise DocumentParsingError("DOCX_RENDERER_UNAVAILABLE", "Máy chủ chưa có LibreOffice để xác minh số trang DOCX.")
+    with tempfile.TemporaryDirectory(prefix="talentscreen-docx-") as temp_dir:
+        root = Path(temp_dir)
+        source = root / "candidate.docx"
+        source.write_bytes(docx_bytes)
+        profile = (root / "lo-profile").as_uri()
+        try:
+            result = subprocess.run(
+                [binary, f"-env:UserInstallation={profile}", "--headless", "--convert-to", "pdf", "--outdir", str(root), str(source)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise DocumentParsingError("DOCX_RENDER_TIMEOUT", "Render DOCX quá thời gian cho phép.") from exc
+        output = root / "candidate.pdf"
+        if result.returncode != 0 or not output.is_file():
+            raise DocumentParsingError("DOCX_RENDER_FAILED", "Không thể render DOCX để xác minh trang.")
+        return output.read_bytes()
 
 
 def generate_span_id() -> str:
@@ -297,7 +342,7 @@ def parse_pdf_bytes(pdf_bytes: bytes) -> ParseResult:
 
 
 def parse_docx_bytes(docx_bytes: bytes) -> ParseResult:
-    """Parse DOCX file bytes into canonical text, page estimates, and registered spans."""
+    """Parse DOCX with verified rendered page count and source pages."""
     try:
         doc = docx.Document(io.BytesIO(docx_bytes))
     except Exception as e:
@@ -321,23 +366,35 @@ def parse_docx_bytes(docx_bytes: bytes) -> ParseResult:
 
     raw_text = "\n\n".join(paragraphs).strip()
 
-    # Estimate page count: roughly 2,000 characters per standard CV page
-    estimated_pages = max(1, (len(raw_text) + 1999) // 2000)
+    rendered_pdf = render_docx_to_pdf(docx_bytes)
+    try:
+        rendered_page_count = len(PdfReader(io.BytesIO(rendered_pdf)).pages)
+    except Exception as exc:
+        raise DocumentParsingError("DOCX_RENDER_FAILED", "Không đọc được bản render DOCX.") from exc
+    if rendered_page_count == 0:
+        raise DocumentParsingError("DOCX_RENDER_FAILED", "Bản render DOCX không có trang.")
+    if rendered_page_count > 10:
+        raise DocumentParsingError("DOCX_TOO_MANY_PAGES", "CV DOCX vượt quá giới hạn 10 trang thực tế.")
+    if rendered_page_count > 1:
+        result = parse_pdf_bytes(rendered_pdf)
+        result.quality_report["docx_pages_verified"] = True
+        result.quality_report["rendered_page_count"] = rendered_page_count
+        return result
     pages_text = [(1, raw_text)]
 
     canonical_text, spans = build_spans_from_pages(pages_text)
     sha256 = hashlib.sha256(canonical_text.encode("utf-8")).hexdigest()
-    quality = compute_quality_report(pages_text, len(canonical_text), total_pages=estimated_pages)
-    # Add page limit check per Spec 05 (max 10 pages for CV)
-    quality["estimated_pages"] = estimated_pages
-    quality["excessive_page_count"] = estimated_pages > 10
+    quality = compute_quality_report(pages_text, len(canonical_text), total_pages=rendered_page_count)
+    quality["docx_pages_verified"] = True
+    quality["rendered_page_count"] = rendered_page_count
+    quality["excessive_page_count"] = False
 
     lang = detect_language_vi_or_en(canonical_text)
 
     return ParseResult(
         canonical_text=canonical_text,
         sha256=sha256,
-        page_count=estimated_pages,
+        page_count=rendered_page_count,
         spans=spans,
         quality_report=quality,
         detected_language=lang,

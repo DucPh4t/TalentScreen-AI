@@ -2,6 +2,8 @@
 
 Hệ thống AI hỗ trợ HR đối chiếu CV với tiêu chí tuyển dụng (JD) đã được phê duyệt, trên cơ sở bằng chứng rõ ràng (evidence-based) và HR là người đưa ra quyết định cuối cùng (Human-in-the-Loop).
 
+**Trạng thái:** mã MVP dùng để kiểm thử sandbox. Chưa được phê duyệt cho assisted pilot trên CV thật: cần nhãn HR chấm độc lập, holdout đủ mẫu, real-shadow, kiểm thử vận hành và ký các gate G1–G7. Xem `docs/runbooks/pilot_calibration_and_shadow.md` và `docs/evaluation-data-contract.md`.
+
 Dự án được xây dựng theo bộ đặc tả chi tiết tại thư mục [talentscreen-mvp-plan/](talentscreen-mvp-plan/README.md).
 
 ---
@@ -33,6 +35,7 @@ Dự án được xây dựng theo bộ đặc tả chi tiết tại thư mục 
 * Python >= 3.12 (khuyên dùng `uv`)
 * Node.js >= 20 và npm
 * Docker Desktop đang chạy
+* LibreOffice (`soffice`) nếu tiếp nhận DOCX. Thiếu renderer, API từ chối DOCX với lỗi kỹ thuật rõ ràng; PDF vẫn dùng được.
 
 ### Các bước khởi chạy
 

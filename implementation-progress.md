@@ -1,6 +1,6 @@
 # TalentScreen AI — Nhật Ký Triển Khai (Implementation Progress)
 
-Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gates G1–G7 được quy định trong `talentscreen-mvp-plan/09-implementation-backlog.md`.
+Theo dõi mã đã triển khai của B00–B26 và các điều kiện nghiệm thu trong `talentscreen-mvp-plan/09-implementation-backlog.md`. Các mục “COMPLETED” ở nhật ký chi tiết bên dưới là ghi nhận lịch sử commit/test lúc viết, **không đồng nghĩa G1–G7 đã PASS**. Bảng sau là trạng thái hiện tại; xem `docs/runbooks/pilot_calibration_and_shadow.md` để biết bằng chứng còn thiếu.
 
 ---
 
@@ -8,33 +8,40 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
 
 | Task | Tên tác vụ | Ưu tiên | Trạng thái | Ghi chú & Lệnh kiểm thử |
 |---|---|---|---|---|
-| **B00** | Khởi tạo monorepo, doctor và cấu hình | P0 | **COMPLETED** | `make doctor`, `make test-backend`, Next.js build pass |
-| **B01** | Data model, migration và domain enums | P0 | **COMPLETED** | 35 tables created, Alembic migrations pass, 6 integration tests on real PostgreSQL pass |
-| **B02** | Authentication, session, CSRF và authorization | P0 | **COMPLETED** | Argon2id, HttpOnly session, CSRF check, RBAC & Requisition guards, 21 tests pass |
-| **B03** | Requisition và JD version | P0 | **COMPLETED** | Lifecycle, optimistic locking (409), JD immutability & egress approval, 28 tests pass |
-| **B04** | Rubric seed, editor, approval và policy | P0 | **COMPLETED** | Seed 6 criteria, sum=100, anchors 0..4, anti-bias policy, immutability, 32 tests pass |
-| **B05** | Intake upload và private storage | P0 | **COMPLETED** | Storage manager, path traversal guards, MIME/magic checks, idempotency, 38 tests pass |
-| **B06** | Parse PDF, normalization và provenance | P0 | **COMPLETED** | PDF/DOCX parser, NFC/LF normalization, Source Span Registry, 43 tests pass |
-| **B07** | Durable PostgreSQL worker | P0 | *READY* | Sẵn sàng triển khai PostgreSQL Queue Worker & Fencing |
-| **B08** | Sanitization, HR approval và source viewer | P0 | *PENDING* | Phụ thuộc B06, B07 |
-| **B09** | DeepSeek adapter, capabilities và cost ledger | P0 | *PENDING* | Phụ thuộc B07, B08 |
-| **B10** | Full-text assessment baseline & output validation | P0 | *PENDING* | Phụ thuộc B04, B08, B09 |
-| **B11** | Deterministic scoring/recommendation engine | P0 | *PENDING* | Phụ thuộc B04 |
-| **B12** | Review workspace và danh sách ứng viên | P0 | *PENDING* | Phụ thuộc B10, B11 |
-| **B13** | HR revision, attestation, decision và audit | P0 | *PENDING* | Phụ thuộc B12, B02 |
-| **B14** | Rubric Agent và Interview Agent | P0 | *PENDING* | Phụ thuộc B09, B10, B13 |
-| **B15** | Local OCR và DOCX rendering | P1 | *PENDING* | Phụ thuộc B06, B07 |
-| **B16** | Local multilingual embeddings & hybrid retrieval | P1 | *PENDING* | Phụ thuộc B08, B10 |
-| **B17** | Deletion, retention và data inventory | P0 | *PENDING* | Phụ thuộc B07, B08, B13 |
-| **B18** | Dataset bootstrap và fixture factory | P0 | *PENDING* | Phụ thuộc B00, B04 |
-| **B19** | Evaluation harness, metrics và HR annotation | P0 | *PENDING* | Phụ thuộc B10, B11, B18 |
-| **B20** | Prompt regression và release/rollback | P0 | *PENDING* | Phụ thuộc B19 |
-| **B21** | Sandbox onboarding và help UI | P0 | *PENDING* | Phụ thuộc B12, B13, B18 |
-| **B22** | Security regression và privacy review kỹ thuật | P0 | *PENDING* | Phụ thuộc B02, B08, B13, B17 |
-| **B23** | Observability, load và budget operations | P0 | *PENDING* | Phụ thuộc B07, B09, B19 |
-| **B24** | Packaging, backup và restore | P0 | *PENDING* | Phụ thuộc B17, B22 |
-| **B25** | HR calibration, shadow và pilot gate | P0 | *PENDING* | Phụ thuộc B19–B24 |
-| **B26** | Sửa lỗi còn lại và bàn giao vận hành | P0 | *PENDING* | Phụ thuộc B25 |
+| **B00** | Khởi tạo monorepo, doctor và cấu hình | P0 | IMPLEMENTED; ACCEPTANCE PENDING | `make doctor`, `make test-backend`, Next.js build pass |
+| **B01** | Data model, migration và domain enums | P0 | IMPLEMENTED; ACCEPTANCE PENDING | 35 tables created, Alembic migrations pass, 6 integration tests on real PostgreSQL pass |
+| **B02** | Authentication, session, CSRF và authorization | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Argon2id, HttpOnly session, CSRF check, RBAC & Requisition guards, 21 tests pass |
+| **B03** | Requisition và JD version | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Lifecycle, optimistic locking (409), JD immutability & egress approval, 28 tests pass |
+| **B04** | Rubric seed, editor, approval và policy | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Seed 6 criteria, sum=100, anchors 0..4, anti-bias policy, immutability, 32 tests pass |
+| **B05** | Intake upload và private storage | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Storage manager, path traversal guards, MIME/magic checks, idempotency, 38 tests pass |
+| **B06** | Parse PDF, normalization và provenance | P0 | IMPLEMENTED; ACCEPTANCE PENDING | PDF/DOCX parser, NFC/LF normalization, Source Span Registry, 43 tests pass |
+| **B07** | Durable PostgreSQL worker | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B08** | Sanitization, HR approval và source viewer | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B09** | DeepSeek adapter, capabilities và cost ledger | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B10** | Full-text assessment baseline & output validation | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B11** | Deterministic scoring/recommendation engine | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B12** | Review workspace và danh sách ứng viên | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B13** | HR revision, attestation, decision và audit | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B14** | Rubric Agent và Interview Agent | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B15** | Local OCR và DOCX rendering | P1 | PARTIAL: RENDER VALIDATION | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B16** | Local multilingual embeddings & hybrid retrieval | P1 | PROTOTYPE: BENCHMARK PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B17** | Deletion, retention và data inventory | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B18** | Dataset bootstrap và fixture factory | P0 | PARTIAL: 12 UNLABELED DEV | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B19** | Evaluation harness, metrics và HR annotation | P0 | PARTIAL: HR LABELS PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B20** | Prompt regression và release/rollback | P0 | PARTIAL: OUTPUT A/B PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B21** | Sandbox onboarding và help UI | P0 | IMPLEMENTED; HR UAT PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B22** | Security regression và privacy review kỹ thuật | P0 | IMPLEMENTED; CI PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B23** | Observability, load và budget operations | P0 | IMPLEMENTED; SLO MEASUREMENT PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B24** | Packaging, backup và restore | P0 | IMPLEMENTED; DRILL EVIDENCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B25** | HR calibration, shadow và pilot gate | P0 | PENDING: CALIBRATION & SHADOW | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B26** | Sửa lỗi còn lại và bàn giao vận hành | P0 | PENDING: PILOT SIGN-OFF | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+
+### Điều chỉnh sau rà soát
+
+- B18: 12 family ban đầu thuộc dev, trong đó 10 family là smoke subset. Chưa có holdout. Các trường điểm synthetic không dùng rubric thật và PDF chỉ chứa 200 ký tự đầu đã được bỏ; fixture hiện chưa có nhãn HR.
+- B19/B20: Evaluation yêu cầu file dự đoán thực và nhãn độc lập; prompt có hash và bộ so sánh A/B cùng sample IDs. Chưa có báo cáo chất lượng DeepSeek/HR.
+- B15/B16: DOCX đếm trang từ bản render LibreOffice; thiếu renderer bị từ chối. Lexical retrieval dùng PostgreSQL full-text `simple`; benchmark hybrid so với full-text baseline còn chờ.
+- B25/B26: G1–G7 đều cần bằng chứng theo giai đoạn và HR/IT sign-off. Không dùng nhãn PASS trong runbook cũ làm chứng cứ nghiệm thu.
 
 ---
 
@@ -322,4 +329,3 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
 * **Tests đã chạy & Kết quả:**
   * `pytest services/backend/tests`: **101/101 tests PASS (100%)** trong 24.37s.
   * Next.js build: **Compiled successfully in 0.5s**.
-

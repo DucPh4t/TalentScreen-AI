@@ -10,6 +10,7 @@ private_storage/
 data/private/
 storage/
 uploads/
+reports/
 
 # Python
 __pycache__/

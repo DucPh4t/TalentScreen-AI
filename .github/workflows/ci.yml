@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: talentscreen
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d talentscreen"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/talentscreen
+      DATABASE_SYNC_URL: postgresql://postgres:postgres@127.0.0.1:5432/talentscreen
+      PGPASSWORD: postgres
+      LLM_PROVIDER: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install document and database tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-dejavu-core tesseract-ocr tesseract-ocr-eng tesseract-ocr-vie postgresql-client
+      - name: Install backend
+        run: python -m pip install -e 'services/backend[dev]'
+      - name: Prepare isolated test schema
+        run: |
+          psql -h 127.0.0.1 -U postgres -d talentscreen -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+          psql -h 127.0.0.1 -U postgres -d talentscreen -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+          alembic upgrade head
+      - name: Backend regression tests
+        run: pytest services/backend/tests -q
+      - name: Frontend build
+        run: npm ci && npm run build
+        working-directory: apps/web

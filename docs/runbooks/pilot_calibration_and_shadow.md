@@ -29,7 +29,7 @@ Before deploying TalentScreen AI in an assisted pilot with real candidate applic
 During the Shadow Evaluation phase:
 1. Candidate CVs are ingested and sanitized through normal privacy pipelines.
 2. The AI background assessment job runs asynchronously in shadow mode.
-3. **UI Blinding**: The web workspace hides preliminary AI scores and recommendations from human reviewers until their independent assessment is submitted.
+3. **UI Blinding is a pending implementation gate**: The current review workspace displays AI results; use a separate HR annotation form or controlled paper workflow before opening it. Do not call the current UI a blind-review tool.
 4. Once the human reviewer submits their score, the system reveals the comparative delta:
    - Difference in comparable score ($\Delta = |Score_{HR} - Score_{AI}|$)
    - Discrepancies in criterion anchors
@@ -40,31 +40,29 @@ During the Shadow Evaluation phase:
 
 ## 4. Stage-Gate Verification Matrix (G1 — G7)
 
-Before moving from Sandbox $\rightarrow$ Real Shadow $\rightarrow$ Assisted Pilot, the following gates must be documented and signed:
+Before moving from Sandbox $\rightarrow$ Real Shadow $\rightarrow$ Assisted Pilot, attach dated evidence and an HR/IT sign-off for every applicable gate. `PENDING_EVIDENCE` is not PASS. The school has approved use of DeepSeek, but account configuration, budget, provider probe and operating procedures still need verification.
 
 | Gate | Category | Required Evidence | Disallowed Shortcuts | Status |
 |---|---|---|---|---|
-| **G1** | Permissions & Config | DeepSeek agreement confirmed; valid API key; rate card verified; budget cap set | Merely having API key without budget guard | **PASS** |
-| **G2** | Business Policy | HR Owner & IT approval on JD, 6 Rubric criteria, weights = 100, threshold = 70 | Unvalidated AI-drafted rubric | **PASS** |
-| **G3** | Privacy & Data | PII redaction engine verified; raw grant access logs; university masking active | Unsanitized CV egress to LLM | **PASS** |
-| **G4** | Technical Invariants | 120 automated tests pass (SEC-01..15, math scoring, idempotency, race conditions) | Mock UI or SQLite-only tests | **PASS** |
-| **G5** | Evaluation Quality | Holdout MAE $\le 0.50$; Cohen's Kappa $\ge 0.70$; zero demographic violations | LLM-as-a-judge self-evaluation | **PASS** |
-| **G6** | Operations | Encrypted backup/restore drill completed; SEC-11 deletion ledger verified | Theoretical disaster recovery plans | **PASS** |
-| **G7** | User Training | HR completed 5 Sandbox Onboarding scenarios; knows how to inspect spans & override | Skimming user documentation | **PASS** |
+| **G1** | Permissions & Config | DeepSeek permission, valid key, live capability probe, current rate card and budget cap | Merely having API key | **PENDING_EVIDENCE** |
+| **G2** | Business Policy | Dated HR Owner & IT approval of JD, six rubric criteria, weights and thresholds | Seed rubric only | **PENDING_HR_IT** |
+| **G3** | Privacy & Data | Sanitization review on representative vi/en/mixed CVs, raw grant and egress audit | Unit tests alone | **PENDING_EVIDENCE** |
+| **G4** | Technical Invariants | Clean-checkout CI and local test reports, including concurrency and recovery | Commit message claiming tests pass | **PENDING_VERIFICATION** |
+| **G5** | Evaluation Quality | Independent HR labels, recorded AI predictions, frozen holdout of 30 families and real-shadow report. Draft targets for HR/IT approval: conditional MAE ≤0.75/4, human-assessable coverage ≥85%, linear weighted kappa ≥0.60, with error audit | Synthetic scenario expectations or self-comparison | **PENDING_DATA** |
+| **G6** | Operations | Measured load/SLO and cost report, dated restore/delete/rollback drill artifacts | Runbook text alone | **PENDING_EVIDENCE** |
+| **G7** | User Training | Backend-recorded sandbox completion and HR UAT sign-off | Offline local state | **PENDING_HR** |
 
 ---
 
 ## 5. Shadow Evaluation Report Template
 
-When executing a shadow batch, generate the report using:
+After HR reviewers label cases before viewing AI outputs, export only pseudonymous IDs, rubric scores, recommendations and run metadata to private JSONL files described in `docs/evaluation-data-contract.md`. Never commit real candidate labels or predictions. Run:
 ```bash
-.venv/bin/python scripts/eval_harness.py --split holdout --output reports/shadow_report.json
+.venv/bin/python scripts/eval_harness.py \
+  --predictions private_storage/eval/ai_predictions.jsonl \
+  --labels private_storage/eval/hr_blind_labels.jsonl \
+  --split real_shadow \
+  --output private_storage/eval/shadow_report.json
 ```
 
-The resulting report records:
-- Evaluated candidate count
-- Score MAE overall and per criterion
-- Recommendation Cohen's Kappa
-- Disaggregated metrics for Vietnamese vs English vs Code-switching CVs
-- Token cost and provider latency percentiles
-- Zero demographic bias confirmation hash
+The report records matched and missing counts, conditional MAE, human-assessable coverage, linear weighted kappa on 0..4 scores, recommendation agreement, language breakdown and observed usage when supplied. `gate_eligible` is a data-completeness hint, **not** an approval. Human reviewers must inspect error cases and sign the gate. Do not label a group with no comparable scores or an undefined kappa as PASS.

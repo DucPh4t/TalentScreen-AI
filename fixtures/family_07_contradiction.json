@@ -1,20 +1,12 @@
 {
   "family_id": "family_07_contradiction",
-  "split": "smoke",
+  "split": "dev",
+  "smoke": true,
   "persona_label": "Ứng viên 07 — Mâu thuẫn giữa tóm tắt và thực tế",
   "language": "vi",
   "category": "backend_python",
   "scenario_type": "contradiction",
   "raw_text": "Tóm tắt năng lực\nChuyên gia kiến trúc trưởng đã tự tay xây dựng toàn bộ hệ thống cơ sở hạ tầng phân tán của doanh nghiệp.\n\nKinh nghiệm làm việc\nThực tập sinh kỹ thuật (2024 - 2025):\n- Tham gia hỗ trợ ghi chú biên bản các cuộc họp kỹ thuật của đội hạ tầng.\n- Quan sát quá trình triển khai máy chủ của các kỹ sư chính.\n",
-  "expected_scores": {
-    "technical_competence": 1,
-    "system_design_architecture": 1,
-    "problem_solving_debugging": null,
-    "code_quality_testing": null,
-    "communication_collaboration": 1,
-    "domain_expertise": 0
-  },
-  "expected_recommendation": "review_required",
   "source_registry": {
     "source_id": "syn_src_family_07_contradiction",
     "dataset_id": "talentscreen-synthetic-seed-v1",
@@ -22,7 +14,7 @@
     "license_id": "MIT",
     "revision": "git_pinned_b18",
     "approved_use": "testing_evaluation",
-    "label_origin": "design_expected",
+    "label_origin": "unlabeled_synthetic",
     "created_at": "2026-09-26T00:00:00Z"
   }
 }

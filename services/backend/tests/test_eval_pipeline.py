@@ -4,23 +4,32 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 import tempfile
+import json
 import pytest
 
-from scripts.eval_harness import compute_cohens_kappa, compute_mae, run_evaluation
+from scripts.eval_harness import compute_cohens_kappa, compute_linear_weighted_kappa, compute_mae, run_evaluation
 from scripts.fixture_factory import generate_fixtures
 from scripts.prompt_regression import run_prompt_regression, verify_prompt_invariants
+from scripts.prompt_compare import compare_variants
 
 
 def test_fixture_generation_in_temp_dir():
-    """B18: Fixture factory produces smoke, dev, and holdout splits with deterministic manifests."""
+    """B18: Smoke is a dev subset; initial fixtures must not masquerade as holdout."""
     with tempfile.TemporaryDirectory() as tmpdir:
         counts = generate_fixtures(Path(tmpdir))
         assert counts["smoke"] >= 10
-        assert counts["dev"] >= 1
-        assert counts["holdout"] >= 1
+        assert counts["dev"] == 12
+        assert counts["holdout"] == 0
 
         manifest = Path(tmpdir) / "manifest.json"
         assert manifest.exists()
+        rows = json.loads(manifest.read_text(encoding="utf-8"))["families"]
+        assert all(row["split"] == "dev" for row in rows)
+        assert sum(row["smoke"] for row in rows) == 10
+        assert not list(Path(tmpdir).glob("*.pdf"))
+        sample = json.loads((Path(tmpdir) / rows[0]["json_file"]).read_text(encoding="utf-8"))
+        assert sample["source_registry"]["label_origin"] == "unlabeled_synthetic"
+        assert "expected_scores" not in sample
 
 
 def test_eval_metrics_mae_and_kappa():
@@ -42,24 +51,89 @@ def test_eval_metrics_mae_and_kappa():
     kappa_val = compute_cohens_kappa(mixed_pairs, ["consider_next_round", "needs_clarification", "review_required"])
     assert kappa_val is not None
     assert kappa_val < 1.0
+    assert compute_cohens_kappa(
+        [("review_required", "review_required"), ("review_required", "consider_next_round")],
+        ["consider_next_round", "review_required"],
+    ) == 0.0
+    assert compute_linear_weighted_kappa([(1, 1), (4, 4)]) == 1.0
+    assert compute_linear_weighted_kappa([(2, 2), (2, 2)]) is None
 
 
 def test_full_evaluation_harness():
-    """B19: Evaluation harness aggregates metrics across language splits and estimates costs."""
-    res = run_evaluation()
+    """B19: Evaluation uses recorded predictions; a wrong score changes MAE."""
+    criterion_ids = ["python_backend", "api_design", "sql_data", "testing_debugging", "security_privacy", "delivery_ops"]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        labels = [
+            {"sample_id": "a", "split": "dev", "language": "vi", "label_origin": "hr_blind", "reviewer_id": "hr1", "criterion_scores": {key: 2 for key in criterion_ids}, "recommendation": "consider_next_round"},
+            {"sample_id": "b", "split": "dev", "language": "en", "label_origin": "hr_blind", "reviewer_id": "hr1", "criterion_scores": {key: 1 for key in criterion_ids}, "recommendation": "review_required"},
+        ]
+        predictions = [
+            {"sample_id": "a", "run_id": "run-a", "prompt_version": "v1", "model": "mock", "criterion_scores": {key: 3 for key in criterion_ids}, "recommendation": "consider_next_round"},
+            {"sample_id": "b", "run_id": "run-b", "prompt_version": "v1", "model": "mock", "criterion_scores": {key: 1 for key in criterion_ids}, "recommendation": "needs_clarification"},
+        ]
+        labels_path, predictions_path = root / "labels.json", root / "predictions.json"
+        labels_path.write_text(json.dumps(labels), encoding="utf-8")
+        predictions_path.write_text(json.dumps(predictions), encoding="utf-8")
+        res = run_evaluation(predictions_path, labels_path, "dev")
     summary = res["evaluation_summary"]
-    assert summary["total_evaluated"] >= 12
-    assert summary["recommendation_accuracy"] >= 0.8
-    assert summary["estimated_cost_usd"] > 0
+    assert summary["total_evaluated"] == 2
+    assert summary["mean_absolute_error_score"] == 0.5
+    assert summary["human_assessable_coverage"] == 1.0
+    assert summary["linear_weighted_kappa_score"] is not None
+    assert summary["recommendation_accuracy"] == 0.5
+    assert summary["observed_cost_usd"] is None
     assert "vi" in res["disaggregated_by_language"]
     assert "en" in res["disaggregated_by_language"]
+    assert res["gate_eligible"] is False
+
+
+def test_eval_rejects_missing_predictions_and_legacy_criteria(tmp_path):
+    criterion_ids = ["python_backend", "api_design", "sql_data", "testing_debugging", "security_privacy", "delivery_ops"]
+    label = {"sample_id": "a", "split": "holdout", "language": "mixed", "label_origin": "design_expected", "criterion_scores": {key: None for key in criterion_ids}, "recommendation": "review_required"}
+    label_path, prediction_path = tmp_path / "labels.jsonl", tmp_path / "predictions.jsonl"
+    label_path.write_text(json.dumps(label) + "\n", encoding="utf-8")
+    prediction_path.write_text(json.dumps({"sample_id": "a", "run_id": "r", "prompt_version": "v1", "model": "mock", "criterion_scores": {key: None for key in criterion_ids}, "recommendation": "review_required"}) + "\n", encoding="utf-8")
+    report = run_evaluation(prediction_path, label_path, "holdout")
+    assert report["gate_eligible"] is False
+    assert report["evaluation_summary"]["mean_absolute_error_score"] is None
+    assert report["evaluation_summary"]["cohens_kappa"] is None
+    bad = json.loads(prediction_path.read_text(encoding="utf-8"))
+    bad["criterion_scores"] = {"technical_competence": 4}
+    prediction_path.write_text(json.dumps(bad), encoding="utf-8")
+    with pytest.raises(ValueError, match="six production rubric IDs"):
+        run_evaluation(prediction_path, label_path, "holdout")
+
+
+def test_prompt_variants_use_identical_cases(tmp_path):
+    keys = ["python_backend", "api_design", "sql_data", "testing_debugging", "security_privacy", "delivery_ops"]
+    labels = [
+        {"sample_id": sid, "split": "dev", "language": lang, "label_origin": "hr_blind", "reviewer_id": "hr1", "criterion_scores": {key: score for key in keys}, "recommendation": rec}
+        for sid, lang, score, rec in [("a", "vi", 2, "review_required"), ("b", "en", 3, "consider_next_round")]
+    ]
+    label_path = tmp_path / "labels.json"
+    label_path.write_text(json.dumps(labels), encoding="utf-8")
+    paths = {}
+    for name, score in [("v1", 2), ("v2", 3)]:
+        path = tmp_path / f"{name}.json"
+        rows = [{"sample_id": row["sample_id"], "run_id": f"run-{name}-{row['sample_id']}", "prompt_version": name, "model": "mock", "criterion_scores": {key: score for key in keys}, "recommendation": row["recommendation"]} for row in labels]
+        path.write_text(json.dumps(rows), encoding="utf-8")
+        paths[name] = path
+    comparison = compare_variants(label_path, paths, "dev")
+    assert comparison["same_sample_count"] == 2
+    assert comparison["variants"]["v1"]["evaluation_summary"]["mean_absolute_error_score"] == 0.5
+    paths["v2"].write_text(json.dumps(json.loads(paths["v2"].read_text(encoding="utf-8"))[:1]), encoding="utf-8")
+    with pytest.raises(ValueError, match="missing predictions"):
+        compare_variants(label_path, paths, "dev")
 
 
 def test_prompt_regression_clean():
     """B20: Production prompts pass zero demographic violations and contain JSON contracts."""
     report = run_prompt_regression()
-    assert report["status"] == "PASS"
+    assert report["status"] == "PASS_STATIC_CHECKS"
     assert len(report["violations"]) == 0
+    assert len(report["prompt_sha256"]) == 3
+    assert report["quality_evaluation_status"] == "NOT_RUN"
 
 
 def test_prompt_regression_catches_violations():
