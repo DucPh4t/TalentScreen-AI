@@ -1,0 +1,104 @@
+{
+  "generator_version": "1.0.0",
+  "origin_kind": "synthetic",
+  "license_id": "MIT",
+  "total_families": 12,
+  "families": [
+    {
+      "family_id": "family_01_strong_backend_vi",
+      "split": "smoke",
+      "sha256": "6668ca7bc19715ba17e1a4b0b534766d2516226d2c26abbf71656625f3b915d3",
+      "json_file": "family_01_strong_backend_vi.json",
+      "txt_file": "family_01_strong_backend_vi.txt",
+      "pdf_file": "family_01_strong_backend_vi.pdf"
+    },
+    {
+      "family_id": "family_02_skills_only_en",
+      "split": "smoke",
+      "sha256": "a9cf97be8f06559ffbd9895be54869d276a86482a021eabc5e0ca230653dc3fc",
+      "json_file": "family_02_skills_only_en.json",
+      "txt_file": "family_02_skills_only_en.txt",
+      "pdf_file": "family_02_skills_only_en.pdf"
+    },
+    {
+      "family_id": "family_03_partial_evidence_vi",
+      "split": "smoke",
+      "sha256": "5c44921622c234e4bf22084085315e87a9543f4cea0501045ce400cf5943411f",
+      "json_file": "family_03_partial_evidence_vi.json",
+      "txt_file": "family_03_partial_evidence_vi.txt",
+      "pdf_file": "family_03_partial_evidence_vi.pdf"
+    },
+    {
+      "family_id": "family_04_limited_scope_en",
+      "split": "smoke",
+      "sha256": "822e336bf7625a7b7db62257543897a77726206bbfdcde9b3843a2e57f799050",
+      "json_file": "family_04_limited_scope_en.json",
+      "txt_file": "family_04_limited_scope_en.txt",
+      "pdf_file": "family_04_limited_scope_en.pdf"
+    },
+    {
+      "family_id": "family_05_code_switch_mixed",
+      "split": "smoke",
+      "sha256": "65176ac21ef994dbd8846876fabd6a2b5eef89389f9ef589d7ddfd2424417c65",
+      "json_file": "family_05_code_switch_mixed.json",
+      "txt_file": "family_05_code_switch_mixed.txt",
+      "pdf_file": "family_05_code_switch_mixed.pdf"
+    },
+    {
+      "family_id": "family_06_bilingual_dup",
+      "split": "smoke",
+      "sha256": "09db56ae6f91bf88b7878006451b2fca5e8e52641415d13b5135340a3d2d6a8f",
+      "json_file": "family_06_bilingual_dup.json",
+      "txt_file": "family_06_bilingual_dup.txt",
+      "pdf_file": "family_06_bilingual_dup.pdf"
+    },
+    {
+      "family_id": "family_07_contradiction",
+      "split": "smoke",
+      "sha256": "17baedc0bb22005986a0e08a06c33f6ed720ca4400c0573372a703e833ad358f",
+      "json_file": "family_07_contradiction.json",
+      "txt_file": "family_07_contradiction.txt",
+      "pdf_file": "family_07_contradiction.pdf"
+    },
+    {
+      "family_id": "family_08_negative_explicit",
+      "split": "smoke",
+      "sha256": "cc235f0b669045c2574cc4b18250d580d1e4266635deb3daa136972a20299dba",
+      "json_file": "family_08_negative_explicit.json",
+      "txt_file": "family_08_negative_explicit.txt",
+      "pdf_file": "family_08_negative_explicit.pdf"
+    },
+    {
+      "family_id": "family_09_prompt_injection",
+      "split": "smoke",
+      "sha256": "c6a55b0dbd715e018bf2fcb9bc89fff2abc0f1db397e9b6fbf82bb7d5c5caa25",
+      "json_file": "family_09_prompt_injection.json",
+      "txt_file": "family_09_prompt_injection.txt",
+      "pdf_file": "family_09_prompt_injection.pdf"
+    },
+    {
+      "family_id": "family_10_proxy_pii",
+      "split": "smoke",
+      "sha256": "d7bdde25e4d3efd8d552743d31761373c2b6fd47359a87af3ed2fbca9e35f46a",
+      "json_file": "family_10_proxy_pii.json",
+      "txt_file": "family_10_proxy_pii.txt",
+      "pdf_file": "family_10_proxy_pii.pdf"
+    },
+    {
+      "family_id": "family_11_parse_stress",
+      "split": "dev",
+      "sha256": "465cee933b30d6ecf8f1abd67182c50f5a546272ddfc6742fdbe3beddedd8a86",
+      "json_file": "family_11_parse_stress.json",
+      "txt_file": "family_11_parse_stress.txt",
+      "pdf_file": "family_11_parse_stress.pdf"
+    },
+    {
+      "family_id": "family_12_out_of_domain",
+      "split": "holdout",
+      "sha256": "011a0acb9cfe9cba57a1b416518021fa48297409af9bde66b4fdef0e1e3298c2",
+      "json_file": "family_12_out_of_domain.json",
+      "txt_file": "family_12_out_of_domain.txt",
+      "pdf_file": "family_12_out_of_domain.pdf"
+    }
+  ]
+}

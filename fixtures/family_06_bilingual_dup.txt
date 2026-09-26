@@ -1,0 +1,7 @@
+Kinh nghiệm làm việc
+Dự án Cổng thanh toán (2023 - 2024):
+- Xây dựng API tích hợp cổng thanh toán trực tuyến sử dụng Python và Flask.
+
+Projects Experience
+Payment Gateway Project (2023 - 2024):
+- Built API integrating online payment gateways using Python and Flask.

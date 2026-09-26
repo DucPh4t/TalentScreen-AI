@@ -1,0 +1,6 @@
+Kinh nghiệm làm việc
+Công nghệ: Python 3.12 | Hệ quản trị: PostgreSQL 16 | Hạ tầng: Docker
+
+Dự án phức tạp:
+1. Xử lý chuỗi Unicode tiếng Việt tổ hợp (NFD) và dựng sẵn (NFC): Hòa bình, tiếng Việt có dấu ẵ, ặ, ẳ, ỗ, ộ.
+2. Tối ưu hóa bộ nhớ RAM và CPU cho các tiến trình xử lý dữ liệu lớn.

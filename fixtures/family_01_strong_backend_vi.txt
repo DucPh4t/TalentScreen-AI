@@ -1,0 +1,12 @@
+Kinh nghiệm làm việc
+Kỹ sư phần mềm Backend tại Công ty Cổ phần Công nghệ Alpha (2022 - 2026)
+- Trực tiếp thiết kế và phát triển hệ thống RESTful API và microservices bằng Python FastAPI và Golang, xử lý 15.000 requests/giây.
+- Tối ưu hóa cơ sở dữ liệu PostgreSQL, phân vùng bảng và viết chỉ mục chuyên sâu, giảm thời gian phản hồi truy vấn từ 450ms xuống 35ms.
+- Xây dựng kiến trúc phân tán dựa trên Docker, Kubernetes và RabbitMQ.
+- Viết kiểm thử tự động với pytest, đạt độ bao phủ mã nguồn 92% (unit test và integration test).
+
+Dự án tiêu biểu
+Hệ thống thanh toán trực tuyến: Thiết kế kiến trúc chịu lỗi với cơ chế Idempotency-Key và giao dịch hai pha.
+
+Kỹ năng chuyên môn
+Python, FastAPI, Golang, PostgreSQL, Docker, Kubernetes, CI/CD, Git, Pytest.

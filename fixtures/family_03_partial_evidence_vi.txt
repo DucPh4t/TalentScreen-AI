@@ -1,0 +1,5 @@
+Kinh nghiệm làm việc
+Lập trình viên Python tại Tech Beta (2023 - 2025)
+- Xây dựng các API cơ bản phục vụ ứng dụng di động sử dụng Django.
+- Quản trị cơ sở dữ liệu MySQL và viết truy vấn CRUD cơ bản.
+- Hỗ trợ triển khai ứng dụng lên máy chủ đám mây AWS EC2.

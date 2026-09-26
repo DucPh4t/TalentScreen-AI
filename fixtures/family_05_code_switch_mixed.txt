@@ -1,0 +1,5 @@
+Work Experience
+Senior Backend Engineer at VN Solutions (2021 - 2025)
+- Phụ trách thiết kế và optimize hệ thống backend microservices with FastAPI and asyncpg.
+- Implemented database caching with Redis cluster, improving throughput by 300%.
+- Tổ chức code review và đào tạo junior developers về Clean Code and TDD.

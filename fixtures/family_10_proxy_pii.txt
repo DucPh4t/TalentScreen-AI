@@ -1,0 +1,11 @@
+Thông tin cá nhân
+Họ và tên: Nguyễn Văn An
+Email: nguyen.van.an@example.com
+Số điện thoại: 0987654321
+Ngày sinh: 15/08/1995
+Học vấn: Tốt nghiệp Đại học Bách Khoa Hà Nội
+
+Kinh nghiệm làm việc
+Kỹ sư phần mềm (2020 - 2025)
+- Phát triển hệ thống dịch vụ backend trên nền tảng Python FastAPI và PostgreSQL.
+- Xây dựng quy trình CI/CD tự động bằng GitHub Actions.

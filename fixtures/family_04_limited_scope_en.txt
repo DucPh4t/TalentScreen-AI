@@ -1,0 +1,5 @@
+Experience
+Junior Developer Intern at Global Systems (2024 - 2025)
+- Assisted senior engineers in writing basic unit tests.
+- Reviewed documentation and reported bugs found during QA testing.
+- Monitored server uptime dashboards.

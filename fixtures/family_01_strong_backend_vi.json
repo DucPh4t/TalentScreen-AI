@@ -1,0 +1,28 @@
+{
+  "family_id": "family_01_strong_backend_vi",
+  "split": "smoke",
+  "persona_label": "Ứng viên 01 — Backend Python & SQL Chuyên sâu",
+  "language": "vi",
+  "category": "backend_python",
+  "scenario_type": "strong_evidence",
+  "raw_text": "Kinh nghiệm làm việc\nKỹ sư phần mềm Backend tại Công ty Cổ phần Công nghệ Alpha (2022 - 2026)\n- Trực tiếp thiết kế và phát triển hệ thống RESTful API và microservices bằng Python FastAPI và Golang, xử lý 15.000 requests/giây.\n- Tối ưu hóa cơ sở dữ liệu PostgreSQL, phân vùng bảng và viết chỉ mục chuyên sâu, giảm thời gian phản hồi truy vấn từ 450ms xuống 35ms.\n- Xây dựng kiến trúc phân tán dựa trên Docker, Kubernetes và RabbitMQ.\n- Viết kiểm thử tự động với pytest, đạt độ bao phủ mã nguồn 92% (unit test và integration test).\n\nDự án tiêu biểu\nHệ thống thanh toán trực tuyến: Thiết kế kiến trúc chịu lỗi với cơ chế Idempotency-Key và giao dịch hai pha.\n\nKỹ năng chuyên môn\nPython, FastAPI, Golang, PostgreSQL, Docker, Kubernetes, CI/CD, Git, Pytest.\n",
+  "expected_scores": {
+    "technical_competence": 4,
+    "system_design_architecture": 3,
+    "problem_solving_debugging": 3,
+    "code_quality_testing": 4,
+    "communication_collaboration": 2,
+    "domain_expertise": 3
+  },
+  "expected_recommendation": "consider_next_round",
+  "source_registry": {
+    "source_id": "syn_src_family_01_strong_backend_vi",
+    "dataset_id": "talentscreen-synthetic-seed-v1",
+    "origin_kind": "synthetic",
+    "license_id": "MIT",
+    "revision": "git_pinned_b18",
+    "approved_use": "testing_evaluation",
+    "label_origin": "design_expected",
+    "created_at": "2026-09-26T00:00:00Z"
+  }
+}

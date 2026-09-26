@@ -1,0 +1,8 @@
+Technical Skills
+Languages: Python, Go, Java, C++, TypeScript.
+Frameworks: FastAPI, Django, Flask, Spring Boot.
+Databases: PostgreSQL, MySQL, Redis, MongoDB.
+Tools: Docker, Kubernetes, Git, Jenkins, AWS, GCP.
+
+Summary
+Senior software engineer with enthusiasm for cloud technologies.

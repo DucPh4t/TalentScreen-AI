@@ -288,3 +288,38 @@ Theo dõi tiến độ theo dõi thực hiện các task B00–B26 và Stage Gat
   * Next.js build: **Compiled successfully in 0.5s**.
 * **Bước tiếp theo:** B18, B19, B20 — Dataset bootstrap & fixture factory, Evaluation harness & metrics, Prompt regression runner.
 
+### B18 — Dataset bootstrap và fixture factory
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `scripts/fixture_factory.py`: Công cụ khởi tạo và sinh bộ fixtures tổng hợp (synthetic fixtures) độc lập:
+    * 12 họ dữ liệu (families) kiểm thử tiêu biểu: đủ bằng chứng (`family_01_strong_backend_vi`), chỉ liệt kê kỹ năng (`family_02_skills_only_en`), thiếu một phần bằng chứng (`family_03_partial_evidence_vi`), phạm vi công việc hạn chế (`family_04_limited_scope_en`), song ngữ đan xen (`family_05_code_switch_mixed`), trùng lặp dự án song ngữ (`family_06_bilingual_dup`), mâu thuẫn giữa tóm tắt và kinh nghiệm (`family_07_contradiction`), tự xác nhận tiêu cực (`family_08_negative_explicit`), phòng chống tấn công prompt injection (`family_09_prompt_injection`), kiểm tra rò rỉ PII proxy (`family_10_proxy_pii`), thử thách bóc tách Unicode (`family_11_parse_stress`), và hồ sơ trái ngành (`family_12_out_of_domain`).
+    * Phân chia tập kiểm thử (splits): `smoke` (10 families), `dev` (1 family), `holdout` (1 family).
+    * Xuất bản tự động: định dạng JSON canonical facts, văn bản thuần `.txt`, tài liệu PDF render `.pdf`, và tệp kê khai nguồn gốc `fixtures/manifest.json` ghi nhận mã băm SHA-256 cho từng tệp.
+* **Invariants được đáp ứng:**
+  * Không có dữ liệu PII thật hoặc CV chưa rõ nguồn gốc được lưu trữ trong Git.
+  * Mỗi family được phân chia vào duy nhất một tập split (không rò rỉ giữa dev và holdout).
+
+### B19 — Evaluation harness, metrics và HR annotation
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `scripts/eval_harness.py`: Bộ công cụ đo lường và đánh giá hiệu năng mô hình so với nhãn thiết kế/nhãn HR:
+    * Mean Absolute Error (MAE): Tính sai số tuyệt đối trung bình trên các cặp điểm có thể so sánh (0..4).
+    * Cohen's Kappa ($\kappa$): Đo lường độ đồng thuận phân loại trên khuyến nghị (`consider_next_round`, `needs_clarification`, `review_required`) có xử lý an toàn trường hợp đơn lớp (single class N/A).
+    * Phân tích tách biệt theo ngôn ngữ (Disaggregated metrics): Đo lường độ chính xác và sai số riêng cho tiếng Việt (`vi`), tiếng Anh (`en`), và song ngữ (`mixed`).
+    * Theo dõi chi phí và số lượng token: Ước tính tổng số tokens tiêu thụ và chi phí tài chính (USD).
+
+### B20 — Prompt regression và release/rollback
+* **Thời điểm hoàn thành:** 2026-09-26
+* **Files đã tạo & cập nhật:**
+  * `scripts/prompt_regression.py`: Công cụ kiểm thử hồi quy prompt và quản lý phát hành/rollback:
+    * Quét vi phạm nhân khẩu học (Anti-discrimination scan) trên toàn bộ prompt hệ thống: Nghiêm cấm mọi đặc tính nhạy cảm ngoài ngữ cảnh phủ định/chỉ dẫn loại trừ.
+    * Kiểm tra hợp đồng JSON: Bảo đảm prompt luôn yêu cầu định dạng JSON theo đúng schema.
+    * Tạo bản kê khai phát hành bất biến (Release Manifest): Lưu trữ tại `releases/manifest_v1.0.0-mvp.json` kèm hướng dẫn rollback an toàn về `LLM_PROVIDER=mock`.
+  * `services/backend/tests/test_eval_pipeline.py`: 5 test cases bao quát: sinh fixtures vào thư mục tạm, tính toán toán học chính xác cho MAE và Cohen's Kappa, luồng chạy evaluation harness toàn diện, kiểm thử hồi quy prompt chuẩn hóa PASS, và phát hiện kịp thời các prompt bị chèn thuộc tính nhân khẩu học nhạy cảm.
+* **Invariants được đáp ứng:**
+  * Toàn bộ prompt sản xuất đều tuân thủ hợp đồng AI có trách nhiệm và định dạng JSON nghiêm ngặt.
+  * Bản kê khai phát hành có hướng dẫn rollback độc lập, không ghi đè lịch sử đánh giá trong quá khứ.
+* **Tests đã chạy & Kết quả:**
+  * `pytest services/backend/tests`: **101/101 tests PASS (100%)** trong 24.37s.
+  * Next.js build: **Compiled successfully in 0.5s**.
+
