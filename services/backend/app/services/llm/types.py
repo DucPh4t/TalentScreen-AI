@@ -15,6 +15,7 @@ class CompletionRequest:
     timeout_seconds: float = 30.0
     temperature: float = 0.0
     response_format: Optional[dict[str, str]] = field(default_factory=lambda: {"type": "json_object"})
+    thinking_mode: Optional[Literal["enabled", "disabled"]] = None
     manifest_id: Optional[str] = None
 
 

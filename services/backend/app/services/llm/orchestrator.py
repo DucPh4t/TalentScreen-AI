@@ -10,15 +10,20 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db.models.document import SanitizedVersion
 from app.db.models.ops import LLMInvocation
-from app.domain.enums import LLMInvocationStatus, SanitizedVersionStatus
+from app.domain.enums import BudgetScope, LLMInvocationStatus, SanitizedVersionStatus
 from app.services.llm.cost import calculate_actual_cost, estimate_request_cost
 from app.services.llm.exceptions import (
     LLMAuthenticationError,
+    LLMEmptyResponseError,
+    LLMMalformedJSONError,
     LLMModelUnavailableError,
     LLMProviderError,
     LLMQuotaExhaustedError,
+    LLMRefusalError,
+    LLMTruncatedError,
     LLMTimeoutError,
 )
 from app.services.llm.ledger import reserve_budget, settle_budget
@@ -102,7 +107,8 @@ async def execute_bounded_llm_call(
         max_output_tokens=request.max_output_tokens,
         model=request.model,
     )
-    reservation = await reserve_budget(db, job_id=job_id, amount_usd=estimated_cost)
+    budget_scope = BudgetScope.DEVELOPMENT if get_settings().APP_ENV == "sandbox" else BudgetScope.PILOT
+    reservation = await reserve_budget(db, job_id=job_id, amount_usd=estimated_cost, scope=budget_scope)
     await db.commit()  # commit reservation before network I/O
 
     # 3. Create invocation record in RESERVED status
@@ -137,8 +143,9 @@ async def execute_bounded_llm_call(
         # Non-retryable configuration errors: zero actual cost if network call was not made/rejected
         call_error = e
         outcome_unknown = False
-    except LLMTimeoutError as e:
-        # Transport timeout: provider outcome is unknown (may or may not have billed)
+    except (LLMTimeoutError, LLMTruncatedError, LLMEmptyResponseError, LLMMalformedJSONError, LLMRefusalError) as e:
+        # A request may have completed and been billed even without usable content.
+        # Hold the reservation until usage is reconciled rather than marking it free.
         call_error = e
         outcome_unknown = True
     except Exception as e:
@@ -156,29 +163,28 @@ async def execute_bounded_llm_call(
             inv_record.status = LLMInvocationStatus.OUTCOME_UNKNOWN
             inv_record.finished_at = finished_now
             await settle_budget(db, reservation_id=reservation.id, outcome_unknown=True)
-            raise call_error
-
-        if call_error:
+        elif call_error:
             inv_record.status = LLMInvocationStatus.FAILED
             inv_record.finished_at = finished_now
             await settle_budget(db, reservation_id=reservation.id, actual_cost_usd=None)
-            raise call_error
+        else:
+            # Success case
+            actual_cost = calculate_actual_cost(
+                input_tokens=result.input_tokens or estimated_input_tokens,
+                output_tokens=result.output_tokens or 0,
+                model=request.model,
+            )
 
-        # Success case
-        actual_cost = calculate_actual_cost(
-            input_tokens=result.input_tokens or estimated_input_tokens,
-            output_tokens=result.output_tokens or 0,
-            model=request.model,
-        )
+            inv_record.status = LLMInvocationStatus.SUCCEEDED
+            inv_record.model_resolved = result.reported_model or request.model
+            inv_record.input_tokens = result.input_tokens
+            inv_record.output_tokens = result.output_tokens
+            inv_record.provider_request_id = result.provider_request_id
+            inv_record.cost_actual = float(actual_cost)
+            inv_record.finished_at = finished_now
 
-        inv_record.status = LLMInvocationStatus.SUCCEEDED
-        inv_record.model_resolved = result.reported_model or request.model
-        inv_record.input_tokens = result.input_tokens
-        inv_record.output_tokens = result.output_tokens
-        inv_record.provider_request_id = result.provider_request_id
-        inv_record.cost_actual = float(actual_cost)
-        inv_record.finished_at = finished_now
+            await settle_budget(db, reservation_id=reservation.id, actual_cost_usd=actual_cost)
 
-        await settle_budget(db, reservation_id=reservation.id, actual_cost_usd=actual_cost)
-
+    if call_error:
+        raise call_error
     return result

@@ -98,6 +98,16 @@ def test_source_spans_exact_codepoints():
         assert len(s.text) <= 1200
 
 
+def test_source_spans_separate_conflicting_sentences_on_one_line():
+    text = "I implemented a Python endpoint. I did not write any backend code."
+    spans = build_source_spans_from_canonical(uuid.uuid4(), text)
+    assert [span.text for span in spans] == [
+        "I implemented a Python endpoint.",
+        "I did not write any backend code.",
+    ]
+    assert all(span.text == text[span.start_cp:span.end_cp] for span in spans)
+
+
 async def setup_test_context(session):
     """Helper to set up organization, requisition, owner, reviewer, candidate, and document."""
     from app.services.requisition import get_or_create_default_org

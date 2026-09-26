@@ -40,14 +40,14 @@ During the Shadow Evaluation phase:
 
 ## 4. Stage-Gate Verification Matrix (G1 — G7)
 
-Before moving from Sandbox $\rightarrow$ Real Shadow $\rightarrow$ Assisted Pilot, attach dated evidence and an HR/IT sign-off for every applicable gate. `PENDING_EVIDENCE` is not PASS. The school has approved use of DeepSeek, but account configuration, budget, provider probe and operating procedures still need verification.
+Before moving from Sandbox $\rightarrow$ Real Shadow $\rightarrow$ Assisted Pilot, attach dated evidence and an HR/IT sign-off for every applicable gate. `PENDING_EVIDENCE` is not PASS. The school has approved use of DeepSeek. A single synthetic API capability probe succeeded on 2026-09-27 local time (key-free evidence: `private_storage/eval/deepseek_probe_2026-09-27.json`); account limits, rate card, budget cap and application-level integration still need verification. The application remains configured with `LLM_PROVIDER=mock`.
 
 | Gate | Category | Required Evidence | Disallowed Shortcuts | Status |
 |---|---|---|---|---|
-| **G1** | Permissions & Config | DeepSeek permission, valid key, live capability probe, current rate card and budget cap | Merely having API key | **PENDING_EVIDENCE** |
-| **G2** | Business Policy | Dated HR Owner & IT approval of JD, six rubric criteria, weights and thresholds | Seed rubric only | **PENDING_HR_IT** |
+| **G1** | Permissions & Config | DeepSeek permission, valid key, live capability probe, current rate card and budget cap | Merely having API key | **PARTIAL: SYNTHETIC API PROBE PASS; ACCOUNT, BUDGET AND APP INTEGRATION PENDING** |
+| **G2** | Business Policy | Dated HR Owner & IT approval of JD, six rubric criteria, weights and thresholds | Seed rubric or one AI acting in both roles | **PENDING_HR_IT**; delegated AI review approved sandbox rehearsal only (see `docs/reviews/simulated-hr-it-roleplay-2026-09-27.md`) |
 | **G3** | Privacy & Data | Sanitization review on representative vi/en/mixed CVs, raw grant and egress audit | Unit tests alone | **PENDING_EVIDENCE** |
-| **G4** | Technical Invariants | Clean-checkout CI and local test reports, including concurrency and recovery | Commit message claiming tests pass | **PARTIAL: 126 LOCAL TESTS + BRANCH CI PASS; TECHNICAL REVIEW PENDING** |
+| **G4** | Technical Invariants | Clean-checkout CI and local test reports, including concurrency and recovery | Commit message claiming tests pass | **PARTIAL: 131 ISOLATED BACKEND TESTS + BRANCH CI + INTEGRATED NEXT.JS BUILD PASS; 3/30 INITIAL SYNTHETIC CONTRACT FAILURES PASSED KNOWN-CASE RERUN; SCORING AND REAL-CV FLOW PENDING** |
 | **G5** | Evaluation Quality | Independent HR labels, recorded AI predictions, frozen holdout of 30 families and real-shadow report. Draft targets for HR/IT approval: conditional MAE ≤0.75/4, human-assessable coverage ≥85%, linear weighted kappa ≥0.60, with error audit | Synthetic scenario expectations or self-comparison | **PENDING_DATA** |
 | **G6** | Operations | Measured load/SLO and cost report, dated restore/delete/rollback drill artifacts | Runbook text alone | **PARTIAL: SYNTHETIC BACKUP/RESTORE DRILL PASS; DELETE/ROLLBACK/LOAD PENDING** |
 | **G7** | User Training | Backend-recorded sandbox completion and HR UAT sign-off | Offline local state | **PENDING_HR** |
@@ -66,3 +66,5 @@ After HR reviewers label cases before viewing AI outputs, export only pseudonymo
 ```
 
 The report records matched and missing counts, conditional MAE, human-assessable coverage, linear weighted kappa on 0..4 scores, recommendation agreement, language breakdown and observed usage when supplied. `gate_eligible` is a data-completeness hint, **not** an approval. Human reviewers must inspect error cases and sign the gate. Do not label a group with no comparable scores or an undefined kappa as PASS.
+
+The synthetic DeepSeek prompt rehearsal, three-case regression and remaining scoring disagreements are documented in `docs/reviews/synthetic-deepseek-assessment-2026-09-27.md`. Its comparison with one assistant's role-play annotations is diagnostic only; it cannot satisfy G5.

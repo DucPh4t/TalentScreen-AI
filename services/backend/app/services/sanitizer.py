@@ -282,35 +282,47 @@ def build_source_spans_from_canonical(
     text = normalize_text_nfc_lf(canonical_text)
     spans: list[SourceSpan] = []
 
-    # Find distinct non-empty paragraphs separated by newlines
+    # Keep citations small enough to copy exactly and to cite contradictory
+    # statements independently, even when a CV puts them on one line.
     for m in re.finditer(r"[^\n]+", text):
-        para_text = m.group()
-        start_cp = m.start()
-        end_cp = m.end()
+        paragraph = m.group()
+        sentence_start = 0
+        boundaries = [match.start() for match in re.finditer(r"(?<=[.!?])\s+(?=\S)", paragraph)]
+        for boundary in boundaries + [len(paragraph)]:
+            start_cp = m.start() + sentence_start
+            end_cp = m.start() + boundary
+            while start_cp < end_cp and text[start_cp].isspace():
+                start_cp += 1
+            while end_cp > start_cp and text[end_cp - 1].isspace():
+                end_cp -= 1
+            sentence_start = boundary
+            if start_cp == end_cp:
+                continue
 
-        # If a single paragraph is longer than max_span_codepoints, slice into sub-spans
-        sub_start = start_cp
-        while sub_start < end_cp:
-            sub_end = min(sub_start + max_span_codepoints, end_cp)
-            span_slice = text[sub_start:sub_end]
+            # Long sentences remain bounded; offsets always refer to the
+            # unchanged canonical text, including across mixed languages.
+            sub_start = start_cp
+            while sub_start < end_cp:
+                sub_end = min(sub_start + max_span_codepoints, end_cp)
+                span_slice = text[sub_start:sub_end]
 
-            span_key = f"{sanitized_version_id}:{sub_start}:{sub_end}"
-            full_h = hashlib.sha256(span_key.encode("utf-8")).hexdigest()
-            span_id = f"spn_{full_h[:24]}"
+                span_key = f"{sanitized_version_id}:{sub_start}:{sub_end}"
+                full_h = hashlib.sha256(span_key.encode("utf-8")).hexdigest()
+                span_id = f"spn_{full_h[:24]}"
 
-            spans.append(
-                SourceSpan(
-                    span_id=span_id,
-                    full_hash=full_h,
-                    sanitized_version_id=sanitized_version_id,
-                    start_cp=sub_start,
-                    end_cp=sub_end,
-                    page_number=1,
-                    section_label=None,
-                    language="vi",
-                    text=span_slice,
+                spans.append(
+                    SourceSpan(
+                        span_id=span_id,
+                        full_hash=full_h,
+                        sanitized_version_id=sanitized_version_id,
+                        start_cp=sub_start,
+                        end_cp=sub_end,
+                        page_number=1,
+                        section_label=None,
+                        language="vi",
+                        text=span_slice,
+                    )
                 )
-            )
-            sub_start = sub_end
+                sub_start = sub_end
 
     return spans

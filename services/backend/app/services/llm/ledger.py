@@ -15,15 +15,13 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db.models.ops import BudgetPeriod, BudgetReservation
 from app.domain.enums import BudgetScope
 from app.services.llm.cost import RATE_CARD_VERSION
 from app.services.llm.exceptions import BudgetExceededError
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_PILOT_BUDGET_USD = Decimal("50.00000000")
-
 
 async def get_or_create_active_budget_period(
     db: AsyncSession,
@@ -49,6 +47,12 @@ async def get_or_create_active_budget_period(
 
     if not period:
         # Create a 30-day budget period
+        settings = get_settings()
+        configured_limit = (
+            settings.DEV_EVAL_BUDGET_USD
+            if scope == BudgetScope.DEVELOPMENT
+            else settings.PILOT_MONTHLY_BUDGET_USD
+        )
         p_start = now
         p_end = now + timedelta(days=30)
         period = BudgetPeriod(
@@ -56,7 +60,7 @@ async def get_or_create_active_budget_period(
             scope=scope,
             period_start=p_start,
             period_end=p_end,
-            limit_usd=float(DEFAULT_PILOT_BUDGET_USD),
+            limit_usd=configured_limit,
             reserved_usd=0.0,
             spent_usd=0.0,
             rate_card_version=RATE_CARD_VERSION,

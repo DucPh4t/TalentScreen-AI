@@ -41,6 +41,7 @@ from app.schemas.assessment import (
     CriterionEvidenceResponse,
 )
 from app.services.assessment.prompt import (
+    ASSESSMENT_PROMPT_VERSION,
     build_assessment_system_prompt,
     build_assessment_user_prompt,
     build_repair_user_prompt,
@@ -122,6 +123,7 @@ async def create_assessment_run(
 
     now = datetime.now(timezone.utc)
     snapshot = {
+        "assessment_prompt_version": ASSESSMENT_PROMPT_VERSION,
         "application_id": str(application_id),
         "document_id": str(sanitized.document_id),
         "sanitized_version_id": str(sanitized.id),
@@ -258,6 +260,7 @@ async def execute_assessment_job(
             user_prompt=current_prompt,
             model=get_settings().DEEPSEEK_MODEL,
             max_output_tokens=4096,
+            thinking_mode="disabled",
         )
 
         try:

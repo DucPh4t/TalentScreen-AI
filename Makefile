@@ -45,7 +45,7 @@ dev-web:
 	cd apps/web && npm run dev
 
 test-backend:
-	$(PYTEST) services/backend/tests -v
+	bash scripts/test_backend_isolated.sh
 
 test: test-backend
 	cd apps/web && npm run build

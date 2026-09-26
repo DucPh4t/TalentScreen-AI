@@ -16,7 +16,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app.domain.rubric_policy import FORBIDDEN_DISCRIMINATION_PATTERNS
-from app.services.assessment.prompt import build_assessment_system_prompt
+from app.services.assessment.prompt import ASSESSMENT_PROMPT_VERSION, build_assessment_system_prompt
 from app.services.interview_prompts import build_interview_system_prompt
 
 RELEASES_DIR = Path(__file__).resolve().parent.parent / "releases"
@@ -69,7 +69,7 @@ def verify_prompt_invariants(prompt_name: str, prompt_text: str) -> list[str]:
 def run_prompt_regression() -> dict[str, Any]:
     """Run regression test on all production prompt templates."""
     prompts = {
-        "assessment_system_prompt_v1": build_assessment_system_prompt(),
+        ASSESSMENT_PROMPT_VERSION: build_assessment_system_prompt(),
         "rubric_draft_system_prompt_v1": RUBRIC_DRAFT_SYSTEM_PROMPT,
         "interview_system_prompt_v1": build_interview_system_prompt(),
     }
@@ -102,7 +102,7 @@ def generate_release_manifest(version: str = "v1.0.0-mvp") -> Path:
         "release_version": version,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "prompt_versions": {
-            "assessment": "v1.0.0",
+            "assessment": ASSESSMENT_PROMPT_VERSION,
             "rubric": "v1.0.0",
             "interview": "v1.0.0",
         },

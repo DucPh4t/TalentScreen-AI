@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.db.models import (
     Application,
+    BudgetReservation,
     Candidate,
     Document,
     Job,
@@ -186,6 +187,39 @@ async def test_mock_provider_fault_injection():
     assert res.content is not None
     assert res.input_tokens is not None
     assert res.output_tokens is not None
+
+
+@pytest.mark.asyncio
+async def test_truncated_provider_response_keeps_budget_reserved(test_session_factory):
+    """A provider may bill a truncated 200 response; it must not be booked as free."""
+    async with test_session_factory() as session:
+        _, _, _, _, _, job = await setup_llm_test_context(session)
+        job_id = job.id
+        await session.commit()
+
+    request = CompletionRequest(
+        task_kind="rubric",
+        system_prompt="Return JSON.",
+        user_prompt="Synthetic rubric prompt.",
+        model="deepseek-flash",
+    )
+    async with test_session_factory() as session:
+        with pytest.raises(LLMTruncatedError):
+            await execute_bounded_llm_call(
+                db=session,
+                job_id=job_id,
+                request=request,
+                logical_step="rubric_truncated",
+                attempt_no=1,
+                provider_override=MockLLMProvider(fault_mode="truncated"),
+            )
+
+    async with test_session_factory() as session:
+        from sqlalchemy import select
+        invocation = (await session.execute(select(LLMInvocation).where(LLMInvocation.job_id == job_id))).scalar_one()
+        reservation = (await session.execute(select(BudgetReservation).where(BudgetReservation.job_id == job_id))).scalar_one()
+        assert invocation.status == LLMInvocationStatus.OUTCOME_UNKNOWN
+        assert reservation.status == "outcome_unknown"
 
 
 @pytest.mark.asyncio

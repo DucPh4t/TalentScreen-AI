@@ -153,6 +153,8 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
         }
         if request.response_format:
             payload["response_format"] = request.response_format
+        if request.thinking_mode is not None:
+            payload["thinking"] = {"type": request.thinking_mode}
 
         start_time = time.monotonic()
         client = self._external_client or httpx.AsyncClient(timeout=request.timeout_seconds)
