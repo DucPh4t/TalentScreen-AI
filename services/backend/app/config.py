@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     APP_BIND_HOST: str = Field(default="127.0.0.1")
     APP_PORT: int = Field(default=8000)
     APP_ORIGIN: str = Field(
-        default="http://localhost:3000",
+        default="http://localhost:2004",
         description="Single allowed origin for session cookie / CSRF requests",
     )
 

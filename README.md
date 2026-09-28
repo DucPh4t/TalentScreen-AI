@@ -65,7 +65,7 @@ Dự án được xây dựng theo bộ đặc tả chi tiết tại thư mục 
    ```bash
    make dev-web
    ```
-   * Truy cập giao diện tại: `http://localhost:3000`
+   * Truy cập giao diện tại: `http://localhost:2004`
 
 6. **Chạy kiểm thử tự động:** `make test` tạo PostgreSQL/pgvector tạm thời trên một cổng riêng, chạy migration và pytest, rồi xóa container. Không dùng database ứng dụng trong `.env` để chạy test.
    ```bash

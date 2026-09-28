@@ -12,7 +12,7 @@ help:
 	@echo "  make db-down        Stop local Docker database container"
 	@echo "  make db-status      Check status of database container"
 	@echo "  make dev-backend    Start FastAPI backend development server (127.0.0.1:8000)"
-	@echo "  make dev-web        Start Next.js frontend development server (localhost:3000)"
+	@echo "  make dev-web        Start Next.js frontend development server (localhost:2004)"
 	@echo "  make test-backend   Run pytest test suite for backend"
 	@echo "  make test           Run all automated tests"
 

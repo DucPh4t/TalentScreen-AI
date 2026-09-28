@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TalentScreen AI — Chuẩn Mực Tuyển Dụng Hội Đồng Quản Trị &amp; Khảo Sát Đa Chiều</title>
+<!-- Google Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Typography: Bodoni Moda (Avant-garde Editorial Display Serif) + Sora & JetBrains Mono (Tech Geometric Sans & Cryptographic Mono) -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..700&amp;family=JetBrains+Mono:wght@300;400;500;600;700&amp;family=Sora:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              cream: "#f8f8f6",
+              surface: "#f3f3ef",
+              parchment: "#eae9e1",
+              charcoal: "#18181b",
+              dark: "#09090b",
+              muted: "#71717a",
+              border: "#e2e1d7",
+              teal: "#0d9488",
+              tealLight: "#10b981",
+              tealSoft: "#f0fdfa",
+              amber: "#d97706",
+              amberSoft: "#fef3c7"
+            }
+          },
+          fontFamily: {
+            serif: ["'Bodoni Moda'", "serif"],
+            sans: ["'Sora'", "sans-serif"],
+            mono: ["'JetBrains Mono'", "monospace"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 350, 'GRAD' 0, 'opsz' 22;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    .vellum-canvas {
+      background-color: #f8f8f6;
+      background-image: 
+        radial-gradient(ellipse at 15% 10%, rgba(13, 148, 136, 0.04) 0%, transparent 40%),
+        radial-gradient(ellipse at 85% 85%, rgba(16, 185, 129, 0.03) 0%, transparent 45%),
+        linear-gradient(to right, rgba(226, 225, 215, 0.3) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(226, 225, 215, 0.3) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+    }
+    .briefcase-shadow {
+      box-shadow: 
+        0 30px 70px -15px rgba(24, 24, 27, 0.12),
+        0 15px 30px -10px rgba(13, 148, 136, 0.06),
+        0 0 0 1px rgba(24, 24, 27, 0.07);
+    }
+    .wax-seal {
+      box-shadow: inset 0 2px 4px rgba(255,255,255,0.4), 0 4px 10px rgba(13, 148, 136, 0.25);
+    }
+    .hairline-input {
+      background: transparent;
+      border: none;
+      border-bottom: 1.5px solid #d4d4cb;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .hairline-input:focus {
+      outline: none;
+      border-bottom-color: #0d9488;
+      box-shadow: 0 4px 12px -4px rgba(13, 148, 136, 0.25);
+    }
+    @keyframes subtleFloat {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-4px) rotate(0.3deg); }
+    }
+    .floating-dossier {
+      animation: subtleFloat 7s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="vellum-canvas text-brand-charcoal antialiased min-h-screen flex flex-col font-sans selection:bg-brand-teal selection:text-white">
+<!-- ================= TOP ARCHIVAL METRIC BREADCRUMB HEADER ================= -->
+<header class="w-full bg-[#f8f8f6]/90 backdrop-blur-md sticky top-0 z-50 border-b border-brand-border">
+<div class="max-w-7xl mx-auto px-6 py-3 flex flex-wrap justify-between items-center gap-4">
+<!-- Brand & SHA-256 Ledger Stamp -->
+<div class="flex items-center gap-4">
+<a class="flex items-center gap-3 group" href="#">
+<div class="w-9 h-9 rounded-sm bg-brand-charcoal text-white flex items-center justify-center border border-brand-charcoal group-hover:bg-brand-teal transition-all duration-300">
+<span class="material-symbols-outlined text-[20px]">polyline</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-baseline gap-2">
+<span class="font-serif text-lg tracking-tight font-bold text-brand-charcoal">TalentScreen AI</span>
+<span class="text-[9px] font-mono tracking-widest text-brand-teal bg-brand-tealSoft px-1.5 py-0.5 border border-brand-teal/20 rounded">ARCHIVE #2025-V5</span>
+</div>
+<span class="text-[10px] font-mono text-brand-muted tracking-tight">SHA-256: 9b2d-f41e-884a-c071-7eb1a</span>
+</div>
+</a>
+</div>
+<!-- Navigation & Archival Breadcrumbs -->
+<nav class="hidden md:flex items-center gap-7 text-[12px] font-medium tracking-wide uppercase text-brand-muted">
+<a class="hover:text-brand-charcoal transition-colors flex items-center gap-1.5" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-brand-teal"></span>
+          Báo cáo Đạo đức AI
+        </a>
+<a class="hover:text-brand-charcoal transition-colors" href="#">Hội đồng Thẩm định</a>
+<a class="hover:text-brand-charcoal transition-colors" href="#">Tuân thủ SOC2 Type II</a>
+<a class="hover:text-brand-charcoal transition-colors" href="#">Kho Lưu Trữ Mật</a>
+</nav>
+<!-- Action & Access Key -->
+<div class="flex items-center gap-3">
+<div class="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded border border-brand-border bg-white text-[11px] font-mono text-brand-muted">
+<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          NODE: VN-SGN-CORE-01
+        </div>
+<a class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-brand-charcoal text-white text-[11px] font-semibold tracking-wider uppercase hover:bg-brand-teal transition-colors shadow-sm" href="#">
+<span class="material-symbols-outlined text-[15px]">key</span>
+<span>Khóa Thẩm Quyền</span>
+</a>
+</div>
+</div>
+</header>
+<!-- ================= TOP HERO / EXECUTIVE STATEMENT ================= -->
+<section class="w-full max-w-7xl mx-auto px-6 pt-10 pb-6 text-center flex flex-col items-center">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/80 border border-brand-border text-brand-charcoal text-[11px] font-mono uppercase tracking-widest mb-3 backdrop-blur-xs">
+<span class="material-symbols-outlined text-[14px] text-brand-teal">verified</span>
+<span>Tài liệu Chiến lược Nhân sự Khối Doanh nghiệp &amp; Quỹ Đầu tư</span>
+</div>
+<h1 class="font-serif text-3xl sm:text-5xl lg:text-6xl text-brand-charcoal tracking-tight font-medium max-w-4xl leading-[1.12]">
+      Hồ Sơ Đa Chiều &amp; Chuẩn Mực Tuyển Dụng
+      <span class="italic font-normal block mt-1 text-brand-teal">Chiến Lược Cấp Hội Đồng</span>
+</h1>
+<p class="text-sm sm:text-base text-brand-muted max-w-2xl mt-3 leading-relaxed font-sans font-light">
+      Không gian lưu trữ mật khoa học nhân sự: Phân tích 12 trục năng lực vô hình bằng thuật toán AI minh bạch, khách quan và loại trừ định kiến tuyệt đối.
+    </p>
+<!-- Key Metrics in Editorial Bodoni Styling -->
+<div class="w-full max-w-4xl mt-7 grid grid-cols-3 divide-x divide-brand-border bg-white/90 border border-brand-border rounded-lg shadow-sm backdrop-blur-sm p-4">
+<div class="text-center px-3">
+<div class="font-serif text-2xl sm:text-3xl font-bold text-brand-charcoal">3.5<span class="text-brand-teal text-lg font-sans">×</span></div>
+<div class="text-[11px] font-mono uppercase tracking-wider text-brand-muted mt-1">Gia tốc Tuyển dụng</div>
+</div>
+<div class="text-center px-3">
+<div class="font-serif text-2xl sm:text-3xl font-bold text-brand-teal">85<span class="text-base font-sans">%</span></div>
+<div class="text-[11px] font-mono uppercase tracking-wider text-brand-muted mt-1">Cắt giảm Tiêu hao Hội đồng</div>
+</div>
+<div class="text-center px-3">
+<div class="font-serif text-2xl sm:text-3xl font-bold text-brand-charcoal">120.000<span class="text-brand-teal font-sans text-sm">+</span></div>
+<div class="text-[11px] font-mono uppercase tracking-wider text-brand-muted mt-1">Hồ sơ Kiểm chứng Đa trục</div>
+</div>
+</div>
+</section>
+<!-- ================= RADICAL BRIEFCASE / DOSSIER WORKSPACE ================= -->
+<main class="flex-1 w-full max-w-7xl mx-auto px-6 py-6 lg:py-8 flex flex-col items-center">
+<!-- Archival Intelligence Folder Outer Shell -->
+<div class="w-full bg-[#fcfcfb] rounded-2xl briefcase-shadow border border-brand-border overflow-hidden relative">
+<!-- Luxury Folder Top Metal Tab / Fasteners -->
+<div class="w-full bg-brand-surface border-b border-brand-border px-6 py-3 flex items-center justify-between text-[11px] font-mono">
+<div class="flex items-center gap-3">
+<span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-charcoal/20"></span>
+<span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-charcoal/20"></span>
+<span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-charcoal/20"></span>
+<span class="font-bold text-brand-charcoal uppercase ml-2 tracking-widest flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-brand-teal">folder_open</span>
+            TẬP HỒ SƠ LƯU TRỮ TỐI MẬT: TS-DOSSIER-EXEC-884
+          </span>
+</div>
+<div class="flex items-center gap-4 text-brand-muted hidden sm:flex">
+<span>CLASSIFICATION: EXECUTIVE RESTRICTED</span>
+<span>•</span>
+<span class="text-brand-teal font-semibold">STATUS: VERIFIED BIOMETRIC</span>
+</div>
+</div>
+<!-- Main Split: Left 3D Polyhedral Dossier & Right Board Access Portal -->
+<div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-brand-border">
+<!-- ================= LEFT QUADRANT: POLYHEDRAL AI DOSSIER (7 Cols) ================= -->
+<div class="lg:col-span-7 p-6 sm:p-9 bg-radial from-[#ffffff] to-[#faf9f5] flex flex-col justify-between relative overflow-hidden">
+<!-- Encrypted Hologram Watermark Background -->
+<div class="absolute -right-16 -top-16 opacity-5 pointer-events-none select-none">
+<svg height="420" viewbox="0 0 200 200" width="420">
+<polygon fill="none" points="100,10 190,50 190,150 100,190 10,150 10,50" stroke="#18181b" stroke-width="2"></polygon>
+<polygon fill="none" points="100,30 170,60 170,140 100,170 30,140 30,60" stroke="#0d9488" stroke-width="1.5"></polygon>
+<polygon fill="none" points="100,50 150,70 150,130 100,150 50,130 50,70" stroke="#18181b" stroke-width="1"></polygon>
+</svg>
+</div>
+<!-- Dossier Sub-header & Wax Seal Accent -->
+<div class="flex items-start justify-between mb-6 relative z-10">
+<div>
+<div class="flex items-center gap-2 mb-1.5">
+<span class="text-[10px] font-mono uppercase tracking-widest bg-brand-teal text-white font-semibold px-2 py-0.5 rounded">
+                  HỒ SƠ MẬT KHOA HỌC NHÂN SỰ #DS-884
+                </span>
+<span class="text-[11px] font-mono text-brand-muted">ISO 27001 AUDITED</span>
+</div>
+<h3 class="font-serif text-2xl sm:text-3xl text-brand-charcoal font-semibold">
+                Khảo Sát Đa Chiều Năng Lực Ứng Viên
+              </h3>
+<p class="text-[12px] text-brand-muted font-mono mt-0.5">
+                Mô hình Vector 12 Chiều: Nhận Thức • Kiến Trúc Hệ Thống • Phản Xạ Đạo Đức
+              </p>
+</div>
+<!-- Embossed Wax Seal Badge -->
+<div class="wax-seal w-14 h-14 rounded-full bg-gradient-to-br from-brand-teal to-teal-800 flex flex-col items-center justify-center text-white shrink-0 p-1 border-2 border-white/80 shadow-md">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+<span class="text-[8px] font-mono uppercase tracking-wider font-bold">TOP 0.5%</span>
+</div>
+</div>
+<!-- Interactive Candidate Dossier Glass Card -->
+<div class="bg-white/95 rounded-xl border border-brand-border/90 p-5 shadow-sm relative z-10 floating-dossier mb-6">
+<div class="flex flex-wrap items-center justify-between pb-4 border-b border-brand-border/70 gap-3">
+<div class="flex items-center gap-3.5">
+<div class="w-12 h-12 rounded bg-brand-charcoal text-white flex items-center justify-center font-serif text-lg font-bold shadow-inner">
+                  NC
+                </div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-serif text-lg font-bold text-brand-charcoal">Nguyễn Minh Châu</h4>
+<span class="material-symbols-outlined text-brand-teal text-[18px]" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+<div class="text-[12px] font-mono text-brand-muted">Lead Systems Architect • AI Optimization</div>
+</div>
+</div>
+<!-- Layered Interactive Hologram Tabs -->
+<div class="flex items-center gap-1 bg-brand-surface p-1 rounded border border-brand-border/60 text-[11px] font-mono">
+<button class="px-2.5 py-1 bg-white text-brand-charcoal font-semibold rounded shadow-xs">Vector Phổ</button>
+<button class="px-2.5 py-1 text-brand-muted hover:text-brand-charcoal">Đạo Đức</button>
+<button class="px-2.5 py-1 text-brand-muted hover:text-brand-charcoal">Thẩm Định 360°</button>
+</div>
+</div>
+<!-- Spatial 12-Axis SVG Tessellation & Metric Grid -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-5 mt-4 items-center">
+<!-- SVG Polyhedral Geometric Radar / Tessellation -->
+<div class="md:col-span-5 flex flex-col items-center justify-center p-2 bg-[#f9f9f7] rounded-lg border border-brand-border/60">
+<svg class="w-40 h-40" viewbox="0 0 200 200">
+<!-- Background Hexagonal Grid -->
+<polygon fill="none" points="100,20 170,60 170,140 100,180 30,140 30,60" stroke="#e2e1d7" stroke-width="1"></polygon>
+<polygon fill="none" points="100,40 150,70 150,130 100,160 50,130 50,70" stroke="#e2e1d7" stroke-dasharray="2,2" stroke-width="1"></polygon>
+<polygon fill="none" points="100,60 130,80 130,120 100,140 70,120 70,80" stroke="#e2e1d7" stroke-width="1"></polygon>
+<!-- Center Axis Crossbars -->
+<line stroke="#e2e1d7" stroke-width="1" x1="100" x2="100" y1="20" y2="180"></line>
+<line stroke="#e2e1d7" stroke-width="1" x1="30" x2="170" y1="60" y2="140"></line>
+<line stroke="#e2e1d7" stroke-width="1" x1="30" x2="170" y1="140" y2="60"></line>
+<!-- Filled Candidate Polygon (Polyhedral Talent Map) -->
+<polygon fill="rgba(13, 148, 136, 0.18)" points="100,24 165,65 158,135 100,172 40,132 38,68" stroke="#0d9488" stroke-width="2"></polygon>
+<!-- Data Node Markers -->
+<circle cx="100" cy="24" fill="#0d9488" r="3.5"></circle>
+<circle cx="165" cy="65" fill="#10b981" r="3.5"></circle>
+<circle cx="158" cy="135" fill="#0d9488" r="3.5"></circle>
+<circle cx="100" cy="172" fill="#18181b" r="3.5"></circle>
+<circle cx="40" cy="132" fill="#0d9488" r="3.5"></circle>
+<circle cx="38" cy="68" fill="#10b981" r="3.5"></circle>
+</svg>
+<span class="text-[10px] font-mono text-brand-teal uppercase tracking-widest mt-1 font-semibold">Tọa độ Năng Lực 12D</span>
+</div>
+<!-- 4 Core Vector Metrics -->
+<div class="md:col-span-7 space-y-3">
+<div>
+<div class="flex justify-between text-[11px] mb-1 font-mono">
+<span class="text-brand-charcoal font-semibold">System Architecture &amp; Scalability</span>
+<span class="font-bold text-brand-charcoal">98.4%</span>
+</div>
+<div class="w-full bg-brand-surface h-1.5 rounded-full overflow-hidden">
+<div class="bg-brand-charcoal h-full rounded-full" style="width: 98.4%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-[11px] mb-1 font-mono">
+<span class="text-brand-charcoal font-semibold">Algorithmic Problem Decomposition</span>
+<span class="font-bold text-brand-teal">96.8%</span>
+</div>
+<div class="w-full bg-brand-surface h-1.5 rounded-full overflow-hidden">
+<div class="bg-brand-teal h-full rounded-full" style="width: 96.8%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-[11px] mb-1 font-mono">
+<span class="text-brand-charcoal font-semibold">Ethical AI &amp; Robust Safety Guardrails</span>
+<span class="font-bold text-brand-tealLight">99.1%</span>
+</div>
+<div class="w-full bg-brand-surface h-1.5 rounded-full overflow-hidden">
+<div class="bg-brand-tealLight h-full rounded-full" style="width: 99.1%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-[11px] mb-1 font-mono">
+<span class="text-brand-charcoal font-semibold">Executive Stress Resilience &amp; Grit</span>
+<span class="font-bold text-brand-charcoal">94.5%</span>
+</div>
+<div class="w-full bg-brand-surface h-1.5 rounded-full overflow-hidden">
+<div class="bg-brand-charcoal h-full rounded-full" style="width: 94.5%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Machine Proof & Cryptographic Certificate Badge -->
+<div class="mt-4 pt-3 border-t border-brand-border/60 flex flex-wrap items-center justify-between text-[11px] text-brand-muted gap-2 font-mono">
+<span class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[15px] text-brand-teal">fingerprint</span>
+                AI Hash: 884-NC-7f1c9902ba
+              </span>
+<span class="text-brand-charcoal font-medium">Thời gian kiểm định: <strong class="text-brand-teal">45 giây</strong> (Real-time Synthesized)</span>
+</div>
+</div>
+<!-- Bottom Editorial Endorsement Quote -->
+<div class="p-3.5 bg-white/70 border border-brand-border/70 rounded-lg flex items-start gap-3">
+<span class="material-symbols-outlined text-brand-teal text-[20px] shrink-0 mt-0.5">format_quote</span>
+<p class="text-[12px] font-serif italic text-brand-charcoal leading-relaxed">
+              "TalentScreen AI đem đến sự chính xác tuyệt đối mà hội đồng quản trị yêu cầu: dữ liệu năng lực không cảm tính, thẩm định công nghệ minh bạch và chuẩn bảo mật chuẩn quốc tế."
+              <span class="block mt-1 font-sans not-italic text-[10px] text-brand-muted font-mono uppercase tracking-wider">
+                — Ban Cố Vấn Nhân Sự Cấp Cao, Liên Minh Tài Chính Toàn Cầu
+              </span>
+</p>
+</div>
+</div>
+<!-- ================= RIGHT QUADRANT: BOARD EXCLUSIVE KEY ACCESS (5 Cols) ================= -->
+<div class="lg:col-span-5 p-6 sm:p-9 bg-white flex flex-col justify-between">
+<div>
+<!-- Portal Sub-heading -->
+<div class="text-center pb-5 mb-6 border-b border-brand-border">
+<div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-brand-surface border border-brand-border text-brand-charcoal mb-3">
+<span class="material-symbols-outlined text-[24px] text-brand-teal">shield_with_heart</span>
+</div>
+<span class="text-[10px] font-mono uppercase tracking-widest text-brand-teal block font-semibold mb-1">
+                KÊNH TRUY CẬP ĐỘC QUYỀN
+              </span>
+<h2 class="font-serif text-2xl sm:text-[26px] font-bold text-brand-charcoal">
+                Hội Đồng Quản Trị &amp; Lãnh Đạo
+              </h2>
+<p class="text-[12px] text-brand-muted mt-1 font-sans">
+                Nhập chìa khóa thẩm quyền hoặc tài khoản doanh nghiệp được cấp phép
+              </p>
+</div>
+<!-- Role Selector Mode -->
+<div class="flex p-1 bg-brand-surface rounded mb-6 border border-brand-border/80">
+<button class="flex-1 py-1.5 px-3 rounded text-[12px] font-mono font-semibold transition-all bg-white text-brand-charcoal shadow-xs flex items-center justify-center gap-1.5" id="btnGov">
+<span class="material-symbols-outlined text-[15px] text-brand-teal">domain</span>
+<span>Doanh Nghiệp</span>
+</button>
+<button class="flex-1 py-1.5 px-3 rounded text-[12px] font-mono font-medium transition-all text-brand-muted hover:text-brand-charcoal flex items-center justify-center gap-1.5" id="btnCandidate">
+<span class="material-symbols-outlined text-[15px]">badge</span>
+<span>Ứng Viên Phỏng Vấn</span>
+</button>
+</div>
+<!-- Bespoke SSO Enterprise Access -->
+<div class="space-y-2 mb-6">
+<button class="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded border border-brand-border bg-white hover:border-brand-charcoal hover:bg-brand-surface/40 transition-all text-[12px] font-medium text-brand-charcoal">
+<svg class="w-4 h-4 shrink-0" viewbox="0 0 24 24">
+<path d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.87c2.26-2.09 3.675-5.17 3.675-9.15z" fill="#4285F4"></path>
+<path d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.87-3.05c-1.08.72-2.45 1.16-4.06 1.16-3.13 0-5.78-2.11-6.73-4.96H1.25v3.15C3.25 21.36 7.31 24 12 24z" fill="#34A853"></path>
+<path d="M5.27 14.24c-.25-.72-.38-1.49-.38-2.24s.13-1.52.38-2.24V6.61H1.25C.45 8.22 0 10.05 0 12s.45 3.78 1.25 5.39l4.02-3.15z" fill="#FBBC05"></path>
+<path d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.64 1.25 6.61l4.02 3.15c.95-2.85 3.6-4.96 6.73-4.96z" fill="#EA4335"></path>
+</svg>
+<span>Google Workspace Corporate SAML</span>
+</button>
+<button class="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded border border-brand-border bg-white hover:border-brand-charcoal hover:bg-brand-surface/40 transition-all text-[12px] font-medium text-brand-charcoal">
+<svg class="w-4 h-4 shrink-0" viewbox="0 0 23 23">
+<path d="M1 1h10v10H1z" fill="#f35325"></path>
+<path d="M12 1h10v10H12z" fill="#81bc06"></path>
+<path d="M1 12h10v10H1z" fill="#05a6f0"></path>
+<path d="M12 12h10v10H12z" fill="#ffba08"></path>
+</svg>
+<span>Microsoft Entra ID / Okta SSO</span>
+</button>
+</div>
+<!-- Hairline Divider -->
+<div class="relative flex items-center justify-center my-6">
+<div class="border-t border-brand-border w-full"></div>
+<span class="bg-white px-3 text-[10px] font-mono uppercase tracking-widest text-brand-muted shrink-0">
+                HOẶC KHÓA BẢO MẬT ĐỊNH DANH
+              </span>
+</div>
+<!-- Form: Gold-Teal Hairline Inputs -->
+<form class="space-y-5" onsubmit="event.preventDefault();">
+<div>
+<div class="flex justify-between items-center text-[11px] font-mono mb-1">
+<label class="text-brand-charcoal uppercase tracking-wider font-semibold">Tài Khoản Điều Hành</label>
+<a class="text-brand-teal hover:underline text-[10px]" href="#">Cấu hình Khóa FIDO2</a>
+</div>
+<div class="relative">
+<input class="hairline-input w-full py-2 px-1 text-[13px] text-brand-charcoal placeholder:text-brand-muted/60 font-mono" placeholder="executive@sovereign-holdings.com" required="" type="email"/>
+<span class="material-symbols-outlined absolute right-1 top-2 text-[17px] text-brand-muted">alternate_email</span>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center text-[11px] font-mono mb-1">
+<label class="text-brand-charcoal uppercase tracking-wider font-semibold">Mật Mã Hội Đồng / Passkey</label>
+<a class="text-brand-teal hover:underline text-[10px]" href="#">Quên mã?</a>
+</div>
+<div class="relative">
+<input class="hairline-input w-full py-2 px-1 text-[13px] text-brand-charcoal font-mono tracking-widest" id="passkeyInput" placeholder="••••••••••••••••" required="" type="password"/>
+<button class="absolute right-1 top-2 text-brand-muted hover:text-brand-charcoal transition-colors" id="togglePassBtn" type="button">
+<span class="material-symbols-outlined text-[17px]">visibility</span>
+</button>
+</div>
+</div>
+<!-- Biometric Confirmation Checkbox -->
+<div class="flex items-center justify-between text-[11px] pt-1">
+<label class="flex items-center gap-2 cursor-pointer select-none text-brand-muted font-mono">
+<input class="rounded text-brand-teal focus:ring-brand-teal border-brand-border" type="checkbox"/>
+<span>Ghi nhớ thiết bị mã hóa</span>
+</label>
+<span class="text-brand-teal font-mono text-[10px] flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">lock</span>
+                  E2E Encrypted
+                </span>
+</div>
+<!-- Main Submission Button -->
+<button class="w-full py-3 px-4 rounded bg-brand-charcoal text-white text-[12px] font-mono uppercase tracking-widest hover:bg-brand-teal transition-all duration-200 shadow flex items-center justify-center gap-2 group active:scale-[0.99] mt-3" type="submit">
+<span>Mở Không Gian Tuyển Dụng</span>
+<span class="material-symbols-outlined text-[17px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</form>
+<!-- Invitation Fast-Pass Voucher -->
+<div class="mt-6 p-3 rounded border border-dashed border-brand-border bg-brand-surface/70 flex items-center justify-between text-[11px] font-mono">
+<div class="flex items-center gap-2 text-brand-charcoal">
+<span class="material-symbols-outlined text-brand-teal text-[16px]">vpn_key</span>
+<span>Thư mời ứng viên cấp cao?</span>
+</div>
+<a class="font-bold text-brand-teal hover:underline" href="#">Nhập mã vé →</a>
+</div>
+</div>
+<!-- Micro Cryptographic Assurance Footnote -->
+<div class="pt-6 border-t border-brand-border mt-6 text-center text-[10px] font-mono text-brand-muted flex flex-col items-center gap-1">
+<div class="flex items-center gap-2 text-brand-charcoal">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+<span>ĐẠT CHUẨN ISO/IEC 27001 • SOC2 TYPE II • GDPR AUDITED</span>
+</div>
+<span>Mọi hành vi truy xuất đều được ký số và ghi nhận trên Sổ cái Bất biến.</span>
+</div>
+</div>
+</div>
+</div>
+<!-- ================= PROVENANCE SEALS & CORPORATE TRUST MARQUEE ================= -->
+<div class="w-full mt-10 flex flex-col items-center">
+<span class="text-[10px] font-mono uppercase tracking-widest text-brand-muted text-center mb-4">
+        Được ủy thác bởi các Hội đồng Quản trị, Quỹ đầu tư &amp; Tập đoàn Công nghệ hàng đầu
+      </span>
+<div class="w-full flex flex-wrap items-center justify-center gap-8 sm:gap-14 text-brand-muted/70 text-[11px] font-mono font-semibold tracking-wider">
+<div class="flex items-center gap-1.5 hover:text-brand-charcoal transition-colors">
+<span class="material-symbols-outlined text-[16px]">account_balance</span>
+<span>VIETCAPITAL SOVEREIGN</span>
+</div>
+<div class="flex items-center gap-1.5 hover:text-brand-charcoal transition-colors">
+<span class="material-symbols-outlined text-[16px]">hub</span>
+<span>GLOBAL FINTECH CONSORTIUM</span>
+</div>
+<div class="flex items-center gap-1.5 hover:text-brand-charcoal transition-colors">
+<span class="material-symbols-outlined text-[16px]">biotech</span>
+<span>HEALTHTECH HOLDINGS</span>
+</div>
+<div class="flex items-center gap-1.5 hover:text-brand-charcoal transition-colors">
+<span class="material-symbols-outlined text-[16px]">satellite_alt</span>
+<span>TELECOM CLOUD ASIA</span>
+</div>
+<div class="flex items-center gap-1.5 hover:text-brand-charcoal transition-colors">
+<span class="material-symbols-outlined text-[16px]">security</span>
+<span>CYBERDEFENSE ALLIANCE</span>
+</div>
+</div>
+</div>
+</main>
+<!-- ================= MINIMAL EDITORIAL FOOTER ================= -->
+<footer class="w-full bg-[#f4f4f0] border-t border-brand-border mt-auto py-6">
+<div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-[11px] font-mono text-brand-muted">
+<div class="flex items-center gap-2">
+<span class="font-serif font-bold text-brand-charcoal text-[13px]">TalentScreen AI</span>
+<span>/</span>
+<span>© 2025 TalentScreen AI, Inc. Hệ thống Thẩm định Nhân sự Chuẩn mực Quốc tế.</span>
+</div>
+<div class="flex flex-wrap gap-5">
+<a class="hover:text-brand-charcoal transition-colors" href="#">Quy chuẩn Đạo đức AI</a>
+<a class="hover:text-brand-charcoal transition-colors" href="#">Báo cáo Độc lập SOC2</a>
+<a class="hover:text-brand-charcoal transition-colors" href="#">Sổ cái Chứng thực</a>
+<a class="hover:text-brand-charcoal transition-colors" href="#">Liên hệ Hội đồng</a>
+</div>
+</div>
+</footer>
+<!-- ================= INTERACTIVE SCRIPTS ================= -->
+<script>
+    // Tab switching for Enterprise vs Candidate
+    const btnGov = document.getElementById('btnGov');
+    const btnCandidate = document.getElementById('btnCandidate');
+
+    btnGov?.addEventListener('click', () => {
+      btnGov.className = 'flex-1 py-1.5 px-3 rounded text-[12px] font-mono font-semibold transition-all bg-white text-brand-charcoal shadow-xs flex items-center justify-center gap-1.5';
+      btnCandidate.className = 'flex-1 py-1.5 px-3 rounded text-[12px] font-mono font-medium transition-all text-brand-muted hover:text-brand-charcoal flex items-center justify-center gap-1.5';
+    });
+
+    btnCandidate?.addEventListener('click', () => {
+      btnCandidate.className = 'flex-1 py-1.5 px-3 rounded text-[12px] font-mono font-semibold transition-all bg-white text-brand-charcoal shadow-xs flex items-center justify-center gap-1.5';
+      btnGov.className = 'flex-1 py-1.5 px-3 rounded text-[12px] font-mono font-medium transition-all text-brand-muted hover:text-brand-charcoal flex items-center justify-center gap-1.5';
+    });
+
+    // Password visibility toggle
+    const togglePassBtn = document.getElementById('togglePassBtn');
+    const passkeyInput = document.getElementById('passkeyInput');
+
+    togglePassBtn?.addEventListener('click', () => {
+      const isPass = passkeyInput.getAttribute('type') === 'password';
+      passkeyInput.setAttribute('type', isPass ? 'text' : 'password');
+      const icon = togglePassBtn.querySelector('span');
+      if (icon) {
+        icon.textContent = isPass ? 'visibility_off' : 'visibility';
+      }
+    });
+  </script>
+</body></html>

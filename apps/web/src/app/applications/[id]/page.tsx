@@ -2,7 +2,24 @@
 
 import React, { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, ApplicationItem, AssessmentRunData } from "@/lib/api";
+import { api, AssessmentRunData, UserAccount } from "@/lib/api";
+import {
+  IconShield,
+  IconSparkles,
+  IconCheckCircle,
+  IconAlertTriangle,
+  IconLock,
+  IconQuote,
+  IconTrash,
+  IconArrowRight,
+  IconX,
+  IconUserCheck,
+  IconFileText,
+  IconMessageSquare,
+  IconSliders
+} from "@/components/Icons";
+import { useToast } from "@/components/Toast";
+import { SkeletonDossier } from "@/components/Skeleton";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -10,27 +27,35 @@ interface PageProps {
 
 export default function ApplicationWorkspacePage({ params }: PageProps) {
   const { id } = use(params);
+  const { success, error: toastError, warning, info } = useToast();
 
   const [application, setApplication] = useState<any>(null);
   const [requisition, setRequisition] = useState<any>(null);
   const [rubric, setRubric] = useState<any>(null);
   const [sanitizedVersion, setSanitizedVersion] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [grantingRawAccess, setGrantingRawAccess] = useState(false);
+  const [rawAccessError, setRawAccessError] = useState<string | null>(null);
   const [assessmentRun, setAssessmentRun] = useState<AssessmentRunData | null>(null);
   const [hrRevisions, setHrRevisions] = useState<any[]>([]);
   const [decisions, setDecisions] = useState<any[]>([]);
   const [interviewDraft, setInterviewDraft] = useState<any>(null);
   const [questionBanks, setQuestionBanks] = useState<any[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"sanitization" | "assessment" | "revision" | "interview">("assessment");
+  const [activeTab, setActiveTab] = useState<"assessment" | "sanitization" | "revision" | "interview">("assessment");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Quote drawer
+  // Quote drawer state
   const [selectedEvidence, setSelectedEvidence] = useState<any | null>(null);
 
   // Sanitization action state
   const [approvingSanitized, setApprovingSanitized] = useState(false);
   const [acknowledgedSanitization, setAcknowledgedSanitization] = useState(false);
+  const [editingSanitization, setEditingSanitization] = useState(false);
+  const [editedSanitizedText, setEditedSanitizedText] = useState("");
+  const [sanitizationEditReason, setSanitizationEditReason] = useState("");
+  const [savingSanitization, setSavingSanitization] = useState(false);
 
   // Assessment action state
   const [triggeringAssessment, setTriggeringAssessment] = useState(false);
@@ -40,12 +65,6 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   const [deleteScope, setDeleteScope] = useState<"application" | "candidate">("application");
   const [deleteReason, setDeleteReason] = useState("candidate_request");
   const [deleting, setDeleting] = useState(false);
-
-  // HR Revision state
-  const [showRevisionForm, setShowRevisionForm] = useState(false);
-  const [revisionSummary, setRevisionSummary] = useState("");
-  const [revisionCriteria, setRevisionCriteria] = useState<Record<string, any>>({});
-  const [savingRevision, setSavingRevision] = useState(false);
 
   // Decision Form state
   const [decisionOutcome, setDecisionOutcome] = useState<"advance" | "request_information" | "not_advance">("advance");
@@ -61,12 +80,12 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   async function loadData() {
     setLoading(true);
     setError(null);
+    setSanitizedVersion(null);
     try {
-      // 1. Load application detail
+      setCurrentUser(await api.getMe());
       const app = await api.getApplication(id);
       setApplication(app);
 
-      // 2. Load Requisition & Rubric
       if (app.requisition_id) {
         try {
           const req = await api.getRequisition(app.requisition_id);
@@ -75,7 +94,6 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
             const rub = await api.getRubric(req.current_rubric_version_id);
             setRubric(rub);
 
-            // Load question bank if available
             try {
               const banks = await api.getQuestionBank(req.current_rubric_version_id);
               setQuestionBanks(banks);
@@ -88,12 +106,10 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         }
       }
 
-      // 3. Load Sanitized Version if present
       if (app.current_document_id) {
         try {
           const sanList = await api.listSanitizedVersions(app.current_document_id);
           if (sanList.length > 0) {
-            // Fetch detail of latest sanitized version
             const latestId = app.current_sanitized_version_id || sanList[0].id;
             const sanDetail = await api.getSanitizedDetail(latestId);
             setSanitizedVersion(sanDetail);
@@ -103,7 +119,6 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         }
       }
 
-      // 4. Load Assessment Run if present
       if (app.current_assessment_run_id) {
         try {
           const run = await api.getAssessmentRun(app.id, app.current_assessment_run_id);
@@ -113,7 +128,6 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         }
       }
 
-      // 5. Load HR Revisions
       try {
         const revs = await api.listHRRevisions(app.id);
         setHrRevisions(revs);
@@ -121,7 +135,6 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         console.warn("Could not load HR revisions:", err);
       }
 
-      // 6. Load Decisions
       try {
         const decs = await api.listDecisions(app.id);
         setDecisions(decs);
@@ -139,29 +152,71 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
     loadData();
   }, [id]);
 
-  // Handler: Approve Sanitized Version
   async function handleApproveSanitization() {
     if (!sanitizedVersion) return;
     if (!acknowledgedSanitization) {
-      alert("Vui lòng xác nhận đã kiểm tra khử định danh PII.");
+      warning("Vui lòng tích chọn xác nhận đã kiểm tra khử định danh PII.");
       return;
     }
     setApprovingSanitized(true);
     try {
-      await api.approveSanitizedVersion(sanitizedVersion.id, true);
-      alert("Đã phê duyệt phiên bản khử định danh thành công!");
+      await api.approveSanitizedVersion(sanitizedVersion.id, application.row_version, sanitizedVersion.sha256);
+      success("Đã phê duyệt phiên bản khử định danh thành công!");
       await loadData();
     } catch (err: any) {
-      alert("Lỗi phê duyệt khử định danh: " + err.message);
+      toastError(err.message || "Lỗi phê duyệt khử định danh");
     } finally {
       setApprovingSanitized(false);
     }
   }
 
-  // Handler: Trigger Assessment
+  async function handleGrantRawAccess() {
+    if (!currentUser || !application?.current_document_id) return;
+    setGrantingRawAccess(true);
+    setRawAccessError(null);
+    try {
+      await api.createRawGrant(
+        id,
+        currentUser.id,
+        "Kiểm tra bản CV đã che thông tin định danh trước khi đánh giá",
+        30
+      );
+      success("Đã cấp quyền truy cập CV gốc trong 30 phút.");
+      await loadData();
+    } catch (err: any) {
+      setRawAccessError(err.message || "Không thể cấp quyền xem CV gốc.");
+      toastError(err.message || "Không thể cấp quyền xem CV gốc.");
+    } finally {
+      setGrantingRawAccess(false);
+    }
+  }
+
+  async function handleSaveSanitization() {
+    if (!application?.current_document_id || !sanitizedVersion) return;
+    if (editedSanitizedText.trim().length < 10 || sanitizationEditReason.trim().length < 5) return;
+    setSavingSanitization(true);
+    try {
+      await api.editSanitizedVersion(
+        application.current_document_id,
+        sanitizedVersion.id,
+        editedSanitizedText,
+        sanitizationEditReason.trim()
+      );
+      setEditingSanitization(false);
+      setAcknowledgedSanitization(false);
+      setSanitizationEditReason("");
+      success("Đã lưu nội dung khử định danh mới.");
+      await loadData();
+    } catch (err: any) {
+      toastError(err.message || "Không thể lưu bản đã che");
+    } finally {
+      setSavingSanitization(false);
+    }
+  }
+
   async function handleTriggerAssessment() {
-    if (!sanitizedVersion || !requisition?.current_rubric_version_id) {
-      alert("Cần có phiên bản khử định danh và Rubric được kích hoạt.");
+    if (sanitizedVersion?.status !== "approved" || !requisition?.current_rubric_version_id) {
+      warning("Cần HR duyệt bản đã che thông tin và có rubric được phê duyệt.");
       return;
     }
     setTriggeringAssessment(true);
@@ -171,30 +226,28 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         sanitizedVersion.id,
         requisition.current_rubric_version_id
       );
-      alert("Đã đưa yêu cầu đánh giá AI vào hàng đợi xử lý.");
+      success("Đã đưa yêu cầu đánh giá AI vào hàng đợi xử lý.");
       await loadData();
     } catch (err: any) {
-      alert("Lỗi kích hoạt đánh giá: " + err.message);
+      toastError(err.message || "Lỗi kích hoạt đánh giá");
     } finally {
       setTriggeringAssessment(false);
     }
   }
 
-  // Handler: Submit Attested Hiring Decision
   async function handleSubmitDecision(e: React.FormEvent) {
     e.preventDefault();
     if (!attestCheck1 || !attestCheck2 || !attestCheck3) {
-      alert("Bạn phải cam kết đầy đủ cả 3 điều khoản ký duyệt trước khi ban hành quyết định.");
+      warning("Bạn phải cam kết đầy đủ cả 3 điều khoản ký duyệt trước khi ban hành quyết định.");
       return;
     }
     if (decisionReason.trim().length < 20) {
-      alert("Lý do quyết định phải dài tối thiểu 20 ký tự.");
+      warning("Lý do quyết định phải dài tối thiểu 20 ký tự.");
       return;
     }
 
-    submittingDecisionSet: setSubmittingDecision(true);
+    setSubmittingDecision(true);
     try {
-      // 1. Sign ReviewAttestation first
       let effectiveKind: "assessment_run" | "hr_revision" = "assessment_run";
       let effectiveId = assessmentRun?.id;
       if (hrRevisions.length > 0 && hrRevisions[0].status === "finalized") {
@@ -219,7 +272,6 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         acknowledged: true,
       });
 
-      // 2. Submit Final Decision bound to Attestation
       await api.createFinalDecision(id, {
         decision_basis: "assessment_review",
         outcome: decisionOutcome,
@@ -228,19 +280,18 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         expected_rubric_version_id: rubric?.id,
       });
 
-      alert("Quyết định tuyển dụng đã được ban hành và ký cam kết thành công!");
+      success("Quyết định tuyển dụng đã được ban hành và ký cam kết thành công!");
       await loadData();
     } catch (err: any) {
-      alert("Lỗi ban hành quyết định: " + err.message);
+      toastError(err.message || "Lỗi ban hành quyết định");
     } finally {
       setSubmittingDecision(false);
     }
   }
 
-  // Handler: Trigger Interview Draft
   async function handleTriggerInterview() {
     if (!questionBanks || questionBanks.length === 0) {
-      alert("Chưa có ngân hàng câu hỏi chuẩn cho Rubric này.");
+      warning("Chưa có ngân hàng câu hỏi chuẩn cho Rubric này.");
       return;
     }
     setTriggeringInterview(true);
@@ -259,47 +310,42 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         activeBank.id
       );
       setInterviewDraft(draft);
-      alert("Đã tạo kế hoạch phỏng vấn và câu hỏi đào sâu!");
+      success("Đã tạo kế hoạch phỏng vấn và câu hỏi đào sâu!");
     } catch (err: any) {
-      alert("Lỗi tạo câu hỏi phỏng vấn: " + err.message);
+      toastError(err.message || "Lỗi tạo câu hỏi phỏng vấn");
     } finally {
       setTriggeringInterview(false);
     }
   }
 
-  // Handler: Data Deletion
   async function handleDeleteConfirm() {
-    if (!confirm("Hành động này sẽ XÓA VĨNH VIỄN tệp CV và đặt trạng thái tombstone ngay lập tức. Tiếp tục?")) {
-      return;
-    }
     setDeleting(true);
     try {
-      await api.requestDeletion(deleteScope, id, deleteReason);
-      alert("Hồ sơ đã được xóa vĩnh viễn khỏi hệ thống.");
+      const result = await api.requestDeletion(deleteScope, deleteScope === "candidate" ? application.candidate_id : id, deleteReason);
+      success(`Đã tạo yêu cầu xóa ${result.id}. Trạng thái: ${result.status}. Theo dõi tại mục Lưu giữ dữ liệu.`);
       setShowDeleteModal(false);
       await loadData();
     } catch (err: any) {
-      alert("Lỗi xóa dữ liệu: " + err.message);
+      toastError(err.message || "Lỗi xóa dữ liệu");
     } finally {
       setDeleting(false);
     }
   }
 
   if (loading) {
-    return (
-      <div className="card" style={{ textAlign: "center", padding: "4rem" }}>
-        <div style={{ color: "var(--text-muted)" }}>Đang mở không gian xét duyệt hồ sơ...</div>
-      </div>
-    );
+    return <SkeletonDossier />;
   }
 
   if (error || !application) {
     return (
-      <div className="card" style={{ borderColor: "var(--danger)" }}>
-        <h2 style={{ color: "var(--danger)", marginBottom: "0.5rem" }}>Không tìm thấy hồ sơ</h2>
-        <p style={{ color: "var(--text-muted)", marginBottom: "1rem" }}>{error}</p>
+      <div className="card" style={{ borderColor: "var(--rose-border)", maxWidth: "600px", margin: "3rem auto", textAlign: "center" }}>
+        <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "var(--rose-bg)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
+          <IconAlertTriangle size={24} color="var(--rose-text)" />
+        </div>
+        <h2 style={{ color: "var(--rose-text)", marginBottom: "0.5rem" }}>Không Tìm Thấy Hồ Sơ</h2>
+        <p style={{ color: "var(--text-secondary)", marginBottom: "1.5rem" }}>{error}</p>
         <Link href="/requisitions" className="btn btn-secondary">
-          Quay lại đợt tuyển dụng
+          Quay lại danh sách đợt tuyển dụng
         </Link>
       </div>
     );
@@ -307,175 +353,207 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
   return (
     <div>
-      {/* Top Header Bar */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-          <Link href={application.requisition_id ? `/requisitions/${application.requisition_id}` : "/requisitions"} style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-            ← {requisition?.title || "Đợt tuyển dụng"}
-          </Link>
-          <span style={{ color: "var(--text-muted)" }}>/</span>
-          <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>{application.public_label}</span>
+      {/* Top Header Bar — Strictly Spec 01: Evidence-first (NO hero score) */}
+      <div className="page-header" style={{ marginBottom: "1.5rem" }}>
+        <div>
+          <div className="breadcrumbs">
+            <Link href="/">Trang chủ</Link>
+            <span>/</span>
+            <Link href={application.requisition_id ? `/requisitions/${application.requisition_id}` : "/requisitions"}>
+              {requisition?.title || "Đợt tuyển dụng"}
+            </Link>
+            <span>/</span>
+            <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
+              {application.public_label}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", flexWrap: "wrap" }}>
+            <h1 className="page-title" style={{ fontFamily: "var(--font-mono)", color: "var(--accent-cyan)", letterSpacing: "0.02em" }}>
+              {application.public_label}
+            </h1>
+            <span className={`badge badge-${application.status}`}>
+              {application.status.toUpperCase()}
+            </span>
+            <span className="badge badge-subtle">
+              Thế hệ gen-{application.generation} • Khóa v{application.row_version}
+            </span>
+          </div>
+
+          <p className="page-subtitle">
+            {sanitizedVersion?.status === "approved" ? "Bản đã che được HR duyệt" : "Bản đã che cần HR kiểm tra"} • Tiếp nhận lúc: {new Date(application.received_at).toLocaleString("vi-VN")}
+          </p>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.25rem" }}>
-              <h1 style={{ fontSize: "1.75rem", fontWeight: 700, fontFamily: "monospace", color: "var(--accent-glow)" }}>
-                {application.public_label}
-              </h1>
-              <span className={`badge badge-${application.status}`}>{application.status.toUpperCase()}</span>
-              <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)", background: "var(--bg-main)", padding: "0.2rem 0.5rem", borderRadius: "var(--radius-sm)" }}>
-                Thế hệ g{application.generation} • Khóa v{application.row_version}
-              </span>
-            </div>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
-              Quy tắc AI có trách nhiệm: Quyết định dựa trên chuỗi bằng chứng thực tế — Không sử dụng điểm tổng hợp làm căn cứ tự động loại ứng viên.
-            </p>
-          </div>
-
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <button
-              className="btn btn-secondary"
-              style={{ color: "var(--danger)", borderColor: "rgba(239, 68, 68, 0.4)" }}
-              onClick={() => setShowDeleteModal(true)}
-            >
-              Yêu cầu xóa dữ liệu (GDPR)
-            </button>
-          </div>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => void loadData()}>Làm mới trạng thái</button>
+          <button
+            className="btn btn-danger btn-sm"
+            onClick={() => setShowDeleteModal(true)}
+          >
+            <IconTrash size={14} />
+            <span>Yêu cầu xóa hồ sơ</span>
+          </button>
         </div>
       </div>
 
-      {/* Tabs Bar */}
-      <div className="tabs">
+      {/* Tabs Switcher */}
+      <div className="tabs-container">
         <button
           className={`tab-btn ${activeTab === "assessment" ? "active" : ""}`}
           onClick={() => setActiveTab("assessment")}
         >
-          1. Đánh giá & Bằng chứng ({assessmentRun ? "Đã có kết quả" : "Chưa chạy"})
+          <IconCheckCircle size={16} />
+          <span>1. Đánh Giá &amp; Bằng Chứng ({assessmentRun ? "Đã có kết quả" : "Chưa chạy"})</span>
         </button>
         <button
           className={`tab-btn ${activeTab === "sanitization" ? "active" : ""}`}
           onClick={() => setActiveTab("sanitization")}
         >
-          2. Khử định danh PII ({sanitizedVersion?.status || "Chờ xử lý"})
+          <IconLock size={16} />
+          <span>2. Hồ Sơ Đã Khử PII ({sanitizedVersion?.status === "approved" ? "Đã duyệt" : "Chờ duyệt"})</span>
         </button>
         <button
           className={`tab-btn ${activeTab === "revision" ? "active" : ""}`}
           onClick={() => setActiveTab("revision")}
         >
-          3. Hiệu chỉnh HR & Ký quyết định ({decisions.length > 0 ? "Đã duyệt" : "Chờ quyết định"})
+          <IconUserCheck size={16} />
+          <span>3. HR Ký Duyệt Quyết Định ({decisions.length > 0 ? "Đã ban hành" : "Chờ quyết định"})</span>
         </button>
         <button
           className={`tab-btn ${activeTab === "interview" ? "active" : ""}`}
           onClick={() => setActiveTab("interview")}
         >
-          4. Phỏng vấn & Đào sâu
+          <IconMessageSquare size={16} />
+          <span>4. Kế Hoạch Phỏng Vấn &amp; Đào Sâu</span>
         </button>
       </div>
 
       {/* Tab 1: Evidence-first Assessment */}
       {activeTab === "assessment" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
           {!assessmentRun ? (
-            <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
-              <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.75rem" }}>
+            <div className="card" style={{ textAlign: "center", padding: "4rem 1.5rem" }}>
+              <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "rgba(56, 189, 248, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem auto" }}>
+                <IconSparkles size={28} color="#38bdf8" />
+              </div>
+              <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>
                 Hồ sơ chưa có kết quả đánh giá AI
               </h2>
-              <p style={{ color: "var(--text-muted)", maxWidth: "600px", margin: "0 auto 1.5rem auto", fontSize: "0.875rem" }}>
-                Đánh giá AI sẽ đối chiếu văn bản CV đã khử định danh với 6 tiêu chí chuẩn hóa của Rubric. Mọi trích dẫn đều được liên kết mã byte để kiểm chứng.
+              <p style={{ color: "var(--text-secondary)", maxWidth: "620px", margin: "0 auto 1.5rem auto", fontSize: "0.875rem", lineHeight: 1.6 }}>
+                Hệ thống sẽ đối chiếu nội dung CV đã khử định danh với 6 tiêu chí Rubric chuẩn mực. Mỗi nhận định đều buộc phải có trích dẫn chuỗi ký tự nguyên văn để con người kiểm chứng.
               </p>
               <button
                 className="btn btn-primary"
                 onClick={handleTriggerAssessment}
-                disabled={triggeringAssessment || !sanitizedVersion}
+                disabled={triggeringAssessment || sanitizedVersion?.status !== "approved" || !requisition?.current_rubric_version_id}
               >
-                {triggeringAssessment ? "Đang xếp hàng đánh giá..." : "Chạy đánh giá AI ngay"}
+                <IconSparkles size={16} />
+                <span>{triggeringAssessment ? "Đang xử lý đánh giá AI…" : "Chạy Đánh Giá Bằng Chứng AI Ngay"}</span>
               </button>
-              {!sanitizedVersion && (
-                <p style={{ color: "var(--warning)", fontSize: "0.8125rem", marginTop: "0.5rem" }}>
-                  * Lưu ý: Cần xử lý bước Khử định danh trước khi đánh giá.
+              {sanitizedVersion?.status !== "approved" && (
+                <p style={{ color: "var(--amber-text)", fontSize: "0.8rem", marginTop: "0.75rem" }}>
+                  Cần HR duyệt bản đã che thông tin định danh trước khi chạy đánh giá.
                 </p>
               )}
             </div>
           ) : (
             <div>
-              {/* Summary Collapsible Card */}
+              {/* Recommendation & Confidence Banner */}
               <div className="card" style={{ marginBottom: "1.5rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1.25rem" }}>
                   <div>
-                    <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Khuyến nghị từ hệ thống
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
+                      Gợi Ý Đánh Giá Hệ Thống
                     </span>
-                    <div style={{ marginTop: "0.25rem" }}>
-                      <span className={`badge badge-${assessmentRun.recommendation === "consider_next_round" ? "open" : "paused"}`} style={{ fontSize: "0.95rem", padding: "0.35rem 0.75rem" }}>
+                    <div style={{ marginTop: "0.35rem" }}>
+                      <span className={`badge ${assessmentRun.recommendation === "consider_next_round" ? "badge-rec-advance" : assessmentRun.recommendation === "needs_clarification" ? "badge-rec-clarify" : "badge-rec-review"}`} style={{ fontSize: "0.875rem", padding: "0.35rem 0.85rem" }}>
                         {assessmentRun.recommendation === "consider_next_round" && "Đề xuất phỏng vấn vòng sau (Consider Next Round)"}
-                        {assessmentRun.recommendation === "needs_clarification" && "Cần làm rõ thêm thông tin (Needs Clarification)"}
-                        {assessmentRun.recommendation === "review_required" && "Cần HR xem xét trực tiếp (Review Required)"}
+                        {assessmentRun.recommendation === "needs_clarification" && "Cần làm rõ thêm thông tin kỹ thuật (Needs Clarification)"}
+                        {assessmentRun.recommendation === "review_required" && "Yêu cầu HR đối chiếu trực tiếp (Review Required)"}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: "2rem" }}>
+                  <div style={{ display: "flex", gap: "2.5rem", alignItems: "center" }}>
                     <div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>ĐỘ PHỦ TIÊU CHÍ</div>
-                      <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>
-                        {assessmentRun.coverage}%
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Độ Phủ Bằng Chứng</div>
+                      <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
+                        {(assessmentRun.coverage * 100).toFixed(0)}%
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>ĐIỂM QUAN SÁT</div>
-                      <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--accent-glow)" }}>
-                        {assessmentRun.observed_score ?? "N/A"}/100
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Điểm Quan Sát</div>
+                      <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
+                        {assessmentRun.observed_score ?? "N/A"}<span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>/100</span>
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>ĐIỂM SO SÁNH</div>
-                      <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>
-                        {assessmentRun.comparable_score ?? "N/A"}/100
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Điểm Đối Chiếu</div>
+                      <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
+                        {assessmentRun.comparable_score ?? "N/A"}<span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>/100</span>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Criteria Evidence Table */}
+              {/* 6 Criteria Evidence Cards */}
               <div className="card">
-                <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "1rem" }}>
-                  Bảng đối chiếu 6 tiêu chí & Bằng chứng nguyên văn
-                </h2>
+                <div className="card-header">
+                  <div>
+                    <h2 className="card-title">Bảng 6 Tiêu Chí Năng Lực &amp; Chuỗi Bằng Chứng Minh Bạch</h2>
+                    <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
+                      Nhấp vào từng trích dẫn bằng chứng để mở Quote Drawer đối chiếu vị trí ký tự gốc trong CV
+                    </p>
+                  </div>
+                </div>
 
-                <div className="table-container">
-                  <table>
+                <div className="table-wrapper" style={{ border: "none" }}>
+                  <table className="data-table">
                     <thead>
                       <tr>
-                        <th style={{ width: "20%" }}>Tiêu chí</th>
-                        <th style={{ width: "12%" }}>Trạng thái</th>
+                        <th style={{ width: "22%" }}>Tiêu Chí</th>
+                        <th style={{ width: "12%" }}>Trạng Thái</th>
                         <th style={{ width: "10%" }}>Điểm (0..4)</th>
-                        <th style={{ width: "30%" }}>Giải trình đánh giá</th>
-                        <th>Trích dẫn bằng chứng (Exact Span)</th>
+                        <th style={{ width: "32%" }}>Giải Trình Đánh Giá Của AI</th>
+                        <th>Trích Dẫn Bằng Chứng (Click Mở Drawer)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {assessmentRun.criteria.map((c) => (
                         <tr key={c.criterion_id}>
                           <td>
-                            <strong style={{ fontSize: "0.875rem" }}>{c.criterion_id}</strong>
+                            <strong style={{ fontSize: "0.88rem", color: "var(--text-primary)" }}>{c.criterion_id}</strong>
                           </td>
                           <td>
-                            <span className={`badge badge-${c.status === "assessed" ? "open" : "draft"}`}>
-                              {c.status}
+                            <span className={`badge ${c.status === "assessed" ? "badge-open" : "badge-draft"}`}>
+                              {c.status === "assessed" ? "Đã Đánh Giá" : c.status}
                             </span>
                           </td>
                           <td>
-                            <span style={{ fontSize: "1.125rem", fontWeight: 700, color: c.score !== null && c.score >= 2 ? "var(--success)" : "var(--warning)" }}>
-                              {c.score !== null ? c.score : "-"}
+                            <span style={{
+                              fontSize: "1.25rem",
+                              fontWeight: 800,
+                              fontFamily: "var(--font-mono)",
+                              color: c.score !== null && c.score >= 2 ? "var(--emerald-text)" : "var(--amber-text)"
+                            }}>
+                              {c.score !== null ? `${c.score}/4` : "-"}
                             </span>
                           </td>
-                          <td style={{ fontSize: "0.8125rem", lineHeight: 1.5 }}>
-                            {c.rationale}
+                          <td style={{ fontSize: "0.825rem", lineHeight: 1.55 }}>
+                            <div style={{ color: "var(--text-primary)" }}>{c.rationale}</div>
                             {c.missing_information && c.missing_information.length > 0 && (
-                              <div style={{ marginTop: "0.5rem", color: "var(--warning)" }}>
-                                <strong>Thiếu thông tin:</strong> {c.missing_information.join(", ")}
+                              <div style={{
+                                marginTop: "0.5rem",
+                                padding: "0.5rem 0.75rem",
+                                background: "var(--amber-bg)",
+                                border: "1px solid var(--amber-border)",
+                                borderRadius: "var(--radius-xs)",
+                                color: "var(--amber-text)",
+                                fontSize: "0.775rem"
+                              }}>
+                                <strong>Lỗ hổng bằng chứng:</strong> {c.missing_information.join("; ")}
                               </div>
                             )}
                           </td>
@@ -485,27 +563,27 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                                 <div
                                   key={ev.span_id}
                                   onClick={() => setSelectedEvidence(ev)}
-                                  style={{
-                                    padding: "0.4rem 0.6rem",
-                                    background: "var(--bg-main)",
-                                    border: "1px solid var(--border-subtle)",
-                                    borderRadius: "var(--radius-sm)",
-                                    cursor: "pointer",
-                                    fontSize: "0.75rem",
-                                  }}
-                                  title="Bấm để xem trích dẫn đầy đủ"
+                                  className="evidence-quote-box card-interactive"
+                                  title="Nhấp để đối chiếu trích dẫn trong Quote Drawer"
+                                  style={{ margin: 0, padding: "0.6rem 0.85rem" }}
                                 >
-                                  <div style={{ color: "var(--accent-glow)", fontFamily: "monospace", marginBottom: "0.2rem" }}>
-                                    {ev.span_id} [{ev.resolved_start_cp}..{ev.resolved_end_cp}]
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
+                                    <span className="codepoint-pill">
+                                      <IconQuote size={10} />
+                                      {ev.span_id} [{ev.resolved_start_cp}..{ev.resolved_end_cp}]
+                                    </span>
+                                    <span style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", textDecoration: "underline" }}>
+                                      Mở Drawer →
+                                    </span>
                                   </div>
-                                  <div style={{ color: "var(--text-secondary)", fontStyle: "italic" }}>
-                                    &ldquo;{ev.quote.slice(0, 80)}{ev.quote.length > 80 ? "..." : ""}&rdquo;
+                                  <div style={{ color: "#e2e8f0", fontStyle: "italic", fontSize: "0.8rem" }}>
+                                    &ldquo;{ev.quote.slice(0, 95)}{ev.quote.length > 95 ? "…" : ""}&rdquo;
                                   </div>
                                 </div>
                               ))}
                               {c.evidence.length === 0 && (
-                                <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
-                                  Không có trích dẫn bằng chứng
+                                <span style={{ color: "var(--text-muted)", fontSize: "0.775rem" }}>
+                                  Chưa có trích dẫn được xác thực cho tiêu chí này
                                 </span>
                               )}
                             </div>
@@ -523,37 +601,38 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
       {/* Tab 2: Sanitization & Redaction Viewer */}
       {activeTab === "sanitization" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
           <div className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
+            <div className="card-header" style={{ flexWrap: "wrap", gap: "0.85rem" }}>
               <div>
-                <h2 style={{ fontSize: "1.25rem", fontWeight: 600 }}>Văn bản hồ sơ đã khử định danh PII</h2>
-                <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
-                  Toàn bộ tên riêng, số điện thoại, email, địa chỉ, ngày sinh và trường đại học đã được thay thế bằng token khử định danh.
+                <h2 className="card-title">Hồ Sơ Đã Che Giấu Thông Tin Định Danh (Redacted CV)</h2>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
+                  Hệ thống tự động che thông tin định danh; Owner phải kiểm tra toàn văn và xử lý mọi dữ liệu còn sót trước khi phê duyệt.
                 </p>
               </div>
 
               {sanitizedVersion && (
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                  <span className={`badge badge-${sanitizedVersion.status === "approved" ? "open" : "draft"}`}>
-                    {sanitizedVersion.status.toUpperCase()}
+                <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                  <span className={`badge ${sanitizedVersion.status === "approved" ? "badge-open" : "badge-paused"}`}>
+                    {sanitizedVersion.status === "approved" ? "✓ ĐÃ PHÊ DUYỆT PII" : "CHỜ DUYỆT PII"}
                   </span>
                   {sanitizedVersion.status === "draft" && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <label style={{ fontSize: "0.8125rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      <label style={{ fontSize: "0.825rem", display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", color: "var(--text-secondary)" }}>
                         <input
                           type="checkbox"
                           checked={acknowledgedSanitization}
                           onChange={(e) => setAcknowledgedSanitization(e.target.checked)}
                         />
-                        Xác nhận đã kiểm tra
+                        <span>Đã kiểm tra khử định danh</span>
                       </label>
                       <button
-                        className="btn btn-primary"
+                        className="btn btn-primary btn-sm"
                         onClick={handleApproveSanitization}
                         disabled={approvingSanitized || !acknowledgedSanitization}
                       >
-                        Phê duyệt PII (Owner)
+                        <IconCheckCircle size={14} />
+                        <span>Phê Duyệt PII (Owner)</span>
                       </button>
                     </div>
                   )}
@@ -562,23 +641,82 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
             </div>
 
             {sanitizedVersion ? (
-              <div style={{
-                background: "var(--bg-main)",
-                padding: "1.25rem",
-                borderRadius: "var(--radius-sm)",
+              <div>
+                {sanitizedVersion.status === "draft" && (
+                  <div style={{ marginBottom: "1rem" }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setEditedSanitizedText(sanitizedVersion.canonical_text);
+                        setEditingSanitization(!editingSanitization);
+                        setAcknowledgedSanitization(false);
+                      }}
+                    >
+                      {editingSanitization ? "Hủy chỉnh sửa" : "Sửa thông tin còn sót trong bản đã che"}
+                    </button>
+                  </div>
+                )}
+                {editingSanitization ? (
+                  <div className="form-group">
+                    <label htmlFor="sanitizedTextEdit" className="form-label">Toàn văn bản đã che</label>
+                    <textarea
+                      id="sanitizedTextEdit"
+                      className="form-textarea"
+                      rows={18}
+                      value={editedSanitizedText}
+                      onChange={(event) => setEditedSanitizedText(event.target.value)}
+                    />
+                    <label htmlFor="sanitizationEditReason" className="form-label" style={{ marginTop: "0.75rem" }}>Lý do chỉnh sửa</label>
+                    <input
+                      id="sanitizationEditReason"
+                      className="form-input"
+                      value={sanitizationEditReason}
+                      onChange={(event) => setSanitizationEditReason(event.target.value)}
+                      placeholder="Ví dụ: Che địa chỉ còn sót"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      disabled={savingSanitization || editedSanitizedText.trim().length < 10 || sanitizationEditReason.trim().length < 5}
+                      onClick={handleSaveSanitization}
+                      style={{ marginTop: "0.75rem" }}
+                    >
+                      {savingSanitization ? "Đang lưu…" : "Lưu bản nháp đã sửa"}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{
+                background: "var(--bg-surface-elevated)",
+                border: "1px solid var(--border-subtle)",
+                padding: "1.5rem",
+                borderRadius: "var(--radius-md)",
                 fontSize: "0.875rem",
-                lineHeight: 1.7,
-                maxHeight: "500px",
+                lineHeight: 1.75,
+                maxHeight: "550px",
                 overflowY: "auto",
                 whiteSpace: "pre-wrap",
                 fontFamily: "var(--font-mono)",
-                color: "var(--text-secondary)",
+                color: "var(--text-primary)"
               }}>
                 {sanitizedVersion.canonical_text}
+                  </div>
+                )}
+              </div>
+            ) : application.current_sanitized_version_id ? (
+              <div>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: "1rem" }}>
+                  Bản nháp đã tạo nhưng cần quyền xem CV gốc có thời hạn để Owner kiểm tra trước khi phê duyệt.
+                </p>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={handleGrantRawAccess} disabled={grantingRawAccess}>
+                  <IconLock size={14} />
+                  <span>{grantingRawAccess ? "Đang cấp quyền…" : "Owner: cấp quyền xem bản nháp 30 phút"}</span>
+                </button>
+                {rawAccessError && <p role="alert" style={{ color: "var(--rose-text)", marginTop: "0.75rem" }}>{rawAccessError}</p>}
               </div>
             ) : (
               <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                Chưa có văn bản khử định danh nào được tạo cho hồ sơ này.
+                Hồ sơ đang được xử lý. Hãy làm mới trạng thái sau khi tệp được trích xuất.
               </p>
             )}
           </div>
@@ -587,51 +725,52 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
       {/* Tab 3: HR Revision & Attested Hiring Decision */}
       {activeTab === "revision" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          {/* Attested Decision Section */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
           <div className="card">
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.5rem" }}>
-              Quyết định tuyển dụng chính thức (Attested Hiring Decision)
-            </h2>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem", marginBottom: "1.5rem" }}>
-              Theo quy chuẩn kiến trúc: AI không bao giờ tự đưa ra quyết định tuyển dụng. Con người (Owner) phải trực tiếp đối chiếu trích dẫn và chịu trách nhiệm pháp lý.
-            </p>
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">Quyết Định Tuyển Dụng Có Cam Kết (Attested Hiring Decision)</h2>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
+                  AI chỉ đóng vai trò phân tích bằng chứng; Trưởng bộ phận tuyển dụng (Owner) trực tiếp đưa ra quyết định cuối cùng
+                </p>
+              </div>
+            </div>
 
             {decisions.length > 0 ? (
-              <div style={{ padding: "1.25rem", background: "var(--bg-main)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                  <span className={`badge badge-${decisions[0].outcome === "advance" ? "open" : "draft"}`} style={{ fontSize: "1rem", padding: "0.4rem 0.8rem" }}>
-                    {decisions[0].outcome.toUpperCase()}
+              <div style={{ padding: "1.5rem", background: "var(--bg-surface-elevated)", border: "1px solid var(--border-medium)", borderRadius: "var(--radius-md)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                  <span className={`badge ${decisions[0].outcome === "advance" ? "badge-rec-advance" : "badge-rec-review"}`} style={{ fontSize: "1rem", padding: "0.4rem 0.9rem" }}>
+                    KẾT LUẬN: {decisions[0].outcome.toUpperCase()}
                   </span>
-                  <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                    Ký ngày: {new Date(decisions[0].created_at).toLocaleString("vi-VN")}
+                  <span style={{ fontSize: "0.825rem", color: "var(--text-muted)" }}>
+                    Ban hành: {new Date(decisions[0].created_at).toLocaleString("vi-VN")}
                   </span>
                 </div>
-                <p style={{ fontSize: "0.875rem", lineHeight: 1.6, color: "var(--text-primary)" }}>
-                  <strong>Lý do quyết định:</strong> {decisions[0].reason}
+                <p style={{ fontSize: "0.925rem", lineHeight: 1.65, color: "var(--text-primary)" }}>
+                  <strong>Căn cứ quyết định của hội đồng:</strong> {decisions[0].reason}
                 </p>
               </div>
             ) : (
               <form onSubmit={handleSubmitDecision}>
                 <div className="form-group">
-                  <label className="form-label">Kết luận tuyển dụng:</label>
+                  <label className="form-label">Kết luận tuyển dụng</label>
                   <select
-                    className="form-input"
+                    className="form-select"
                     value={decisionOutcome}
                     onChange={(e: any) => setDecisionOutcome(e.target.value)}
                   >
-                    <option value="advance">Chuyển tiếp vòng phỏng vấn (ADVANCE)</option>
-                    <option value="request_information">Yêu cầu bổ sung thông tin (REQUEST INFORMATION)</option>
-                    <option value="not_advance">Từ chối / Không tiếp tục (NOT ADVANCE)</option>
+                    <option value="advance">Chuyển tiếp vòng phỏng vấn kỹ thuật (ADVANCE)</option>
+                    <option value="request_information">Yêu cầu bổ sung thêm thông tin năng lực (REQUEST INFORMATION)</option>
+                    <option value="not_advance">Từ chối / Chưa phù hợp ở vị trí này (NOT ADVANCE)</option>
                   </select>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Giải trình quyết định của người duyệt (Tối thiểu 20 ký tự):</label>
+                  <label className="form-label">Giải trình quyết định của người duyệt (Bắt buộc tối thiểu 20 ký tự)</label>
                   <textarea
-                    className="form-input"
+                    className="form-textarea"
                     rows={4}
-                    placeholder="Nêu rõ căn cứ từ năng lực kỹ thuật, thiết kế hệ thống, các bằng chứng đã đối chiếu..."
+                    placeholder="Nêu rõ căn cứ từ năng lực kỹ thuật, thiết kế hệ thống, các bằng chứng đã đối chiếu trong CV..."
                     value={decisionReason}
                     onChange={(e) => setDecisionReason(e.target.value)}
                     required
@@ -639,12 +778,13 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                 </div>
 
                 {/* Signed ReviewAttestation Checklist */}
-                <div style={{ background: "var(--bg-main)", padding: "1rem", borderRadius: "var(--radius-sm)", marginBottom: "1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--accent-glow)" }}>
-                    Bản cam kết ký duyệt có trách nhiệm (Review Attestation Checklist):
+                <div style={{ background: "var(--bg-surface-elevated)", padding: "1.25rem", borderRadius: "var(--radius-md)", border: "1px solid var(--border-medium)", marginBottom: "1.75rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--accent-cyan)", display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                    <IconShield size={16} color="var(--accent-cyan)" />
+                    <span>Xác nhận của người duyệt trước khi ra quyết định:</span>
                   </div>
 
-                  <label style={{ fontSize: "0.8125rem", display: "flex", alignItems: "flex-start", gap: "0.5rem", cursor: "pointer" }}>
+                  <label style={{ fontSize: "0.825rem", display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", color: "var(--text-primary)" }}>
                     <input
                       type="checkbox"
                       checked={attestCheck1}
@@ -654,7 +794,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                     <span>1. Tôi đã đối chiếu trực tiếp các trích dẫn bằng chứng với văn bản ứng viên và xác nhận tính xác thực.</span>
                   </label>
 
-                  <label style={{ fontSize: "0.8125rem", display: "flex", alignItems: "flex-start", gap: "0.5rem", cursor: "pointer" }}>
+                  <label style={{ fontSize: "0.825rem", display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", color: "var(--text-primary)" }}>
                     <input
                       type="checkbox"
                       checked={attestCheck2}
@@ -664,7 +804,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                     <span>2. Tôi chịu trách nhiệm hoàn toàn về quyết định tuyển dụng độc lập của con người, không ủy quyền cho AI.</span>
                   </label>
 
-                  <label style={{ fontSize: "0.8125rem", display: "flex", alignItems: "flex-start", gap: "0.5rem", cursor: "pointer" }}>
+                  <label style={{ fontSize: "0.825rem", display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", color: "var(--text-primary)" }}>
                     <input
                       type="checkbox"
                       checked={attestCheck3}
@@ -677,10 +817,11 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
                 <button
                   type="submit"
-                  className="btn btn-primary"
+                  className="btn btn-primary btn-lg"
                   disabled={submittingDecision || !attestCheck1 || !attestCheck2 || !attestCheck3}
                 >
-                  {submittingDecision ? "Đang ký duyệt..." : "Ký cam kết & Ban hành quyết định chính thức (Owner)"}
+                  <IconCheckCircle size={18} />
+                  <span>{submittingDecision ? "Đang ký duyệt…" : "Ký Cam Kết & Ban Hành Quyết Định (Owner)"}</span>
                 </button>
               </form>
             )}
@@ -690,122 +831,188 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
       {/* Tab 4: Interview Guide */}
       {activeTab === "interview" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
           <div className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
+            <div className="card-header" style={{ flexWrap: "wrap", gap: "0.85rem" }}>
               <div>
-                <h2 style={{ fontSize: "1.25rem", fontWeight: 600 }}>Bộ câu hỏi phỏng vấn & Đào sâu</h2>
-                <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
-                  Bao gồm câu hỏi chuẩn từ Ngân hàng Rubric và tối đa 3 câu hỏi đào sâu do AI gợi ý dựa trên lỗ hổng bằng chứng.
+                <h2 className="card-title">Bộ Câu Hỏi Phỏng Vấn &amp; Đào Sâu (Interview Guide)</h2>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
+                  Bao gồm câu hỏi chuẩn từ ngân hàng Rubric và tối đa 3 câu hỏi đào sâu do AI gợi ý dựa trên lỗ hổng bằng chứng
                 </p>
               </div>
 
               <button
-                className="btn btn-primary"
+                className="btn btn-primary btn-sm"
                 onClick={handleTriggerInterview}
                 disabled={triggeringInterview || !assessmentRun}
               >
-                {triggeringInterview ? "Đang tạo câu hỏi..." : "+ Tạo câu hỏi đào sâu bằng AI"}
+                <IconSparkles size={14} />
+                <span>{triggeringInterview ? "Đang tạo câu hỏi…" : "Tạo Câu Hỏi Đào Sâu Bằng AI"}</span>
               </button>
             </div>
 
             {interviewDraft ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 {interviewDraft.candidate_followups && interviewDraft.candidate_followups.map((q: any, idx: number) => (
-                  <div key={idx} style={{ padding: "1rem", background: "var(--bg-main)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                      <span className="badge badge-paused">Câu hỏi đào sâu {idx + 1} (Tiêu chí: {q.criterion_id})</span>
-                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Trọng tâm: {q.focus_area}</span>
+                  <div key={idx} style={{ padding: "1.25rem", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-medium)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                      <span className="badge badge-rec-clarify">Câu hỏi đào sâu {idx + 1} (Tiêu chí: {q.criterion_id})</span>
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>Trọng tâm: {q.focus_area}</span>
                     </div>
-                    <p style={{ fontSize: "0.95rem", fontWeight: 500, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
+                    <p style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
                       {q.question_text}
                     </p>
-                    <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                    <div style={{ fontSize: "0.825rem", color: "var(--text-secondary)" }}>
                       <strong>Dấu hiệu cần tìm kiếm:</strong> {q.what_to_look_for}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                Chưa tạo bản thảo câu hỏi phỏng vấn riêng cho ứng viên này. Bấm &quot;Tạo câu hỏi đào sâu bằng AI&quot; để tạo.
-              </p>
+              <div style={{ textAlign: "center", padding: "3rem 1.5rem" }}>
+                <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(56, 189, 248, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
+                  <IconMessageSquare size={24} color="#38bdf8" />
+                </div>
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "0.35rem" }}>Chưa tạo bộ câu hỏi phỏng vấn riêng</h3>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: "1.25rem" }}>
+                  Bấm &quot;Tạo Câu Hỏi Đào Sâu Bằng AI&quot; để engine tự động phân tích điểm yếu trong CV và soạn câu hỏi phỏng vấn tương ứng.
+                </p>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleTriggerInterview}
+                  disabled={triggeringInterview || !assessmentRun}
+                >
+                  <IconSparkles size={16} />
+                  <span>Tạo Câu Hỏi Đào Sâu Ngay</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Quote Drawer Modal */}
+      {/* Slide-in Quote Drawer Component */}
       {selectedEvidence && (
-        <div className="modal-backdrop" onClick={() => setSelectedEvidence(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.5rem" }}>
-              Chi tiết trích dẫn bằng chứng (Exact Span Provenance)
-            </h2>
-            <div style={{ fontFamily: "monospace", color: "var(--accent-glow)", fontSize: "0.8125rem", marginBottom: "1rem" }}>
-              Mã: {selectedEvidence.span_id} • Codepoints: [{selectedEvidence.resolved_start_cp}..{selectedEvidence.resolved_end_cp}]
+        <div className="modal-overlay" onClick={() => setSelectedEvidence(null)}>
+          <div className="quote-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <IconQuote size={18} color="var(--accent-cyan)" />
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                  Chi Tiết Trích Dẫn Bằng Chứng
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedEvidence(null)}
+                style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+              >
+                <IconX size={20} />
+              </button>
             </div>
 
-            <div style={{
-              background: "var(--bg-main)",
-              padding: "1rem",
-              borderRadius: "var(--radius-sm)",
-              border: "1px solid var(--border-subtle)",
-              fontSize: "0.9375rem",
-              lineHeight: 1.6,
-              color: "var(--text-primary)",
-              fontStyle: "italic",
-              marginBottom: "1.5rem",
-            }}>
-              &ldquo;{selectedEvidence.quote}&rdquo;
+            <div className="drawer-body">
+              <div style={{ marginBottom: "1.25rem" }}>
+                <span className="codepoint-pill" style={{ fontSize: "0.8rem", padding: "0.25rem 0.6rem" }}>
+                  ID: {selectedEvidence.span_id}
+                </span>
+                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.4rem", fontFamily: "var(--font-mono)" }}>
+                  Tọa độ ký tự trong CV: [{selectedEvidence.resolved_start_cp}..{selectedEvidence.resolved_end_cp}]
+                </div>
+              </div>
+
+              <div style={{
+                background: "var(--bg-surface-elevated)",
+                border: "1px solid var(--border-medium)",
+                borderLeft: "4px solid var(--accent-cyan)",
+                padding: "1.25rem",
+                borderRadius: "var(--radius-sm)",
+                fontSize: "0.925rem",
+                lineHeight: 1.7,
+                color: "var(--text-primary)",
+                fontStyle: "italic",
+                marginBottom: "1.5rem"
+              }}>
+                &ldquo;{selectedEvidence.quote}&rdquo;
+              </div>
+
+              <div style={{
+                background: "rgba(56, 189, 248, 0.06)",
+                border: "1px solid rgba(56, 189, 248, 0.18)",
+                padding: "1rem",
+                borderRadius: "var(--radius-sm)",
+                fontSize: "0.8rem",
+                color: "var(--text-secondary)",
+                lineHeight: 1.6
+              }}>
+                <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "0.25rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <IconCheckCircle size={14} />
+                  <span>Đối chiếu nguồn trích dẫn</span>
+                </div>
+                Tọa độ ký tự giúp HR tìm lại đoạn tương ứng trong bản CV đã xử lý. Hãy đọc ngữ cảnh xung quanh trước khi quyết định.
+              </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div style={{ padding: "1.25rem 1.5rem", borderTop: "1px solid var(--border-subtle)", display: "flex", justifyContent: "flex-end" }}>
               <button className="btn btn-secondary" onClick={() => setSelectedEvidence(null)}>
-                Đóng
+                Đóng Drawer
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Deletion Request Modal (B17) */}
+      {/* Data deletion request modal */}
       {showDeleteModal && (
-        <div className="modal-backdrop">
-          <div className="modal-content">
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--danger)", marginBottom: "0.5rem" }}>
-              Yêu cầu xóa dữ liệu vĩnh viễn (Data Deletion)
-            </h2>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", marginBottom: "1.5rem" }}>
-              Theo quy định B17 & GDPR: Bản ghi sẽ được đánh dấu xóa tombstone ngay lập tức, tệp nhị phân trong kho bị hủy liên kết, hủy mọi tiến trình worker đang chạy.
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <div className="modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "var(--rose-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <IconTrash size={18} color="var(--rose-text)" />
+                </div>
+                <div>
+                  <h2 className="modal-title" style={{ color: "var(--rose-text)" }}>Yêu cầu xóa dữ liệu</h2>
+                  <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Kiểm tra phạm vi trước khi gửi yêu cầu.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+              >
+                <IconX size={20} />
+              </button>
+            </div>
+
+            <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: "1.5rem", lineHeight: 1.6 }}>
+              Hệ thống sẽ đánh dấu hồ sơ và đưa tác vụ xóa vào hàng đợi. Chỉ xác nhận hoàn tất khi trạng thái yêu cầu được cập nhật.
             </p>
 
             <div className="form-group">
-              <label className="form-label">Phạm vi xóa:</label>
+              <label className="form-label">Phạm vi xóa dữ liệu</label>
               <select
-                className="form-input"
+                className="form-select"
                 value={deleteScope}
                 onChange={(e: any) => setDeleteScope(e.target.value)}
               >
                 <option value="application">Chỉ xóa Hồ sơ ứng tuyển này (Application)</option>
-                <option value="candidate">Xóa toàn bộ Ứng viên & Các hồ sơ liên quan (Candidate)</option>
+                <option value="candidate">Xóa toàn bộ Ứng viên &amp; Các hồ sơ liên quan (Candidate)</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Lý do yêu cầu xóa:</label>
+              <label className="form-label">Lý do yêu cầu xóa</label>
               <select
-                className="form-input"
+                className="form-select"
                 value={deleteReason}
                 onChange={(e) => setDeleteReason(e.target.value)}
               >
-                <option value="candidate_request">Yêu cầu từ ứng viên (GDPR Right to be Forgotten)</option>
+                <option value="candidate_request">Yêu cầu từ ứng viên</option>
                 <option value="retention_expired">Hết hạn thời gian lưu trữ theo chính sách</option>
                 <option value="legal_obligation">Yêu cầu pháp lý bắt buộc</option>
               </select>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.5rem" }}>
+            <div className="modal-footer">
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -816,12 +1023,11 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               </button>
               <button
                 type="button"
-                className="btn btn-primary"
-                style={{ background: "var(--danger)", borderColor: "var(--danger)" }}
+                className="btn btn-danger"
                 onClick={handleDeleteConfirm}
                 disabled={deleting}
               >
-                {deleting ? "Đang xóa dữ liệu..." : "Xác nhận xóa vĩnh viễn"}
+                {deleting ? "Đang xóa dữ liệu…" : "Xác Nhận Tiêu Hủy Vĩnh Viễn"}
               </button>
             </div>
           </div>

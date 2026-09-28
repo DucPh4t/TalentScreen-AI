@@ -68,6 +68,15 @@ async def login(
         path="/",
         max_age=8 * 3600,  # 8 hours absolute lifetime
     )
+    response.set_cookie(
+        key="talentscreen_csrf",
+        value=csrf_token,
+        httponly=False,
+        secure=is_secure,
+        samesite="strict",
+        path="/",
+        max_age=8 * 3600,
+    )
 
     roles = [assoc.role.value for assoc in user.account_roles]
 
@@ -97,6 +106,7 @@ async def logout(
         key=SESSION_COOKIE_NAME,
         path="/",
     )
+    response.delete_cookie(key="talentscreen_csrf", path="/", samesite="strict")
     return {"status": "ok", "message": "Đăng xuất thành công."}
 
 

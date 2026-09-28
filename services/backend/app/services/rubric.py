@@ -29,6 +29,7 @@ from app.schemas.rubric import (
     SourceRequirementRefDTO,
 )
 from app.services.audit import record_audit_event
+from app.services.requisition import extract_jd_source_refs
 
 
 def get_seed_rubric_path() -> Path:
@@ -181,12 +182,28 @@ async def create_rubric_draft(
         seed_data = load_seed_rubric_dict()
         threshold_config = seed_data.get("recommendation_policy", {})
         raw_criteria = seed_data.get("criteria", [])
+        jd = (await db.execute(select(JDVersion).where(
+            JDVersion.id == jd_id,
+            JDVersion.requisition_id == requisition_id,
+        ))).scalar_one_or_none()
+        if jd is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="JD hiện hành không thuộc đợt tuyển dụng này.")
+        jd_requirements = (jd.source_refs or extract_jd_source_refs(jd.source_text)).get("requirements", [])
         try:
             validate_canonical_rubric({"criteria": raw_criteria, "recommendation_policy": threshold_config})
         except RubricValidationError as e:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
         for c in raw_criteria:
+            matching_refs = [ref for ref in jd_requirements if
+                ref.get("criterion_id") == c["id"] and
+                ref.get("weight") == c["weight"] and
+                ref.get("quote") and ref["quote"] in jd.source_text]
+            if len(matching_refs) != 1:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"JD cần đúng một yêu cầu nguồn cho {c['id']} với trọng số {c['weight']} trước khi tạo rubric mẫu.",
+                )
             criteria_to_insert.append(
                 {
                     "criterion_id": c["id"],
@@ -194,7 +211,7 @@ async def create_rubric_draft(
                     "description_vi": c["description"],
                     "weight": c["weight"],
                     "anchors": c["scoring_anchors"],
-                    "jd_evidence_refs": c.get("source_requirements", []),
+                    "jd_evidence_refs": [{"requirement_id": matching_refs[0]["requirement_id"], "quote": matching_refs[0]["quote"]}],
                     "bilingual_terms": c.get("bilingual_terms"),
                 }
             )
@@ -347,6 +364,32 @@ async def get_rubric_by_id(
     return rubric_model_to_dto(rubric)
 
 
+async def list_rubrics_for_requisition(
+    db: AsyncSession,
+    requisition_id: uuid.UUID,
+    ctx: AuthenticatedContext,
+) -> list[RubricResponse]:
+    """List visible rubric versions, including drafts that are not yet current."""
+    req = (await db.execute(select(Requisition.id).where(Requisition.id == requisition_id))).scalar_one_or_none()
+    if req is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requisition không tồn tại.")
+    if AccountRole.ADMIN not in ctx.roles:
+        member = (await db.execute(select(RequisitionMembership).where(
+            RequisitionMembership.requisition_id == requisition_id,
+            RequisitionMembership.user_id == ctx.user.id,
+            RequisitionMembership.active.is_(True),
+        ))).scalar_one_or_none()
+        if member is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Không có quyền truy cập Rubric của đợt này.")
+    versions = (await db.execute(
+        select(RubricVersion)
+        .where(RubricVersion.requisition_id == requisition_id)
+        .options(selectinload(RubricVersion.criteria))
+        .order_by(RubricVersion.version_no.desc())
+    )).scalars().all()
+    return [rubric_model_to_dto(version) for version in versions]
+
+
 async def update_rubric_draft(
     db: AsyncSession,
     rubric_id: uuid.UUID,
@@ -486,6 +529,19 @@ async def approve_rubric(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="JD_VERSION_MISMATCH: Rubric không khớp với phiên bản JD hiện hành của Requisition.",
+        )
+
+    jd = (await db.execute(select(JDVersion).where(JDVersion.id == rubric.jd_version_id))).scalar_one_or_none()
+    if jd is None or any(
+        not criterion.jd_evidence_refs or any(
+            not ref.get("quote") or ref["quote"] not in jd.source_text
+            for ref in criterion.jd_evidence_refs
+        )
+        for criterion in rubric.criteria
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="JD_RUBRIC_SOURCE_MISMATCH: Mỗi tiêu chí phải có trích dẫn nguồn nguyên văn trong JD hiện hành.",
         )
 
     # Validate canonical criteria

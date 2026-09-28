@@ -84,14 +84,32 @@ class MockLLMProvider(BaseLLMProvider):
                 latency_ms=self.latency_ms,
             )
 
-        # Default success
-        content = self.custom_content or json.dumps(
-            {
+        # The default assessment response must honor the same strict contract as
+        # a real provider. It deliberately assigns no scores or fabricated quotes.
+        if self.custom_content is not None:
+            content = self.custom_content
+        elif request.task_kind == "assessment":
+            from app.schemas.assessment import CANONICAL_CRITERIA_SET
+
+            content = json.dumps({
+                "criteria": [
+                    {
+                        "criterion_id": criterion_id,
+                        "status": "insufficient_evidence",
+                        "score": None,
+                        "evidence": [],
+                        "rationale": "Mock provider không đánh giá năng lực từ CV.",
+                        "missing_information": ["Cần chạy đánh giá thật và người phụ trách kiểm tra bằng chứng."],
+                    }
+                    for criterion_id in sorted(CANONICAL_CRITERIA_SET)
+                ]
+            })
+        else:
+            content = json.dumps({
                 "status": "success",
                 "message": "Mock completion response",
                 "task": request.task_kind,
-            }
-        )
+            })
 
         return CompletionResult(
             content=content,

@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+
+<html class="light" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TalentScreen AI — Executive Assessment Workspace</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&amp;family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config Verbatim -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-surface-variant": "#46464b",
+            "on-error": "#ffffff",
+            "on-primary-container": "#848387",
+            "tertiary-container": "#00201c",
+            "primary-fixed": "#e3e2e6",
+            "on-tertiary-fixed-variant": "#005048",
+            "on-secondary-fixed-variant": "#005049",
+            "surface-dim": "#ded9d2",
+            "secondary-container": "#86f2e4",
+            "surface-bright": "#fef9f1",
+            "error": "#ba1a1a",
+            "on-secondary": "#ffffff",
+            "on-primary-fixed": "#1b1b1f",
+            "surface-variant": "#e7e2da",
+            "primary-fixed-dim": "#c7c6ca",
+            "on-background": "#1d1c17",
+            "error-container": "#ffdad6",
+            "surface-container": "#f2ede5",
+            "on-tertiary-fixed": "#00201c",
+            "tertiary-fixed-dim": "#4fdbc8",
+            "surface-container-low": "#f8f3eb",
+            "inverse-primary": "#c7c6ca",
+            "inverse-surface": "#32302b",
+            "surface-container-highest": "#e7e2da",
+            "primary-container": "#1b1b1f",
+            "background": "#fef9f1",
+            "secondary-fixed": "#89f5e7",
+            "outline": "#76777b",
+            "on-primary": "#ffffff",
+            "on-surface": "#1d1c17",
+            "tertiary": "#000000",
+            "primary": "#000000",
+            "on-secondary-container": "#006f66",
+            "on-primary-fixed-variant": "#46464a",
+            "on-tertiary-container": "#009485",
+            "secondary-fixed-dim": "#6bd8cb",
+            "on-tertiary": "#ffffff",
+            "surface-container-lowest": "#ffffff",
+            "on-secondary-fixed": "#00201d",
+            "inverse-on-surface": "#f5f0e8",
+            "surface-container-high": "#ece8e0",
+            "secondary": "#006a61",
+            "tertiary-fixed": "#71f8e4",
+            "outline-variant": "#c7c6cb",
+            "surface": "#fef9f1",
+            "surface-tint": "#5e5e62",
+            "on-error-container": "#93000a"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-md": "1rem",
+            "gutter": "1.5rem",
+            "gutter-mobile": "1rem",
+            "space-lg": "1.75rem",
+            "margin": "3rem",
+            "margin-mobile": "1.25rem",
+            "space-xl": "3rem",
+            "space-sm": "0.5rem",
+            "space-xs": "0.25rem"
+          },
+          "fontFamily": {
+            "display-md-mobile": ["Playfair Display"],
+            "display-lg": ["Playfair Display"],
+            "headline-sm": ["Playfair Display"],
+            "body-sm": ["Plus Jakarta Sans"],
+            "display-lg-mobile": ["Playfair Display"],
+            "display-md": ["Playfair Display"],
+            "headline-md": ["Playfair Display"],
+            "body-lg": ["Plus Jakarta Sans"],
+            "label-lg": ["Plus Jakarta Sans"],
+            "label-md": ["Plus Jakarta Sans"],
+            "title-md": ["Plus Jakarta Sans"],
+            "body-md": ["Plus Jakarta Sans"],
+            "label-sm": ["Plus Jakarta Sans"],
+            "title-lg": ["Plus Jakarta Sans"],
+            "headline-lg": ["Playfair Display"]
+          },
+          "fontSize": {
+            "display-md-mobile": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.01em", "fontWeight": "400" }],
+            "display-lg": ["56px", { "lineHeight": "64px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+            "headline-sm": ["22px", { "lineHeight": "28px", "fontWeight": "600" }],
+            "body-sm": ["13px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "display-lg-mobile": ["38px", { "lineHeight": "44px", "letterSpacing": "-0.01em", "fontWeight": "400" }],
+            "display-md": ["44px", { "lineHeight": "52px", "letterSpacing": "-0.015em", "fontWeight": "400" }],
+            "headline-md": ["26px", { "lineHeight": "34px", "letterSpacing": "-0.005em", "fontWeight": "500" }],
+            "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+            "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+            "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.04em", "fontWeight": "600" }],
+            "title-md": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+            "body-md": ["15px", { "lineHeight": "24px", "fontWeight": "400" }],
+            "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.06em", "fontWeight": "700" }],
+            "title-lg": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "500" }]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    
+    /* Liquid Glassmorphic Specular System */
+    .liquid-glass {
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(24px) saturate(140%);
+      -webkit-backdrop-filter: blur(24px) saturate(140%);
+      border: 1px solid rgba(18, 19, 22, 0.08);
+      box-shadow: 
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.95),
+        0 20px 40px -15px rgba(60, 48, 32, 0.08),
+        0 1px 3px 0 rgba(60, 48, 32, 0.04);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .liquid-glass:hover {
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 
+        inset 0 1px 1.5px 0 rgba(255, 255, 255, 1),
+        0 24px 48px -18px rgba(60, 48, 32, 0.12),
+        0 2px 4px 0 rgba(60, 48, 32, 0.04);
+    }
+
+    .liquid-glass-subtle {
+      background: rgba(255, 255, 255, 0.68);
+      backdrop-filter: blur(16px) saturate(130%);
+      -webkit-backdrop-filter: blur(16px) saturate(130%);
+      border: 1px solid rgba(18, 19, 22, 0.06);
+      box-shadow: inset 0 1px 0.8px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    /* Travertine Natural Desk Backdrop Fixed Layer */
+    .bg-travertine-desk {
+      background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCPFcKBGTyqwGyO06DLTCOvwq8WTkBP8FTkGF-66u8j3Jr5FNJ8oKk4XEOSAJRqmbmbEdtSlnVnjD2akTfY5a-9F48smRj5QIs4lCk2IEAEVMQOzHiwQV5-ZbalpwpzPcOu4rHpLhJh4VoW810QGE51J85CGJp0RraVSEJyIyT2D1TUhYsnF_1JZwKMPV80A_cXFB14TxLp4VbdrA4CLYVQfxd9D3IBWeZrHFNaOFyBC-FpbWnK9wqwpuT8zRaiCIqrQw');
+      background-size: cover;
+      background-position: center top;
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+    }
+
+    /* Sound Waveform Animation simulation */
+    @keyframes wavePulse {
+      0%, 100% { height: 6px; }
+      50% { height: 22px; }
+    }
+    .wave-bar {
+      animation: wavePulse 1.2s ease-in-out infinite;
+    }
+    .wave-bar:nth-child(2) { animation-delay: 0.15s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.3s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.45s; }
+    .wave-bar:nth-child(5) { animation-delay: 0.2s; }
+    .wave-bar:nth-child(6) { animation-delay: 0.35s; }
+  </style>
+</head>
+<body class="min-h-screen bg-travertine-desk text-on-surface antialiased selection:bg-secondary-fixed selection:text-tertiary-container relative flex flex-col font-body-md text-body-md">
+<!-- Ambient Light Reflection Overlay -->
+<div class="fixed inset-0 bg-gradient-to-b from-white/30 via-transparent to-background/50 pointer-events-none z-0"></div>
+<!-- MAIN WRAPPER -->
+<div class="relative z-10 flex flex-col min-h-screen">
+<!-- Top Navigation Bar (Shared Component Anchor) -->
+<header class="sticky top-4 mx-auto max-w-7xl rounded-xl z-50 w-full px-4 sm:px-6">
+<nav class="liquid-glass rounded-xl flex justify-between items-center w-full px-6 py-3.5 max-w-7xl mx-auto ring-1 ring-outline-variant/30 shadow-[0_20px_40px_-15px_rgba(60,48,32,0.08),0_1px_3px_0_rgba(60,48,32,0.04)]">
+<!-- Left: Brand Logo & Workspace Context Selector -->
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-primary-container text-surface flex items-center justify-center shadow-inner">
+<span class="material-symbols-outlined text-[20px]" data-icon="verified_user">verified_user</span>
+</div>
+<div class="flex flex-col">
+<span class="text-title-lg font-title-lg tracking-tight text-primary uppercase">TalentScreen AI</span>
+<span class="text-[10px] tracking-widest text-secondary font-label-sm uppercase -mt-1 font-semibold">ED. 2025 • Board Level</span>
+</div>
+</div>
+<div class="hidden lg:block h-6 w-px bg-outline-variant/30"></div>
+<!-- Enterprise Workspace Switcher -->
+<div class="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-low/70 border border-outline-variant/20 hover:border-outline-variant/50 transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-[17px] text-secondary" data-icon="domain">domain</span>
+<div class="flex flex-col text-left">
+<span class="font-label-sm text-[11px] leading-none text-on-surface font-semibold">Apex FinTech &amp; Tech Holding</span>
+<span class="text-[10px] leading-tight text-on-surface-variant">Q2-2025 Board Vetting Panel</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-outline ml-1 group-hover:text-primary transition-colors" data-icon="arrow_drop_down">arrow_drop_down</span>
+</div>
+</div>
+<!-- Center: Primary Navigation Links (Intelligence Dossier Active) -->
+<div class="hidden md:flex items-center gap-6">
+<a class="text-on-surface-variant hover:text-on-surface transition-colors pb-1 text-label-md font-label-md" href="#">Executive Overview</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors pb-1 text-label-md font-label-md" href="#">Talent Pipeline</a>
+<a class="text-primary font-semibold border-b-2 border-secondary pb-1 text-label-md font-label-md flex items-center gap-1.5" href="#">
+<span>Intelligence Dossier</span>
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors pb-1 text-label-md font-label-md" href="#">Cognitive Benchmarks</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors pb-1 text-label-md font-label-md flex items-center gap-1" href="#">
+<span>Compliance</span>
+<span class="px-1.5 py-0.5 rounded-full bg-secondary-container/40 text-on-secondary-container text-[9px] font-bold">SOC-2</span>
+</a>
+</div>
+<!-- Right: Actions & User Avatar -->
+<div class="flex items-center gap-3">
+<button class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-surface-container-lowest/90 hover:bg-white text-primary text-label-md font-label-md border border-outline-variant/30 shadow-sm transition-all active:scale-[0.99]">
+<span class="material-symbols-outlined text-[18px]" data-icon="upload_file">upload_file</span>
+<span>Tải hồ sơ CV</span>
+</button>
+<button class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-[#23252a] text-surface-bright text-label-md font-label-md shadow-sm transition-all active:scale-[0.99] border-t border-white/20">
+<span class="material-symbols-outlined text-[18px] text-tertiary-fixed-dim" data-icon="psychology">psychology</span>
+<span>Khởi tạo Phỏng vấn AI</span>
+</button>
+<div class="h-6 w-px bg-outline-variant/30 mx-1 hidden sm:block"></div>
+<!-- Trailing Icon Actions -->
+<div class="flex items-center gap-1">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-lg hover:bg-surface-container-high/60" title="SOC-2 Certified Vault">
+<span class="material-symbols-outlined text-[20px]" data-icon="verified_user">verified_user</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-lg hover:bg-surface-container-high/60 relative" title="Notifications">
+<span class="material-symbols-outlined text-[20px]" data-icon="notifications">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-secondary"></span>
+</button>
+</div>
+<!-- Profile Badge -->
+<div class="flex items-center gap-2.5 pl-1.5 cursor-pointer group">
+<div class="w-9 h-9 rounded-full ring-2 ring-secondary/30 overflow-hidden bg-surface-container-highest flex items-center justify-center shadow-inner">
+<img class="w-full h-full object-cover" data-alt="A dignified Vietnamese executive psychologist and assessment director in a bespoke dark charcoal suit, sitting in a naturally sunlit minimalist travertine boardroom with warm shadows, looking at the camera with quiet authority, soft cinematic portrait style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBm97UOfZwyY4HQ9MWgjM4Uxavpwlc9TkrdDMdbxU9bCtvLTGsVhJWkbqAr9njKTH_pXGkZgrml1RZGExF1QwVxWDK5JmBt96ma_nlPcyX2YGr-lFpyEQ9qOz0eQ_8CEIAc9wnNWgQ3x11p3GNlC2fh3rlZ7DwG2X9A1qg5yy0mLyoqQHxM_Os1gcKPTJpX8Bv3gRLY7V1NzJdLGCDAvPiKIAl4fPulZ3oSw8Rrye-f2r45Zb_gXoJX"/>
+</div>
+<div class="hidden xl:flex flex-col text-left">
+<span class="text-label-sm font-label-sm text-on-surface font-bold leading-tight">TS. Đặng Minh Quân</span>
+<span class="text-[10px] text-on-surface-variant leading-none">Chủ tịch Hội đồng Thẩm định</span>
+</div>
+</div>
+</div>
+</nav>
+</header>
+<!-- MAIN EDITORIAL CONTENT CANVAS -->
+<main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-6 pb-12 flex flex-col gap-6">
+<!-- Executive Header Banner: Subtitle & Context Pills -->
+<section class="flex flex-col md:flex-row md:items-end justify-between gap-4 py-2">
+<div>
+<div class="flex items-center gap-2.5 mb-2">
+<span class="px-2.5 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-container/30 text-secondary border border-secondary/20">
+              AUDITED ASSESSMENT VAULT
+            </span>
+<span class="text-on-surface-variant text-body-sm font-body-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-secondary" data-icon="lock">lock</span>
+              Mã hóa đầu cuối 256-bit AES
+            </span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">
+            Không Gian Thẩm Định Cấp Cao &amp; AI Co-Pilot
+          </h1>
+<p class="text-on-surface-variant font-body-md text-body-md mt-1 max-w-3xl">
+            Phân tích đa chiều chân dung lãnh đạo công nghệ thế hệ mới qua lăng kính Cognitive Sizing, AST (Adaptive Stress Test) và kiểm toán rủi ro văn hóa tự động.
+          </p>
+</div>
+<!-- Quick Context Controls -->
+<div class="flex items-center gap-2 self-start md:self-auto">
+<div class="liquid-glass-subtle px-3 py-1.5 rounded-lg flex items-center gap-2 text-label-md font-label-md text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-secondary" data-icon="tune">tune</span>
+<span>Mô hình: AST-Neura-4.2x</span>
+</div>
+<button class="liquid-glass-subtle hover:bg-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-label-md font-label-md text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="download">download</span>
+<span>Xuất Biên bản Dossier</span>
+</button>
+</div>
+</section>
+<!-- 4 METRIC SLABS: Executive Quantitative Indicators -->
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+<!-- Metric 1 -->
+<div class="liquid-glass rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group">
+<div class="absolute -right-6 -top-6 w-20 h-20 bg-secondary/5 rounded-full blur-xl pointer-events-none"></div>
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Hồ sơ C-Suite &amp; Leads</span>
+<span class="w-8 h-8 rounded-lg bg-surface-container-high/80 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]" data-icon="group">group</span>
+</span>
+</div>
+<div class="mt-4 flex items-baseline gap-2">
+<span class="font-headline-lg text-[34px] leading-none text-primary">42</span>
+<span class="text-label-sm font-label-sm text-secondary flex items-center">
+<span class="material-symbols-outlined text-[14px]" data-icon="arrow_upward">arrow_upward</span>
+              +14% tuần này
+            </span>
+</div>
+<div class="mt-3 pt-3 border-t border-outline-variant/15 flex items-center justify-between text-body-sm font-body-sm text-on-surface-variant">
+<span>Đã lọc qua vòng sơ duyệt</span>
+<span class="font-semibold text-on-surface">94.2% hoàn tất</span>
+</div>
+</div>
+<!-- Metric 2 -->
+<div class="liquid-glass rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Điểm Tổng hợp AST</span>
+<span class="w-8 h-8 rounded-lg bg-secondary-container/40 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[18px]" data-icon="insights">insights</span>
+</span>
+</div>
+<div class="mt-4 flex items-baseline gap-2">
+<span class="font-headline-lg text-[34px] leading-none text-primary">88.4<span class="text-headline-sm font-headline-sm text-on-surface-variant">/100</span></span>
+<span class="text-label-sm font-label-sm px-2 py-0.5 rounded-full bg-secondary-container/30 text-secondary font-bold">
+              Độ tin cậy 99.4%
+            </span>
+</div>
+<div class="mt-3 pt-3 border-t border-outline-variant/15 flex items-center justify-between text-body-sm font-body-sm text-on-surface-variant">
+<span>Tiêu chuẩn Benchmark</span>
+<span class="font-semibold text-secondary font-mono">Tier-1 Silicon Valley</span>
+</div>
+</div>
+<!-- Metric 3 -->
+<div class="liquid-glass rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Thời Gian Thẩm Định</span>
+<span class="w-8 h-8 rounded-lg bg-surface-container-high/80 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]" data-icon="bolt">bolt</span>
+</span>
+</div>
+<div class="mt-4 flex items-baseline gap-2">
+<span class="font-headline-lg text-[34px] leading-none text-primary">1.8 <span class="text-headline-sm font-headline-sm text-on-surface-variant">ngày/hs</span></span>
+<span class="text-label-sm font-label-sm text-secondary font-semibold">Nhanh gấp 3.5x</span>
+</div>
+<div class="mt-3 pt-3 border-t border-outline-variant/15 flex items-center justify-between text-body-sm font-body-sm text-on-surface-variant">
+<span>Truyền thống đối chiếu</span>
+<span class="font-semibold text-on-surface">14.5 ngày</span>
+</div>
+</div>
+<!-- Metric 4 -->
+<div class="liquid-glass rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Sai Lệch Nhận Thức</span>
+<span class="w-8 h-8 rounded-lg bg-secondary-container/30 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[18px]" data-icon="policy">policy</span>
+</span>
+</div>
+<div class="mt-4 flex items-baseline gap-2">
+<span class="font-headline-lg text-[34px] leading-none text-secondary">0.00%</span>
+<span class="text-label-sm font-label-sm text-on-surface font-semibold">Zero-Bias Protocol</span>
+</div>
+<div class="mt-3 pt-3 border-t border-outline-variant/15 flex items-center justify-between text-body-sm font-body-sm text-on-surface-variant">
+<span>Tiêu chuẩn kiểm toán</span>
+<span class="font-semibold text-secondary font-mono">NIST &amp; EU AI Act</span>
+</div>
+</div>
+</section>
+<!-- MAIN SPLIT WORKSPACE: Left (Dossier & Candidate Metrics) | Right (AI Agent Co-Pilot Chat) -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+<!-- LEFT COLUMN: Candidate Intelligence Dossier (5 Cols) -->
+<div class="lg:col-span-5 flex flex-col gap-6">
+<!-- Candidate Header Card -->
+<div class="liquid-glass rounded-xl p-6 relative overflow-hidden">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-4">
+<div class="relative">
+<div class="w-16 h-16 rounded-xl overflow-hidden ring-2 ring-white shadow-md">
+<img class="w-full h-full object-cover" data-alt="Portrait of an esteemed Vietnamese chief AI architect in his late thirties wearing an architecturally tailored navy wool blazer, poised posture against a light warm stone background with sharp daylight casting gentle editorial shadows." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_-o7lZfQnEJmtR9PLGAPMOvWD4VrCThzAV-rWjfwzRj6C4jG4Fyl2GV-ZQxX3Z3f3LyxtI4RvGlHMhG0qSD78eYq6s1vzPSFEI_wFvmFqqzbKQZ4_XzzfNRoyRJgoc0PZc1-Uc4Z7xOA2Gk_ssJyTv3rcVjaOMCQc38xcAKB6WYhunDC8N6hzSuyneXNxauhYZ6dTo3vNjva_bZLctUEarbqELq-v6VfD3kQW0ZTs3h68F6sq0Xv-"/>
+</div>
+<div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-secondary text-white flex items-center justify-center text-[13px] font-bold shadow-sm" title="Top 1% Percentile">
+                    ★
+                  </div>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<h2 class="font-headline-sm text-headline-sm text-primary">Phan Vũ Hoàng</h2>
+<span class="material-symbols-outlined text-[18px] text-secondary" data-icon="verified" title="Identity &amp; Diplomas Verified">verified</span>
+</div>
+<p class="text-label-md font-label-md text-on-surface-variant mt-0.5">Principal AI Architect &amp; VP of Eng Candidate</p>
+<p class="text-[12px] text-outline mt-0.5">Cựu Staff Engineer tại Meta London • 14 năm kinh nghiệm</p>
+</div>
+</div>
+<!-- Percentile Tag -->
+<div class="text-right">
+<span class="inline-block px-2.5 py-1 rounded-full bg-secondary-container/40 text-on-secondary-container text-label-sm font-label-sm font-bold border border-secondary/20">
+                  TOP 1% FIT
+                </span>
+<div class="mt-1 font-headline-sm text-[22px] font-bold text-primary">96.8 <span class="text-[12px] font-normal text-on-surface-variant">AST</span></div>
+</div>
+</div>
+<!-- Key Metric Sliders / Badges -->
+<div class="grid grid-cols-3 gap-2.5 mt-6 pt-5 border-t border-outline-variant/15 text-center">
+<div class="liquid-glass-subtle rounded-lg p-2.5">
+<span class="text-[11px] font-label-sm text-on-surface-variant block uppercase tracking-wider">Kiến trúc Hệ thống</span>
+<span class="text-title-lg font-title-lg text-primary font-bold">98%</span>
+<span class="text-[10px] text-secondary font-semibold block">Vượt chuẩn Staff L6</span>
+</div>
+<div class="liquid-glass-subtle rounded-lg p-2.5">
+<span class="text-[11px] font-label-sm text-on-surface-variant block uppercase tracking-wider">Tư duy Phản biện</span>
+<span class="text-title-lg font-title-lg text-primary font-bold">96%</span>
+<span class="text-[10px] text-secondary font-semibold block">AST High Stress</span>
+</div>
+<div class="liquid-glass-subtle rounded-lg p-2.5">
+<span class="text-[11px] font-label-sm text-on-surface-variant block uppercase tracking-wider">Lãnh đạo Thực chiến</span>
+<span class="text-title-lg font-title-lg text-primary font-bold">93%</span>
+<span class="text-[10px] text-on-surface-variant font-semibold block">Scale 250+ Devs</span>
+</div>
+</div>
+</div>
+<!-- Cognitive Depth & Evaluation Matrix -->
+<div class="liquid-glass rounded-xl p-6 flex flex-col gap-5">
+<div class="flex items-center justify-between">
+<div>
+<h3 class="font-title-lg text-title-lg text-primary">Chỉ Số Chi Tiết Cognitive Depth</h3>
+<p class="text-body-sm font-body-sm text-on-surface-variant">Kiểm định bởi 4 vòng phỏng vấn mô phỏng tình huống ngẫu nhiên</p>
+</div>
+<span class="px-2.5 py-1 rounded-md bg-surface-container-high text-on-surface text-[11px] font-mono font-semibold">
+                ID: PVH-9021-VET
+              </span>
+</div>
+<!-- Progress Bars with Editorial Typography -->
+<div class="space-y-4">
+<div>
+<div class="flex justify-between items-center text-label-md font-label-md mb-1.5">
+<span class="text-on-surface font-semibold">Tư duy Trừu tượng &amp; Thiết kế Phân tán (Distributed Systems)</span>
+<span class="text-primary font-bold font-mono">99 / 100</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden p-0.5">
+<div class="bg-primary h-full rounded-full" style="width: 99%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center text-label-md font-label-md mb-1.5">
+<span class="text-on-surface font-semibold">Khả năng Xử lý Khủng hoảng &amp; Downtime (Disaster Recovery)</span>
+<span class="text-primary font-bold font-mono">95 / 100</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden p-0.5">
+<div class="bg-secondary h-full rounded-full" style="width: 95%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center text-label-md font-label-md mb-1.5">
+<span class="text-on-surface font-semibold">Chiến lược Đầu tư GPU CapEx &amp; Tối ưu Hạch toán AI</span>
+<span class="text-primary font-bold font-mono">91 / 100</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden p-0.5">
+<div class="bg-on-surface-variant h-full rounded-full" style="width: 91%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center text-label-md font-label-md mb-1.5">
+<span class="text-on-surface font-semibold">Sự tương thích Văn hóa &amp; Giao tiếp Hội đồng Quản trị</span>
+<span class="text-primary font-bold font-mono">89 / 100</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden p-0.5">
+<div class="bg-secondary h-full rounded-full" style="width: 89%"></div>
+</div>
+</div>
+</div>
+<!-- AI Waveform Audio Snippet Block -->
+<div class="mt-2 p-4 rounded-xl bg-surface-container-lowest/70 border border-outline-variant/30 flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[20px]" data-icon="mic">mic</span>
+<span class="text-label-md font-label-md text-on-surface font-bold">Trích đoạn Phỏng vấn AST #3 (Mô phỏng sập Cluster)</span>
+</div>
+<span class="text-[11px] font-mono text-outline">01:14 / 04:30</span>
+</div>
+<!-- Animated Waveform bars -->
+<div class="flex items-center justify-between gap-1.5 h-10 px-2 bg-surface-container/50 rounded-lg">
+<button class="w-7 h-7 rounded-full bg-primary text-surface flex items-center justify-center hover:scale-105 transition-transform" title="Play Snippet">
+<span class="material-symbols-outlined text-[16px]" data-icon="play_arrow">play_arrow</span>
+</button>
+<div class="flex-1 flex items-center justify-center gap-1 h-full px-2">
+<span class="w-1 bg-secondary rounded-full wave-bar" style="height: 12px"></span>
+<span class="w-1 bg-secondary rounded-full wave-bar" style="height: 24px"></span>
+<span class="w-1 bg-secondary rounded-full wave-bar" style="height: 18px"></span>
+<span class="w-1 bg-primary rounded-full wave-bar" style="height: 28px"></span>
+<span class="w-1 bg-primary rounded-full wave-bar" style="height: 15px"></span>
+<span class="w-1 bg-primary rounded-full wave-bar" style="height: 22px"></span>
+<span class="w-1 bg-outline-variant rounded-full" style="height: 8px"></span>
+<span class="w-1 bg-outline-variant rounded-full" style="height: 14px"></span>
+<span class="w-1 bg-outline-variant rounded-full" style="height: 19px"></span>
+<span class="w-1 bg-outline-variant rounded-full" style="height: 10px"></span>
+<span class="w-1 bg-outline-variant rounded-full" style="height: 16px"></span>
+<span class="w-1 bg-outline-variant rounded-full" style="height: 6px"></span>
+<span class="w-1 bg-outline-variant rounded-full" style="height: 12px"></span>
+<span class="w-1 bg-outline-variant rounded-full" style="height: 18px"></span>
+</div>
+<span class="text-label-sm font-label-sm text-secondary bg-secondary-container/40 px-2 py-0.5 rounded font-mono">Điềm tĩnh 97%</span>
+</div>
+</div>
+</div>
+<!-- Dossier Verification Badges & Audit Trail -->
+<div class="liquid-glass rounded-xl p-5 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[24px]" data-icon="policy">policy</span>
+</div>
+<div>
+<div class="text-label-md font-label-md text-on-surface font-semibold">Chữ ký số Xác thực Cryptographic Audit</div>
+<div class="text-body-sm font-body-sm text-on-surface-variant">Hash: 8f4a...29c1 • Lưu trữ tại Smart Contract Private Ledger</div>
+</div>
+</div>
+<button class="px-3 py-1.5 rounded-lg border border-outline-variant/30 text-label-sm font-label-sm text-primary hover:bg-white transition-colors">
+              Xem Logs
+            </button>
+</div>
+</div>
+<!-- RIGHT COLUMN: AI Agent Talent Screener Chat (AI Co-Pilot Panel) (7 Cols) -->
+<div class="lg:col-span-7 flex flex-col h-full">
+<div class="liquid-glass rounded-xl flex flex-col h-[780px] shadow-2xl relative overflow-hidden border border-white/60">
+<!-- Co-Pilot Chat Header -->
+<div class="p-4 sm:px-6 border-b border-outline-variant/15 flex items-center justify-between bg-surface-container-lowest/80 backdrop-blur-md">
+<div class="flex items-center gap-3">
+<!-- Glowing Brain / AI Core Icon -->
+<div class="relative w-10 h-10 rounded-xl bg-primary text-secondary-fixed flex items-center justify-center shadow-md">
+<span class="material-symbols-outlined text-[24px]" data-icon="neurology">neurology</span>
+<span class="absolute -top-1 -right-1 w-3 h-3 bg-secondary rounded-full ring-2 ring-white animate-pulse"></span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<h3 class="font-headline-sm text-[18px] text-primary">TalentScreen Co-Pilot v4.2</h3>
+<span class="px-2 py-0.5 rounded-full bg-secondary-container/40 text-on-secondary-container text-[10px] font-label-sm font-bold uppercase tracking-wider">
+                      Executive Reasoning
+                    </span>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                    Phiên thẩm định phân nhánh thời gian thực • Phiên làm việc mã hóa
+                  </p>
+</div>
+</div>
+<!-- Header Action Controls -->
+<div class="flex items-center gap-1">
+<button class="p-2 text-on-surface-variant hover:text-primary rounded-lg hover:bg-surface-container transition-colors" title="Xuất hội thoại thành Báo cáo PDF">
+<span class="material-symbols-outlined text-[20px]" data-icon="ios_share">ios_share</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary rounded-lg hover:bg-surface-container transition-colors" title="Đặt lại bối cảnh (Reset Context)">
+<span class="material-symbols-outlined text-[20px]" data-icon="refresh">refresh</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary rounded-lg hover:bg-surface-container transition-colors" title="Cài đặt tham số mô hình">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Quick Action Prompts Bar (Pills) -->
+<div class="px-6 py-2.5 bg-surface-container-low/60 border-b border-outline-variant/10 flex items-center gap-2 overflow-x-auto no-scrollbar">
+<span class="text-[11px] font-label-sm text-outline uppercase whitespace-nowrap">Gợi ý phân tích:</span>
+<button class="px-3 py-1 rounded-full liquid-glass-subtle hover:bg-white text-[12px] font-label-sm text-on-surface whitespace-nowrap transition-colors border border-outline-variant/20 hover:border-secondary/50">
+                ⚡ Mô phỏng phản biện kiến trúc
+              </button>
+<button class="px-3 py-1 rounded-full liquid-glass-subtle hover:bg-white text-[12px] font-label-sm text-on-surface whitespace-nowrap transition-colors border border-outline-variant/20 hover:border-secondary/50">
+                🛡️ Đánh giá rủi ro văn hóa
+              </button>
+<button class="px-3 py-1 rounded-full liquid-glass-subtle hover:bg-white text-[12px] font-label-sm text-on-surface whitespace-nowrap transition-colors border border-outline-variant/20 hover:border-secondary/50">
+                📊 So sánh Benchmark Google Staff L6
+              </button>
+<button class="px-3 py-1 rounded-full liquid-glass-subtle hover:bg-white text-[12px] font-label-sm text-on-surface whitespace-nowrap transition-colors border border-outline-variant/20 hover:border-secondary/50">
+                🎯 Tạo 3 câu hỏi phỏng vấn vòng 3
+              </button>
+</div>
+<!-- Conversation Message Stream -->
+<div class="flex-1 overflow-y-auto p-6 space-y-6">
+<!-- Message 1: User / Assessment Committee Query -->
+<div class="flex items-start justify-end gap-3">
+<div class="flex flex-col items-end max-w-xl">
+<div class="flex items-center gap-2 mb-1">
+<span class="text-label-sm font-label-sm text-outline">14:26 • Hội đồng Thẩm định Apex (TS. Quân)</span>
+</div>
+<div class="p-4 rounded-2xl rounded-tr-none bg-primary text-surface shadow-md">
+<p class="font-body-md text-body-md text-surface-bright leading-relaxed">
+                      "Hãy phân tích sâu tình huống Phan Vũ Hoàng xử lý sự cố sập cluster 10,000 GPU trong bài test mô phỏng số 3. Đặc biệt lưu ý cách anh ấy ưu tiên giữa tính toàn vẹn dữ liệu checkpoint mô hình lớn và chi phí tài chính phát sinh."
+                    </p>
+</div>
+</div>
+<div class="w-8 h-8 rounded-full bg-primary-container text-surface flex items-center justify-center font-bold text-xs ring-1 ring-white">
+                  ĐQ
+                </div>
+</div>
+<!-- Message 2: TalentScreen AI Co-Pilot Structured Answer -->
+<div class="flex items-start gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary text-white flex items-center justify-center shadow-sm shrink-0">
+<span class="material-symbols-outlined text-[16px]" data-icon="neurology">neurology</span>
+</div>
+<div class="flex flex-col items-start max-w-2xl">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-label-sm text-label-sm font-bold text-primary">TalentScreen AI Co-Pilot</span>
+<span class="px-1.5 py-0.2 rounded bg-secondary-container/40 text-secondary text-[10px] font-mono">AST-Kernel Engine</span>
+<span class="text-label-sm font-label-sm text-outline">14:26</span>
+</div>
+<div class="liquid-glass-subtle p-5 rounded-2xl rounded-tl-none border border-outline-variant/25 text-on-surface shadow-sm space-y-4">
+<p class="font-body-md text-body-md leading-relaxed">
+                      Dựa trên phân tích telemetry âm thanh và bản ghi tương tác giả lập AST Scenario #3 vào lúc <strong class="text-primary font-semibold">01:14</strong> của phiên phỏng vấn kỹ thuật, đây là bản bóc tách hành vi điều hành của ứng viên <strong>Phan Vũ Hoàng</strong>:
+                    </p>
+<!-- Analytical Breakdown Slab -->
+<div class="p-4 rounded-xl bg-surface-container-lowest/80 border border-outline-variant/20 space-y-3">
+<div class="flex items-start gap-3">
+<div class="w-6 h-6 rounded-md bg-secondary/10 text-secondary flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">1</div>
+<div>
+<div class="text-label-md font-label-md text-primary font-bold">Thứ tự ưu tiên kiên định (Priority Hierarchy):</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant mt-0.5">
+                            Hoàng chọn cứu <em>Weights Checkpoint v2.8 (được huấn luyện trong 18 ngày)</em> trước thay vì nỗ lực duy trì uptime vô ích. Quyết định cô lập 3,500 node lỗi giúp bảo toàn 100% dữ liệu gradient phân tán mà không làm hỏng file lưu trữ trên S3 / Ceph.
+                          </p>
+</div>
+</div>
+<div class="flex items-start gap-3 pt-2 border-t border-outline-variant/15">
+<div class="w-6 h-6 rounded-md bg-secondary/10 text-secondary flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">2</div>
+<div>
+<div class="text-label-md font-label-md text-primary font-bold">Tối ưu hóa Chi phí Tài chính (Financial CapEx Tradeoff):</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant mt-0.5">
+                            Thay vì vội vã requisition thêm 5,000 GPU dự phòng từ Cloud thứ cấp với giá Spot đắt gấp 2.4x (gây thiệt hại ước tính ~$85,000), ứng viên thực hiện <em>Graceful Model Degradation</em> (hạ bớt batch-size) trong vòng 42 phút phục hồi.
+                          </p>
+</div>
+</div>
+</div>
+<!-- Mini Assessment Radar Metric Highlight -->
+<div class="grid grid-cols-2 gap-3 pt-1">
+<div class="p-2.5 rounded-lg bg-surface-container-low border border-outline-variant/15">
+<span class="text-[11px] font-label-sm text-on-surface-variant block">Độ bình tĩnh dưới áp lực cao</span>
+<div class="flex items-baseline justify-between mt-1">
+<span class="text-headline-sm text-[20px] font-bold text-secondary">97.4%</span>
+<span class="text-[11px] text-outline">Stress Metric 0.12/1.0</span>
+</div>
+</div>
+<div class="p-2.5 rounded-lg bg-surface-container-low border border-outline-variant/15">
+<span class="text-[11px] font-label-sm text-on-surface-variant block">Độ an toàn hệ thống (Zero Data Loss)</span>
+<div class="flex items-baseline justify-between mt-1">
+<span class="text-headline-sm text-[20px] font-bold text-primary">100.0%</span>
+<span class="text-[11px] text-secondary font-semibold">Tối ưu hoàn hảo</span>
+</div>
+</div>
+</div>
+<!-- Follow-up Strategic Recommendation -->
+<div class="p-3 rounded-lg bg-secondary-container/20 border border-secondary/20 flex items-start gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-secondary mt-0.5" data-icon="lightbulb">lightbulb</span>
+<div class="text-body-sm font-body-sm">
+<strong class="font-semibold text-primary">Khuyến nghị Hội đồng:</strong> Đặt tiếp câu hỏi bẫy về mâu thuẫn giữa SLA của bộ phận kinh doanh và rủi ro phần cứng ở câu hỏi tiếp theo.
+                      </div>
+</div>
+</div>
+</div>
+</div>
+<!-- Message 3: AI Proactive Suggested Questions -->
+<div class="flex items-start gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary text-white flex items-center justify-center shadow-sm shrink-0 opacity-80">
+<span class="material-symbols-outlined text-[16px]" data-icon="neurology">neurology</span>
+</div>
+<div class="flex flex-col items-start max-w-xl">
+<div class="liquid-glass-subtle p-4 rounded-2xl rounded-tl-none border border-outline-variant/20 text-on-surface text-body-sm font-body-sm space-y-2">
+<span class="font-label-sm text-label-sm text-secondary font-bold uppercase tracking-wider block">
+                      Đề xuất 2 câu hỏi phỏng vấn đào sâu cho Vòng Chung Khảo:
+                    </span>
+<ol class="list-decimal list-inside space-y-1.5 text-on-surface-variant">
+<li>"Nếu Giám đốc Kinh doanh yêu cầu không được gián đoạn API inference trong lúc bạn biết chắc checkpoint đang corrupt, bạn giải trình và ra quyết định thế nào trong 10 phút?"</li>
+<li>"Tại Meta, quyết định kiến trúc nào bạn từng hối hận nhất khi scale hệ thống gợi ý vượt mốc 100M MAU?"</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<!-- Chat Input Dock (Glassmorphism Input System) -->
+<div class="p-4 sm:p-5 bg-surface-container-lowest/90 backdrop-blur-xl border-t border-outline-variant/20">
+<div class="flex flex-col gap-2">
+<div class="relative flex items-center">
+<textarea class="w-full pl-4 pr-32 py-2.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-secondary/40 focus:border-primary text-body-md font-body-md resize-none shadow-inner" placeholder="Đặt câu hỏi hoặc yêu cầu AI Agent phân tích sâu hồ sơ Phan Vũ Hoàng..." rows="2"></textarea>
+<!-- Internal Dock Actions -->
+<div class="absolute right-3 flex items-center gap-1.5">
+<button class="p-2 text-on-surface-variant hover:text-primary rounded-lg hover:bg-surface-container transition-colors" title="Đính kèm tài liệu thẩm định bổ sung">
+<span class="material-symbols-outlined text-[20px]" data-icon="attach_file">attach_file</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary rounded-lg hover:bg-surface-container transition-colors" title="Ghi âm chỉ thị giọng nói">
+<span class="material-symbols-outlined text-[20px]" data-icon="mic">mic</span>
+</button>
+<button class="w-9 h-9 rounded-lg bg-primary hover:bg-[#23252a] text-surface flex items-center justify-center transition-transform active:scale-95 shadow-md" title="Gửi yêu cầu phân tích">
+<span class="material-symbols-outlined text-[18px] text-tertiary-fixed-dim" data-icon="send">send</span>
+</button>
+</div>
+</div>
+<div class="flex items-center justify-between px-1 text-[11px] text-outline font-label-sm">
+<div class="flex items-center gap-2">
+<span class="flex items-center gap-1 text-secondary">
+<span class="material-symbols-outlined text-[14px]" data-icon="shield">shield</span>
+                      Zero-Data Retention Protocol Enabled
+                    </span>
+<span>•</span>
+<span>Phản hồi kiểm chứng bằng dữ liệu thật</span>
+</div>
+<span class="hidden sm:inline">Nhấn Enter để gửi, Shift + Enter để xuống dòng</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- FOOTER (Shared Component Anchor) -->
+<footer class="mt-auto border-t border-outline-variant/20 bg-transparent">
+<div class="flex flex-col md:flex-row justify-between items-center w-full px-8 py-6 max-w-7xl mx-auto text-body-sm font-body-sm">
+<div class="flex items-center gap-3 mb-4 md:mb-0">
+<span class="text-label-md font-label-md font-bold text-on-surface">TalentScreen AI Systems</span>
+<span class="text-outline-variant">•</span>
+<span class="text-on-surface-variant text-[12px]">© 2025 TalentScreen AI Systems. SOC-2 Type II Certified &amp; Encrypted.</span>
+</div>
+<div class="flex items-center gap-6 text-label-sm font-label-sm">
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:underline underline-offset-4 decoration-secondary" href="#">Cognitive Framework</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:underline underline-offset-4 decoration-secondary" href="#">Audit Vault</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:underline underline-offset-4 decoration-secondary" href="#">Privacy Protocol</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:underline underline-offset-4 decoration-secondary flex items-center gap-1.5" href="#">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span>System Status</span>
+</a>
+</div>
+</div>
+</footer>
+</div>
+</body></html>

@@ -24,10 +24,19 @@ TECHNICAL_ALLOWLIST = {
     "pandas", "numpy", "pytorch", "tensorflow", "scikit-learn", "pytest", "unittest", "selenium",
 }
 
+ROLE_HEADER_WORDS = {
+    "engineer", "developer", "software", "backend", "frontend", "fullstack",
+    "senior", "junior", "intern", "analyst", "architect", "designer",
+    "devops", "data", "python", "java", "react", "resume", "curriculum",
+    "vitae", "portfolio", "profile", "lập", "trình", "viên", "thực", "tập",
+    "sinh", "kỹ", "sư", "chuyên", "nhân", "nghiệm", "kinh", "mục", "tiêu",
+}
+
 # Regex patterns for contact and demographic attributes
 PHONE_REGEX = re.compile(
     r"(?:\+?84|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9[0-9])[\s.-]?\d{3}[\s.-]?\d{4}\b"
-    r"|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b",
+    r"|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b"
+    r"|(?<!\w)\+[1-9]\d{0,2}(?:[ \t().-]*\d){7,12}\b",
     re.IGNORECASE,
 )
 
@@ -60,12 +69,23 @@ ADDRESS_ORIGIN_REGEX = re.compile(
     re.IGNORECASE,
 )
 
+LOCATION_REGEX = re.compile(
+    r"\b(?:Hà\s*Nội|Hanoi|TP\.?\s*HCM|Hồ\s*Chí\s*Minh|Ho\s*Chi\s*Minh(?:\s*City)?|HCMC|"
+    r"Đà\s*Nẵng|Da\s*Nang|Việt\s*Nam|Viet\s*Nam|Vietnam|Bình\s*Dương|Bắc\s*Ninh|"
+    r"Bac\s*Ninh|Berlin|Singapore)\b",
+    re.IGNORECASE,
+)
+
 # University / School names (Vietnamese & International prestige)
 SCHOOL_REGEX = re.compile(
     r"\b(?:trường\s*đại\s*học|đại\s*học|học\s*viện|trường\s*cao\s*đẳng|university\s*of|college\s*of)\s+[^\n\r,;.()0-9]{2,50}\b"
     r"|\b(?:đhqg|đh\s*bách\s*khoa|đh\s*khoa\s*học\s*tự\s*nhiên|đh\s*ngoại\s*thương|đh\s*kinh\s*tế|đh\s*công\s*nghệ|đh\s*sư\s*phạm|đh\s*fpt|đh\s*rmit)\b"
     r"|\b(?:stanford|harvard|mit|oxford|cambridge|berkeley|cmu|yale|princeton|columbia)\s+(?:university|college|institute)?\b",
     re.IGNORECASE,
+)
+
+SCHOOL_SUFFIX_REGEX = re.compile(
+    r"\b(?:[A-ZÀ-Ỹ][A-Za-zÀ-ỹ'’-]+[ \t]+){1,7}(?:University|College|Institute|Academy)\b"
 )
 
 # Company / Organization indicators (single-line only, do not match across newlines)
@@ -90,6 +110,23 @@ def normalize_text_nfc_lf(text: str) -> str:
     return unicodedata.normalize("NFC", text.replace("\r\n", "\n").replace("\r", "\n"))
 
 
+def _header_name_candidate(text: str) -> Optional[str]:
+    """Find a name-shaped CV heading; a person must still review before egress."""
+    for line in (line.strip() for line in text.splitlines() if line.strip()):
+        labeled = re.match(r"^(?:họ\s*(?:và\s*)?tên|full\s*name|name)\s*[:：-]\s*(.+)$", line, re.IGNORECASE)
+        candidate = labeled.group(1).strip() if labeled else re.split(r"\s+[|–—-]\s+|\s*\|\s*", line, maxsplit=1)[0].strip()
+        candidate = re.sub(r"^(?:cv|resume)\s*[:：-]?\s+", "", candidate, flags=re.IGNORECASE)
+        words = re.findall(r"[^\W\d_]+(?:['’][^\W\d_]+)?", candidate, flags=re.UNICODE)
+        if 2 <= len(words) <= 5 and not re.search(r"\d|@|https?://", candidate):
+            folded = {word.casefold() for word in words}
+            if not (folded & ROLE_HEADER_WORDS or folded.issubset(TECHNICAL_ALLOWLIST)):
+                if all(word[:1].isupper() or len(word) == 1 for word in words):
+                    return candidate
+        if not labeled:
+            break
+    return None
+
+
 def sanitize_text(
     raw_text: str,
     candidate_name: Optional[str] = None,
@@ -100,6 +137,17 @@ def sanitize_text(
     """
     normalized = normalize_text_nfc_lf(raw_text)
     redaction_candidates: list[RedactionMatch] = []
+
+    # Candidate identities are often absent from the intake record. Detect a
+    # name-shaped heading, including mixed-case names and a name before a role.
+    # This remains a draft until a person reviews it before egress.
+    if not candidate_name:
+        header_name = _header_name_candidate(normalized)
+        if header_name:
+            for match in re.finditer(re.escape(header_name), normalized, flags=re.IGNORECASE):
+                redaction_candidates.append(
+                    RedactionMatch(match.start(), match.end(), match.group(), "[ỨNG_VIÊN]", "candidate_name_heuristic")
+                )
 
     # 1. Candidate Name (if provided)
     if candidate_name and len(candidate_name.strip()) >= 2:
@@ -188,6 +236,11 @@ def sanitize_text(
             )
         )
 
+    for m in LOCATION_REGEX.finditer(normalized):
+        redaction_candidates.append(
+            RedactionMatch(m.start(), m.end(), m.group(), "[ĐỊA_CHỈ]", "location")
+        )
+
     # 8. School / University
     for m in SCHOOL_REGEX.finditer(normalized):
         matched_str = m.group()
@@ -202,6 +255,11 @@ def sanitize_text(
                     entity_type="school",
                 )
             )
+
+    for m in SCHOOL_SUFFIX_REGEX.finditer(normalized):
+        redaction_candidates.append(
+            RedactionMatch(m.start(), m.end(), m.group(), "[TRƯỜNG_ĐẠI_HỌC]", "school")
+        )
 
     # 9. Company / Organization (with technical keyword protection)
     for m in ORG_REGEX.finditer(normalized):

@@ -39,7 +39,7 @@ services:
       DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-talentscreen}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-talentscreen_prod}
       PRIVATE_STORAGE_ROOT: /app/private_storage
       SECRET_KEY: ${SECRET_KEY:?Production SECRET_KEY required}
-      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:2004}
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
     volumes:
@@ -98,7 +98,7 @@ services:
     networks:
       - talentscreen-edge
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:2004:2004"
     deploy:
       resources:
         limits:

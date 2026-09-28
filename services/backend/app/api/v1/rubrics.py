@@ -19,10 +19,20 @@ from app.services.rubric import (
     approve_rubric,
     create_rubric_draft,
     get_rubric_by_id,
+    list_rubrics_for_requisition,
     update_rubric_draft,
 )
 
 router = APIRouter(tags=["Rubrics"])
+
+
+@router.get("/requisitions/{id}/rubrics", response_model=list[RubricResponse])
+async def get_requisition_rubrics(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    return await list_rubrics_for_requisition(db, id, ctx)
 
 
 @router.post("/requisitions/{id}/rubrics", response_model=RubricResponse, status_code=status.HTTP_201_CREATED)

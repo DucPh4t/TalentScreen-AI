@@ -36,9 +36,10 @@ async def run_capability_probe(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         model=model,
-        max_output_tokens=256,
+        max_output_tokens=512,
         timeout_seconds=15.0,
         response_format={"type": "json_object"},
+        thinking_mode="disabled",
     )
 
     started_at = datetime.now(timezone.utc)

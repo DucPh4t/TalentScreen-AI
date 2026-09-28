@@ -16,6 +16,7 @@ export interface RequisitionItem {
   title: string;
   department?: string;
   status: "draft" | "open" | "paused" | "closed";
+  row_version: number;
   created_by?: string;
   current_rubric_version_id?: string;
   current_jd_version_id?: string;
@@ -40,7 +41,7 @@ export interface ApplicationItem {
 
 export interface CriterionAssessmentData {
   criterion_id: string;
-  status: "assessed" | "insufficient_evidence" | "conflict";
+  status: "assessed" | "insufficient_evidence" | "conflicting_evidence";
   score: number | null;
   rationale: string;
   missing_information?: string[];
@@ -79,17 +80,29 @@ export interface ReviewWorkspaceData {
 
 // Global CSRF token cache
 let cachedCsrfToken: string | null = null;
+const csrfStorageKey = "talentscreen_csrf_token";
 
 export function setCsrfToken(token: string) {
-  cachedCsrfToken = token;
+  cachedCsrfToken = token || null;
+  if (typeof window !== "undefined") {
+    if (token) window.sessionStorage.setItem(csrfStorageKey, token);
+    else window.sessionStorage.removeItem(csrfStorageKey);
+  }
 }
 
 export function getCsrfToken(): string | null {
   if (cachedCsrfToken) return cachedCsrfToken;
-  if (typeof document !== "undefined") {
-    // Attempt to extract from cookie if available
-    const match = document.cookie.match(/talentscreen_csrf=([^;]+)/);
-    if (match) return match[1];
+  if (typeof window !== "undefined") {
+    const stored = window.sessionStorage.getItem(csrfStorageKey);
+    if (stored) {
+      cachedCsrfToken = stored;
+      return stored;
+    }
+    const cookie = document.cookie.match(/(?:^|;\s*)talentscreen_csrf=([^;]+)/);
+    if (cookie) {
+      cachedCsrfToken = decodeURIComponent(cookie[1]);
+      return cachedCsrfToken;
+    }
   }
   return null;
 }
@@ -139,8 +152,8 @@ async function apiRequest<T>(
 
 export const api = {
   // Auth
-  async login(login_name: string, password: string): Promise<{ message: string; csrf_token: string; user_id: string }> {
-    const res = await apiRequest<{ message: string; csrf_token: string; user_id: string }>("/auth/login", {
+  async login(login_name: string, password: string): Promise<{ status: string; csrf_token: string; user: UserAccount }> {
+    const res = await apiRequest<{ status: string; csrf_token: string; user: UserAccount }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ login_name, password }),
     });
@@ -166,14 +179,22 @@ export const api = {
     return apiRequest<RequisitionItem>(`/requisitions/${id}`);
   },
 
-  async createRequisition(title: string, jd_text: string, department?: string): Promise<RequisitionItem> {
+  async createRequisition(title: string): Promise<RequisitionItem> {
     return apiRequest<RequisitionItem>("/requisitions", {
       method: "POST",
-      body: JSON.stringify({ title, jd_text, department }),
+      body: JSON.stringify({ title }),
     });
   },
 
-  async patchRequisition(id: string, payload: { title?: string; status?: string }, rowVersion?: number): Promise<RequisitionItem> {
+  async createJDVersion(requisitionId: string, sourceText: string, rowVersion: number): Promise<{ id: string; text_hash: string }> {
+    return apiRequest<{ id: string; text_hash: string }>(`/requisitions/${requisitionId}/jd-versions`, {
+      method: "POST",
+      headers: { "If-Match": `"${rowVersion}"` },
+      body: JSON.stringify({ source_text: sourceText, change_reason: "Tạo JD ban đầu", expected_requisition_version: rowVersion }),
+    });
+  },
+
+  async patchRequisition(id: string, payload: { title?: string; status?: string; reason?: string }, rowVersion?: number): Promise<RequisitionItem> {
     const headers: Record<string, string> = {};
     if (rowVersion !== undefined) {
       headers["If-Match"] = `"${rowVersion}"`;
@@ -181,12 +202,16 @@ export const api = {
     return apiRequest<RequisitionItem>(`/requisitions/${id}`, {
       method: "PATCH",
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, expected_version: rowVersion }),
     });
   },
 
   async getRubric(id: string): Promise<any> {
     return apiRequest<any>(`/rubrics/${id}`);
+  },
+
+  async listRubrics(requisitionId: string): Promise<any[]> {
+    return apiRequest<any[]>(`/requisitions/${requisitionId}/rubrics`);
   },
 
   async createRubric(requisitionId: string, payload: any): Promise<any> {
@@ -196,11 +221,11 @@ export const api = {
     });
   },
 
-  async approveRubric(id: string, expectedVersion: number): Promise<any> {
+  async approveRubric(id: string, expectedRequisitionVersion: number, expectedJdVersionId: string): Promise<any> {
     return apiRequest<any>(`/rubrics/${id}/approve`, {
       method: "POST",
-      headers: { "If-Match": `"${expectedVersion}"` },
-      body: JSON.stringify({ acknowledged: true }),
+      headers: { "If-Match": `"${expectedRequisitionVersion}"` },
+      body: JSON.stringify({ expected_requisition_version: expectedRequisitionVersion, expected_jd_version_id: expectedJdVersionId, acknowledge_thresholds: true }),
     });
   },
 
@@ -217,10 +242,10 @@ export const api = {
     return apiRequest<ApplicationItem>(`/applications/${id}`);
   },
 
-  async createApplication(requisitionId: string, candidate_name?: string): Promise<ApplicationItem> {
+  async createApplication(requisitionId: string): Promise<ApplicationItem> {
     return apiRequest<ApplicationItem>(`/requisitions/${requisitionId}/applications`, {
       method: "POST",
-      body: JSON.stringify({ candidate_name }),
+      body: JSON.stringify({}),
     });
   },
 
@@ -247,10 +272,25 @@ export const api = {
     return apiRequest<any>(`/sanitized-versions/${sanitizedId}`);
   },
 
-  async approveSanitizedVersion(versionId: string, acknowledged: boolean): Promise<any> {
+  async editSanitizedVersion(documentId: string, baseVersionId: string, canonicalText: string, editReason: string): Promise<any> {
+    return apiRequest<any>(`/documents/${documentId}/sanitized-versions`, {
+      method: "POST",
+      body: JSON.stringify({
+        base_version_id: baseVersionId,
+        canonical_text: canonicalText,
+        edit_reason: editReason,
+      }),
+    });
+  },
+
+  async approveSanitizedVersion(versionId: string, expectedApplicationVersion: number, expectedSha256: string): Promise<any> {
     return apiRequest<any>(`/sanitized-versions/${versionId}/approve`, {
       method: "POST",
-      body: JSON.stringify({ acknowledged }),
+      body: JSON.stringify({
+        expected_application_version: expectedApplicationVersion,
+        expected_sha256: expectedSha256,
+        acknowledged: true,
+      }),
     });
   },
 
@@ -261,10 +301,15 @@ export const api = {
     });
   },
 
-  async createRawGrant(applicationId: string, reviewer_user_id: string, reason: string, duration_minutes: number = 30): Promise<any> {
+  async createRawGrant(applicationId: string, granteeUserId: string, reason: string, durationMinutes: number = 30): Promise<any> {
     return apiRequest<any>(`/applications/${applicationId}/raw-grants`, {
       method: "POST",
-      body: JSON.stringify({ reviewer_user_id, reason, duration_minutes }),
+      body: JSON.stringify({
+        grantee_user_id: granteeUserId,
+        scopes: ["raw_cv"],
+        expires_at: new Date(Date.now() + durationMinutes * 60_000).toISOString(),
+        reason,
+      }),
     });
   },
 
@@ -359,6 +404,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ scope, target_id: targetId, reason_category }),
     });
+  },
+
+  async getDeletionRequest(id: string): Promise<any> {
+    return apiRequest<any>(`/deletion-requests/${id}`);
+  },
+
+  async getRetentionPolicy(): Promise<any> {
+    return apiRequest<any>("/retention-policy");
   },
 
   // Onboarding & Sandbox (Task B21)

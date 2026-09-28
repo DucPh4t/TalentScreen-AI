@@ -31,7 +31,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS Middleware: strictly bound to APP_ORIGIN (e.g. Next.js at localhost:3000)
+    # CORS Middleware: strictly bound to APP_ORIGIN (e.g. Next.js at localhost:2004)
     # Does NOT use wildcard '*' with credentials
     app.add_middleware(
         CORSMiddleware,

@@ -83,6 +83,46 @@ def test_sanitizer_rules_and_technical_preservation():
     assert "Kubernetes" in sanitized
 
 
+def test_sanitizer_redacts_header_name_and_international_phone_without_identity_record():
+    cv_text = "BOGDAN SZABO\nSenior Software Developer Berlin, DE  bogdan@example.org  +49 176 29983069\nBuilt HTTP APIs with Node.js."
+    sanitized, _, flags = sanitize_text(cv_text)
+    assert "BOGDAN SZABO" not in sanitized
+    assert "+49 176 29983069" not in sanitized
+    assert "[ỨNG_VIÊN]" in sanitized
+    assert "[SỐ_ĐIỆN_THOẠI]" in sanitized
+    assert "Node.js" in sanitized
+    assert flags["contains_phone_placeholder"] is True
+
+
+def test_sanitizer_redacts_mixed_case_header_name_and_repetition():
+    cv_text = (
+        "Nguyễn Minh Phát | Backend Developer\n"
+        "Built Python APIs with FastAPI.\n"
+        "Nguyễn Minh Phát owned the authentication module."
+    )
+    sanitized, redactions, _ = sanitize_text(cv_text)
+    assert "Nguyễn Minh Phát" not in sanitized
+    assert sanitized.count("[ỨNG_VIÊN]") == 2
+    assert "Backend Developer" in sanitized
+    assert "FastAPI" in sanitized
+    assert sum(r["entity_type"] == "candidate_name_heuristic" for r in redactions) == 2
+
+
+def test_sanitizer_preserves_role_only_header():
+    sanitized, _, _ = sanitize_text("Senior Python Backend Engineer\nBuilt APIs with FastAPI.")
+    assert "Senior Python Backend Engineer" in sanitized
+
+
+def test_sanitizer_redacts_unlabeled_location_and_suffix_school_name():
+    cv_text = "Lê Minh An\nHanoi, Vietnam\nBachelor of Science at Northern Technical University\nBuilt Python APIs."
+    sanitized, _, _ = sanitize_text(cv_text)
+    assert "Hanoi" not in sanitized
+    assert "Vietnam" not in sanitized
+    assert "Northern Technical University" not in sanitized
+    assert "Bachelor of Science" in sanitized
+    assert "Python APIs" in sanitized
+
+
 def test_source_spans_exact_codepoints():
     """Verify source span codepoints exactly match canonical_text[start:end] == span.text."""
     text = normalize_text_nfc_lf(

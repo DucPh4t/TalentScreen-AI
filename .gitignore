@@ -73,6 +73,9 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+.agents/
+*.tsbuildinfo
 
 # Large zip archives (keep handoff zip ignored or tracked as needed)
 *.tar.gz
+

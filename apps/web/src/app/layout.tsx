@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import AppShell from '../components/AppShell';
+import { ToastProvider } from '../components/Toast';
 
 export const metadata: Metadata = {
-  title: 'TalentScreen AI — Hệ Thống Trợ Lý Sàng Lọc Hồ Sơ Kỹ Thuật',
-  description: 'Hỗ trợ hội đồng tuyển dụng đánh giá năng lực lập trình dựa trên bằng chứng minh bạch, công bằng và bảo mật tuyệt đối.',
+  title: 'TalentScreen AI | Không gian tuyển dụng',
+  description: 'Không gian HR rà soát hồ sơ IT theo JD, rubric và bằng chứng; quyết định cuối cùng thuộc về con người.',
 };
 
 export default function RootLayout({
@@ -13,37 +15,27 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi">
+      <head>
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      </head>
       <body>
-        <div className="env-banner">
-          <div>
-            <span style={{ color: '#38bdf8', fontWeight: 600 }}>TalentScreen AI</span>
-            <span style={{ margin: '0 0.5rem', color: '#475569' }}>•</span>
-            <span>Môi trường: <strong>Local Sandbox</strong></span>
-          </div>
-          <div>
-            <span className="badge badge-open" style={{ fontSize: '0.7rem' }}>
-              DeepSeek Model Active
-            </span>
-          </div>
+        {/* Continuous luxury travertine desk background for all pages */}
+        <div className="global-travertine-bg" aria-hidden="true">
+          <img
+            alt="Travertine stone desk"
+            src="/bgAItalent.png"
+          />
+          <div className="global-tint-1" />
+          <div className="global-tint-2" />
         </div>
-
-        <header className="app-header">
-          <div className="header-inner">
-            <a href="/" className="brand-logo">
-              <span className="brand-badge">TS-AI</span>
-              <span>TalentScreen AI</span>
-            </a>
-            <nav className="nav-links">
-              <a href="/requisitions" className="nav-link">Đợt tuyển dụng</a>
-              <a href="/sandbox" className="nav-link">Sandbox Huấn Luyện</a>
-              <a href="/retention" className="nav-link">Chính sách lưu trữ</a>
-            </nav>
-          </div>
-        </header>
-
-        <main className="main-content">
-          {children}
-        </main>
+        <ToastProvider>
+          <AppShell>
+            {children}
+          </AppShell>
+        </ToastProvider>
       </body>
     </html>
   );

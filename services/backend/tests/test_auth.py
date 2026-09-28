@@ -79,6 +79,9 @@ async def test_login_success_and_httponly_cookie(test_session_factory):
         assert SESSION_COOKIE_NAME in response.cookies
         cookie = response.cookies[SESSION_COOKIE_NAME]
         assert len(cookie) > 20
+        assert response.cookies["talentscreen_csrf"] == data["csrf_token"]
+        csrf_cookie_header = next(header for header in response.headers.get_list("set-cookie") if header.startswith("talentscreen_csrf="))
+        assert "httponly" not in csrf_cookie_header.lower()
 
 
 @pytest.mark.asyncio
@@ -137,6 +140,7 @@ async def test_csrf_validation_on_mutation(test_session_factory):
             headers={"X-CSRF-Token": csrf_token},
         )
         assert logout_success.status_code == 200
+        assert "talentscreen_csrf" not in client.cookies
 
 
 @pytest.mark.asyncio

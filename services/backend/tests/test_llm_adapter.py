@@ -187,6 +187,10 @@ async def test_mock_provider_fault_injection():
     assert res.content is not None
     assert res.input_tokens is not None
     assert res.output_tokens is not None
+    from app.schemas.assessment import AssessmentOutputSchema
+    parsed = AssessmentOutputSchema.model_validate_json(res.content)
+    assert len(parsed.criteria) == 6
+    assert all(criterion.score is None and not criterion.evidence for criterion in parsed.criteria)
 
 
 @pytest.mark.asyncio

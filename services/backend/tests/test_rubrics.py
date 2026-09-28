@@ -146,6 +146,8 @@ async def test_import_seed_rubric_draft(test_session_factory):
         for c in criteria:
             scores = {a["score"] for a in c["scoring_anchors"]}
             assert scores == {0, 1, 2, 3, 4}
+            assert len(c["source_requirements"]) == 1
+            assert c["source_requirements"][0]["quote"] in SAMPLE_JD_TEXT
 
         # Verify threshold config
         policy = data["threshold_config"]
@@ -153,6 +155,48 @@ async def test_import_seed_rubric_draft(test_session_factory):
         assert policy["core_minimum_scores"]["python_backend"] == 2
         assert policy["core_minimum_scores"]["api_design"] == 2
         assert policy["core_minimum_scores"]["sql_data"] == 2
+
+
+@pytest.mark.asyncio
+async def test_seed_rubric_rejects_unmapped_jd(test_session_factory):
+    """A seed rubric cannot silently cite a different job description."""
+    async with test_session_factory() as session:
+        owner, o_token, o_csrf, reviewer, r_token, r_csrf, req_id, jd_id = await setup_requisition_with_jd(session)
+        jd = await session.get(JDVersion, jd_id)
+        jd.source_text = "Vị trí Backend Python: phát triển dịch vụ nội bộ với API và dữ liệu quan hệ theo nhu cầu thực tế."
+        jd.source_refs = {"requirements": [], "extracted_count": 0}
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", cookies={SESSION_COOKIE_NAME: o_token}, headers={"X-CSRF-Token": o_csrf}) as client:
+        response = await client.post(f"/api/v1/requisitions/{req_id}/rubrics", json={"source": "seed"})
+        assert response.status_code == 422
+        assert "JD cần đúng một yêu cầu nguồn" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_rubric_draft_can_be_reopened_by_members(test_session_factory):
+    """Drafts must remain visible after reload while nonmembers cannot inspect them."""
+    async with test_session_factory() as session:
+        owner, o_token, o_csrf, reviewer, r_token, r_csrf, req_id, jd_id = await setup_requisition_with_jd(session)
+
+    transport = ASGITransport(app=app)
+    path = f"/api/v1/requisitions/{req_id}/rubrics"
+    async with AsyncClient(transport=transport, base_url="http://test", cookies={SESSION_COOKIE_NAME: o_token}, headers={"X-CSRF-Token": o_csrf}) as client:
+        create = await client.post(path, json={"source": "seed"})
+        assert create.status_code == 201
+        draft_id = create.json()["id"]
+        listing = await client.get(path)
+        assert listing.status_code == 200
+        assert listing.json()[0]["id"] == draft_id
+        assert listing.json()[0]["status"] == "draft"
+
+    async with AsyncClient(transport=transport, base_url="http://test", cookies={SESSION_COOKIE_NAME: r_token}) as client:
+        listing = await client.get(path)
+        assert listing.status_code == 200
+        assert listing.json()[0]["id"] == draft_id
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        assert (await client.get(path)).status_code == 401
 
 
 @pytest.mark.asyncio
