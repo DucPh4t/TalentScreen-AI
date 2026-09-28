@@ -89,9 +89,9 @@ export default function HomePage() {
 
   if (!user) {
     return (
-      <div className="stitch-exact-container">
+      <div className="talent-portal-container">
         {/* ================= UNIFIED CONTINUOUS FULL VIEWPORT BACKGROUND ================= */}
-        <div className="stitch-exact-bg" aria-hidden="true">
+        <div className="talent-portal-bg" aria-hidden="true">
           <img
             alt="Travertine stone desk"
             src="/bgAItalent.png"
@@ -99,12 +99,12 @@ export default function HomePage() {
               (e.target as HTMLImageElement).src = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBEHVEE457qKGHUjySbsszz3Yx9aLFmTS3BBb853JKV7VmLOqSy_F2hnyC_nfJwVNgDsckPl4NKzUmwzYluGmWhkuJh_opZxLQnXT0okPFeFw_Ds8x7sMY3oqGHsNH3KixeBkzJSypzBoXqzz_LzrZKLFDIB5Kf6D7aNyEedIfY-munLbNnJzyAIl5wEBs2_EwiNVu-JDSpNFwumYCEx9pHgQaklg0rMXtDsqkfPzLCIhJCIOxNExwFYkgeDTZtqUkIjA';
             }}
           />
-          <div className="stitch-exact-tint-1" />
-          <div className="stitch-exact-tint-2" />
+          <div className="talent-portal-tint-1" />
+          <div className="talent-portal-tint-2" />
         </div>
 
         {/* ================= TOP MINIMAL GALLERY HEADER ================= */}
-        <header className="stitch-exact-header">
+        <header className="talent-portal-header">
           <a className="group" href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
             <div style={{
               width: '36px',
@@ -124,7 +124,7 @@ export default function HomePage() {
               <span style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.025em', color: '#18181b' }}>
                 TalentScreen AI
               </span>
-              <span className="stitch-liquid-pill" style={{
+              <span className="talent-glass-pill" style={{
                 fontSize: '10px',
                 fontFamily: 'var(--font-mono, monospace)',
                 letterSpacing: '0.1em',
@@ -142,7 +142,7 @@ export default function HomePage() {
 
           {/* Minimal right badge & language selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '12px' }}>
-            <div className="stitch-liquid-pill" style={{
+            <div className="talent-glass-pill" style={{
               padding: '6px 14px',
               borderRadius: '9999px',
               color: '#52525b',
@@ -159,7 +159,7 @@ export default function HomePage() {
                 SOC2 &amp; ISO 27001 AUDITED
               </span>
             </div>
-            <div className="stitch-liquid-pill" style={{
+            <div className="talent-glass-pill" style={{
               padding: '4px 12px',
               borderRadius: '12px',
               color: '#18181b',
@@ -173,11 +173,11 @@ export default function HomePage() {
         </header>
 
         {/* ================= UNIFIED MAIN WORKSPACE (NO SPLIT) ================= */}
-        <main className="stitch-exact-main">
+        <main className="talent-portal-main">
           {/* LEFT COLUMN: Elegant Typography & 3 Golden Metrics */}
           <div style={{ width: '100%', maxWidth: '36rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '1.75rem' }}>
             {/* Architectural Tag */}
-            <div className="stitch-liquid-pill" style={{
+            <div className="talent-glass-pill" style={{
               padding: '4px 14px',
               borderRadius: '9999px',
               color: '#52525b',
@@ -192,7 +192,7 @@ export default function HomePage() {
 
             {/* Refined Editorial Headline */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <h1 className="stitch-exact-headline">
+              <h1 className="talent-portal-headline">
                 TalentScreen<br />
                 <span className="italic">Đo lường Nhân tài</span> Chuẩn mực.
               </h1>
@@ -204,8 +204,8 @@ export default function HomePage() {
             {/* 3 Golden Metrics (Liquid Glass Prism Cards) */}
             <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', paddingTop: '0.25rem' }}>
               {/* Metric 1 */}
-              <div className="stitch-liquid-card" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
-                <div className="stitch-liquid-caustic" />
+              <div className="talent-glass-card" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
+                <div className="talent-glass-caustic" />
                 <div style={{ position: 'relative', zIndex: 10 }}>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#18181b', letterSpacing: '-0.025em', lineHeight: 1 }}>3.5x</div>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b', marginTop: '0.35rem' }}>Tốc độ</div>
@@ -214,8 +214,8 @@ export default function HomePage() {
               </div>
 
               {/* Metric 2 */}
-              <div className="stitch-liquid-card" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
-                <div className="stitch-liquid-caustic" />
+              <div className="talent-glass-card" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
+                <div className="talent-glass-caustic" />
                 <div style={{ position: 'relative', zIndex: 10 }}>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0d9488', letterSpacing: '-0.025em', lineHeight: 1 }}>85%</div>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b', marginTop: '0.35rem' }}>Tiết kiệm</div>
@@ -224,8 +224,8 @@ export default function HomePage() {
               </div>
 
               {/* Metric 3 */}
-              <div className="stitch-liquid-card" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
-                <div className="stitch-liquid-caustic" />
+              <div className="talent-glass-card" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
+                <div className="talent-glass-caustic" />
                 <div style={{ position: 'relative', zIndex: 10 }}>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#18181b', letterSpacing: '-0.025em', lineHeight: 1 }}>0.00%</div>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b', marginTop: '0.35rem' }}>Thiên vị</div>
@@ -243,14 +243,14 @@ export default function HomePage() {
 
           {/* RIGHT COLUMN: Fluid Refraction Prism Liquid Glass Authentication Card */}
           <div style={{ width: '100%', maxWidth: '450px', flexShrink: 0 }}>
-            <div className="stitch-liquid-card" style={{
+            <div className="talent-glass-card" style={{
               borderRadius: '2rem',
               padding: '2rem',
               width: '100%',
               overflow: 'hidden',
               boxShadow: '0 20px 60px -15px rgba(24, 24, 27, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.7)'
             }}>
-              <div className="stitch-liquid-caustic" />
+              <div className="talent-glass-caustic" />
               <div style={{ position: 'relative', zIndex: 10 }}>
                 {/* Portal Identity Header */}
                 <div style={{
@@ -269,7 +269,7 @@ export default function HomePage() {
                       Đăng nhập Không gian
                     </h2>
                   </div>
-                  <div className="stitch-liquid-pill" style={{
+                  <div className="talent-glass-pill" style={{
                     width: '40px',
                     height: '40px',
                     borderRadius: '1rem',
@@ -288,7 +288,7 @@ export default function HomePage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.85rem' }}>
                   <button
                     type="button"
-                    className="stitch-liquid-interactive"
+                    className="talent-glass-interactive"
                     onClick={() => openSSO('google')}
                     style={{ padding: '0.65rem 0.75rem', borderRadius: '1rem', fontSize: '12px', fontWeight: 600 }}
                   >
@@ -303,7 +303,7 @@ export default function HomePage() {
 
                   <button
                     type="button"
-                    className="stitch-liquid-interactive"
+                    className="talent-glass-interactive"
                     onClick={() => openSSO('microsoft')}
                     style={{ padding: '0.65rem 0.75rem', borderRadius: '1rem', fontSize: '12px', fontWeight: 600 }}
                   >
@@ -445,7 +445,7 @@ export default function HomePage() {
 
                   {/* Submit Button with Viscous Liquid Gloss */}
                   <button
-                    className="stitch-liquid-btn"
+                    className="talent-glass-btn"
                     type="submit"
                     disabled={submitting}
                   >
@@ -468,7 +468,7 @@ export default function HomePage() {
         </main>
 
         {/* ================= MINIMAL EDITORIAL FOOTER ================= */}
-        <footer className="stitch-exact-footer">
+        <footer className="talent-portal-footer">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontWeight: 700, color: '#18181b' }}>TalentScreen AI</span>
             <span>•</span>

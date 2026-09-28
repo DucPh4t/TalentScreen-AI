@@ -14,7 +14,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {/* Global App Header for internal pages matching Stitch Liquid Glass Luxury */}
+      {/* Global App Header for internal pages matching Travertine Liquid Glass Luxury */}
       <header className="app-header">
         <div className="header-inner">
           <Link href="/dashboard" className="brand-logo" aria-label="TalentScreen AI — trang chủ">

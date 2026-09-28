@@ -112,7 +112,7 @@ export default function SSOModal({ isOpen, provider, onClose, onEnterpriseLogin 
       }}
     >
       <div
-        className="stitch-liquid-card"
+        className="talent-glass-card"
         style={{
           width: '100%',
           maxWidth: '540px',
@@ -124,7 +124,7 @@ export default function SSOModal({ isOpen, provider, onClose, onEnterpriseLogin 
           overflow: 'hidden'
         }}
       >
-        <div className="stitch-liquid-caustic" />
+        <div className="talent-glass-caustic" />
 
         <div style={{ position: 'relative', zIndex: 10 }}>
           {/* Header */}
@@ -165,7 +165,7 @@ export default function SSOModal({ isOpen, provider, onClose, onEnterpriseLogin 
                     {providerTitle}
                   </h3>
                   <span
-                    className="stitch-liquid-pill"
+                    className="talent-glass-pill"
                     style={{
                       fontSize: '9.5px',
                       fontFamily: 'var(--font-mono, monospace)',

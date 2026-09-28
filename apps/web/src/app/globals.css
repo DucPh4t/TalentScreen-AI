@@ -1,6 +1,6 @@
 /* ==========================================================================
    TALENTSCREEN AI - LUXURY TRAVERTINE & LIQUID GLASS DESIGN SYSTEM
-   Unifies Login & Internal App into 1-to-1 Match with Stitch Architecture
+   Unifies Login & Internal App into 1-to-1 Match with Travertine Liquid Glass Architecture
    ========================================================================== */
 
 :root {
@@ -377,7 +377,7 @@ a:hover {
 .surface,
 .card,
 .liquid-glass-card,
-.stitch-liquid-card {
+.talent-glass-card {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 252, 248, 0.91) 45%, rgba(245, 253, 251, 0.93) 75%, rgba(255, 255, 255, 0.96) 100%);
   backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
@@ -417,7 +417,7 @@ a:hover {
 }
 
 .liquid-glass-pill,
-.stitch-liquid-pill {
+.talent-glass-pill {
   background: linear-gradient(125deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.6) 50%, rgba(238, 253, 248, 0.75) 100%);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
@@ -433,7 +433,7 @@ a:hover {
 }
 
 .liquid-caustic-layer,
-.stitch-liquid-caustic {
+.talent-glass-caustic {
   position: absolute;
   inset: 0;
   border-radius: inherit;
@@ -445,7 +445,7 @@ a:hover {
 }
 
 .liquid-interactive,
-.stitch-liquid-interactive {
+.talent-glass-interactive {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.75) 100%);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -465,8 +465,8 @@ a:hover {
 }
 
 .liquid-interactive:hover,
-.stitch-liquid-interactive:hover {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(240, 253, 250, 0.9) 100%);
+.talent-glass-interactive:hover {
+  background: linear-gradient(135deg, rgba(255, 255, 1) 0%, rgba(240, 253, 250, 0.9) 100%);
   border-color: rgba(13, 148, 136, 0.4);
   box-shadow: 
     0 8px 24px -4px rgba(13, 148, 136, 0.12),
@@ -478,7 +478,7 @@ a:hover {
    TYPOGRAPHY & HEADINGS
    ========================================================================== */
 
-h1, h2, h3, .page-title, .card-title, .modal-title, .stitch-exact-headline {
+h1, h2, h3, .page-title, .card-title, .modal-title, .talent-portal-headline {
   font-family: var(--font-headline);
   color: var(--text-primary);
   font-weight: 500;
@@ -621,7 +621,7 @@ h1, h2, h3, .page-title, .card-title, .modal-title, .stitch-exact-headline {
   color: #ffffff;
 }
 
-.stitch-liquid-btn {
+.talent-glass-btn {
   width: 100%;
   min-height: 48px;
   padding: 0.85rem 1.5rem;
@@ -648,7 +648,7 @@ h1, h2, h3, .page-title, .card-title, .modal-title, .stitch-exact-headline {
   margin-top: 0.85rem;
 }
 
-.stitch-liquid-btn::before {
+.talent-glass-btn::before {
   content: '';
   position: absolute;
   top: 0;
@@ -660,18 +660,18 @@ h1, h2, h3, .page-title, .card-title, .modal-title, .stitch-exact-headline {
   transition: left 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.stitch-liquid-btn:hover::before {
+.talent-glass-btn:hover::before {
   left: 130%;
 }
 
-.stitch-liquid-btn:hover {
+.talent-glass-btn:hover {
   box-shadow: 
     0 14px 30px -4px rgba(24, 24, 27, 0.45),
     0 6px 14px -2px rgba(13, 148, 136, 0.3);
   transform: translateY(-1px);
 }
 
-.stitch-liquid-btn:active {
+.talent-glass-btn:active {
   transform: scale(0.98);
 }
 
@@ -1995,10 +1995,10 @@ textarea::placeholder {
 }
 
 /* ==========================================================================
-   STITCH 1-TO-1 EXACT TRAVERTINE LIQUID GLASS SYSTEM (LOGIN SPECIFIC)
+   TALENT PORTAL EXACT TRAVERTINE LIQUID GLASS SYSTEM (LOGIN SPECIFIC)
    ========================================================================== */
 
-.stitch-exact-container {
+.talent-portal-container {
   position: relative;
   min-height: 100vh;
   color: #18181b;
@@ -2009,24 +2009,7 @@ textarea::placeholder {
   overflow-x: hidden;
 }
 
-.stitch-exact-footer {
-  position: relative;
-  z-index: 10;
-  width: 100%;
-  max-width: 80rem;
-  margin: 0 auto;
-  padding: 1.5rem 2.5rem;
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  font-size: 11px;
-  color: #71717a;
-  font-family: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
-}
-
-.stitch-exact-bg {
+.talent-portal-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -2034,14 +2017,14 @@ textarea::placeholder {
   pointer-events: none;
 }
 
-.stitch-exact-bg img {
+.talent-portal-bg img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
 }
 
-.stitch-exact-tint-1 {
+.talent-portal-tint-1 {
   position: absolute;
   inset: 0;
   background: rgba(250, 248, 245, 0.2);
@@ -2049,13 +2032,13 @@ textarea::placeholder {
   -webkit-backdrop-filter: blur(0.5px);
 }
 
-.stitch-exact-tint-2 {
+.talent-portal-tint-2 {
   position: absolute;
   inset: 0;
   background: linear-gradient(to top right, rgba(245, 242, 235, 0.4) 0%, transparent 50%, rgba(232, 246, 245, 0.2) 100%);
 }
 
-.stitch-exact-header {
+.talent-portal-header {
   position: relative;
   z-index: 20;
   width: 100%;
@@ -2067,7 +2050,7 @@ textarea::placeholder {
   align-items: center;
 }
 
-.stitch-exact-main {
+.talent-portal-main {
   position: relative;
   z-index: 10;
   flex: 1;
@@ -2083,13 +2066,13 @@ textarea::placeholder {
 }
 
 @media (max-width: 1024px) {
-  .stitch-exact-main {
+  .talent-portal-main {
     flex-direction: column;
     gap: 2rem;
   }
 }
 
-.stitch-exact-footer {
+.talent-portal-footer {
   position: relative;
   z-index: 10;
   width: 100%;
@@ -2107,14 +2090,14 @@ textarea::placeholder {
 }
 
 @media (max-width: 640px) {
-  .stitch-exact-footer {
+  .talent-portal-footer {
     flex-direction: column;
     gap: 0.75rem;
     text-align: center;
   }
 }
 
-.stitch-exact-headline {
+.talent-portal-headline {
   font-family: 'Newsreader', 'Instrument Serif', Georgia, serif;
   font-size: clamp(2.4rem, 4.5vw, 3.65rem);
   line-height: 1.08;
@@ -2124,7 +2107,7 @@ textarea::placeholder {
   margin: 0.85rem 0 0.75rem 0;
 }
 
-.stitch-exact-headline span.italic {
+.talent-portal-headline span.italic {
   font-style: italic;
   font-weight: 400;
 }
