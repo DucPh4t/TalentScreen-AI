@@ -2,7 +2,7 @@
 
 import React, { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, RequisitionItem, ApplicationItem } from "@/lib/api";
+import { api, RequisitionItem, ApplicationItem, ReviewQueueItem, CandidateComparison } from "@/lib/api";
 import {
   IconFileText,
   IconSparkles,
@@ -18,6 +18,8 @@ import {
 } from "@/components/Icons";
 import { useToast } from "@/components/Toast";
 import { SkeletonTable, Skeleton } from "@/components/Skeleton";
+import QuestionBankSetup from "@/components/QuestionBankSetup";
+import { stageLabels } from "@/lib/workflow";
 import BatchDropzone from "@/components/BatchDropzone";
 
 interface PageProps {
@@ -31,9 +33,17 @@ export default function RequisitionDetailPage({ params }: PageProps) {
 
   const [requisition, setRequisition] = useState<any>(null);
   const [applications, setApplications] = useState<ApplicationItem[]>([]);
+  const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("");
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [comparison, setComparison] = useState<CandidateComparison | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [rubric, setRubric] = useState<any>(null);
   const [jdVersion, setJdVersion] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"applications" | "jd_rubric">("applications");
+  const [activeTab, setActiveTab] = useState<"applications" | "jd_rubric" | "comparison">("applications");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [applicationsLoadError, setApplicationsLoadError] = useState<string | null>(null);
@@ -45,29 +55,32 @@ export default function RequisitionDetailPage({ params }: PageProps) {
 
   // Upload modal
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [createdApplicationId, setCreatedApplicationId] = useState<string | null>(null);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Rubric action state
   const [rubricActionLoading, setRubricActionLoading] = useState(false);
   const [acknowledgedRubric, setAcknowledgedRubric] = useState(false);
   const [jdDraftText, setJdDraftText] = useState("");
   const [savingJD, setSavingJD] = useState(false);
+  const canManage = requisition?.my_role === "owner" || requisition?.my_role === "admin";
+  const canCompare = requisition?.my_role === "owner";
+  const canReviewIndependently = requisition?.my_role === "reviewer";
 
-  const rubricJDAligned = Boolean(rubric && jdVersion && rubric.jd_version_id === jdVersion.id && rubric.criteria?.length === 6 && rubric.criteria.every((criterion: any) =>
+  const rubricJDAligned = Boolean(rubric && jdVersion && rubric.jd_version_id === jdVersion.id && rubric.criteria?.length > 0 && rubric.criteria.every((criterion: any) =>
     criterion.source_requirements?.length > 0 && criterion.source_requirements.every((ref: any) =>
       typeof ref.quote === "string" && ref.quote.length > 0 && jdVersion.source_text.includes(ref.quote)
     )
   ));
 
-  async function loadData() {
-    setLoading(true);
+  async function loadData(silent = false) {
+    if (!silent) setLoading(true);
     setError(null);
     setApplicationsLoadError(null);
     setRubricLoadError(null);
     setJdLoadError(null);
+    setQueueError(null);
+    setReviewQueue([]);
+
+    setComparison(null);
     try {
       const req = await api.getRequisition(id);
       setRequisition(req);
@@ -79,6 +92,12 @@ export default function RequisitionDetailPage({ params }: PageProps) {
           (a, b) => new Date(a.received_at).getTime() - new Date(b.received_at).getTime()
         );
         setApplications(sorted);
+        try {
+          setReviewQueue(await api.getReviewQueue(id));
+        } catch (queueErr) {
+          console.warn("Could not load review queue:", queueErr);
+          setQueueError("Không tải được trạng thái rà soát CV.");
+        }
       } catch (err) {
         console.warn("Could not load applications:", err);
         setApplicationsLoadError("Không tải được danh sách hồ sơ. Thử lại trước khi tiếp tục.");
@@ -112,8 +131,38 @@ export default function RequisitionDetailPage({ params }: PageProps) {
   }
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("setup")) setActiveTab("jd_rubric");
     loadData();
   }, [id]);
+
+  useEffect(() => {
+    if (activeTab !== "comparison" || !canCompare) return;
+    let active = true;
+    setComparisonError(null);
+    api.getCandidateComparison(id)
+      .then((data) => { if (active) setComparison(data); })
+      .catch((err) => { if (active) setComparisonError(err.message || "Không tải được ma trận so sánh."); });
+    return () => { active = false; };
+  }, [activeTab, id, applications, canCompare]);
+
+  useEffect(() => {
+    if (!reviewQueue.some(item => ["reading", "analyzing"].includes(item.workflow_stage || ""))) return;
+    let active = true; let running = false;
+    const timer = window.setInterval(async () => {
+      if (running || document.visibilityState !== "visible") return; running = true;
+      try { const [queue, apps] = await Promise.all([api.getReviewQueue(id), api.listApplications(id)]); if (active) { setReviewQueue(queue); setApplications(apps); setQueueError(null); } }
+      catch { if (active) setQueueError("Không cập nhật được tiến độ. Thử làm mới danh sách."); } finally { running = false; }
+    }, 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [id, reviewQueue]);
+
+  const queueByApplication = new Map(reviewQueue.map((item) => [item.application_id, item]));
+  const displayedApplications = pendingOnly
+    ? applications.filter((item) => {
+        const queueItem = queueByApplication.get(item.id);
+        return queueItem && (queueItem.sanitized_status !== "approved" || queueItem.risk_flags.length > 0);
+      })
+    : applications;
 
   async function handleStatusChange(nextStatus: string) {
     if (!requisition) return;
@@ -124,7 +173,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
         { status: nextStatus, reason: `HR cập nhật trạng thái đợt tuyển dụng: ${nextStatus}` },
         requisition.row_version
       );
-      setRequisition(updated);
+      setRequisition((previous: any) => ({ ...previous, ...updated, my_role: previous?.my_role }));
       success(`Đã cập nhật trạng thái đợt tuyển dụng: ${nextStatus.toUpperCase()}`);
     } catch (err: any) {
       toastError(err.message || "Lỗi cập nhật trạng thái");
@@ -133,37 +182,6 @@ export default function RequisitionDetailPage({ params }: PageProps) {
     }
   }
 
-  async function handleUploadCV(e: React.FormEvent) {
-    e.preventDefault();
-    if (!uploadFile) {
-      setUploadError("Vui lòng chọn tệp CV (.pdf hoặc .docx)");
-      return;
-    }
-
-    if (uploadFile.size > 10 * 1024 * 1024) {
-      setUploadError("Tệp vượt quá giới hạn 10MB.");
-      return;
-    }
-
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const applicationId = createdApplicationId || (await api.createApplication(id)).id;
-      setCreatedApplicationId(applicationId);
-      await api.uploadDocument(applicationId, uploadFile);
-
-      setShowUploadModal(false);
-      setCreatedApplicationId(null);
-      setUploadFile(null);
-      success("Tiếp nhận hồ sơ CV thành công!");
-      await loadData();
-    } catch (err: any) {
-      setUploadError(err.message || "Tải lên hồ sơ thất bại");
-      toastError(err.message || "Tải lên hồ sơ thất bại");
-    } finally {
-      setUploading(false);
-    }
-  }
 
   async function handleCreateSeedRubric() {
     if (!requisition) return;
@@ -275,7 +293,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
         {/* Action Controls */}
         <div style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap", alignItems: "center" }}>
           <button type="button" className="btn btn-secondary" onClick={() => void loadData()}>Làm mới trạng thái</button>
-          {requisition.status === "draft" && (
+          {canManage && requisition.status === "draft" && (
             <button
               className="btn btn-primary"
               onClick={() => handleStatusChange("open")}
@@ -284,7 +302,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
               Mở Nhận Hồ Sơ
             </button>
           )}
-          {requisition.status === "open" && (
+          {canManage && requisition.status === "open" && (
             <button
               className="btn btn-secondary"
               onClick={() => handleStatusChange("paused")}
@@ -293,7 +311,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
               Tạm Dừng Tuyển
             </button>
           )}
-          {requisition.status === "paused" && (
+          {canManage && requisition.status === "paused" && (
             <button
               className="btn btn-primary"
               onClick={() => handleStatusChange("open")}
@@ -302,7 +320,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
               Tiếp Tục Mở Lại
             </button>
           )}
-          {requisition.status !== "closed" && (
+          {canManage && requisition.status !== "closed" && (
             <button
               className="btn btn-outline"
               onClick={() => setShowCloseModal(true)}
@@ -312,10 +330,10 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             </button>
           )}
 
-          <button className="btn btn-primary" onClick={() => setShowUploadModal(true)}>
+          {canManage && requisition.status === "open" && <button className="btn btn-primary" onClick={() => setShowUploadModal(true)}>
             <IconUpload size={16} />
             <span>Tiếp Nhận Hồ Sơ CV</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -333,7 +351,20 @@ export default function RequisitionDetailPage({ params }: PageProps) {
           onClick={() => setActiveTab("jd_rubric")}
         >
           <IconSparkles size={16} />
-          <span>Mô Tả Công Việc (JD) &amp; Rubric Tiêu Chí</span>
+          <span>Thiết lập JD, tiêu chí và câu hỏi</span>
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "comparison" ? "active" : ""}`}
+          onClick={() => setActiveTab("comparison")}
+          title={!canCompare ? "Chỉ Owner đợt tuyển dụng mới có quyền xem Ma trận so sánh" : undefined}
+        >
+          <IconUserCheck size={16} />
+          <span>Ma trận so sánh</span>
+          {!canCompare && (
+            <span className="badge badge-subtle" style={{ fontSize: "0.65rem", padding: "0.15rem 0.4rem", marginLeft: "0.35rem" }}>
+              Owner
+            </span>
+          )}
         </button>
       </div>
 
@@ -347,20 +378,37 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             </div>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
               <span className="badge badge-subtle">Tổng: {applicationsLoadError ? "—" : applications.length} hồ sơ</span>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(queueError)} onClick={() => setPendingOnly(!pendingOnly)}>
+                {pendingOnly ? "Hiện tất cả" : `Chờ rà soát (${reviewQueue.filter((item) => item.sanitized_status !== "approved" || item.risk_flags.length > 0).length})`}
+              </button>
             </div>
           </div>
+
+          <div className="workflow-actions"><label>Tìm mã hồ sơ<input className="form-input" value={search} onChange={e => setSearch(e.target.value)} placeholder="CAND-…" /></label><label>Lọc công việc<select className="form-input" value={stageFilter} onChange={e => setStageFilter(e.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(stageLabels).map(([stage,label]) => <option key={stage} value={stage}>{label}</option>)}</select></label><button className="btn btn-secondary" onClick={() => void loadData(true)}>Làm mới danh sách</button></div>
+          {queueError && <p role="alert" className="notice notice-error">{queueError}</p>}
 
           {applicationsLoadError ? (
             <div className="card" role="alert"><h3>Không tải được danh sách hồ sơ</h3><p className="muted">{applicationsLoadError}</p><button type="button" className="btn btn-secondary" onClick={() => void loadData()}>Thử lại</button></div>
           ) : applications.length === 0 ? (
-            <div className="card" style={{ padding: "2rem" }}>
-              <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-                <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.35rem" }}>Chưa có hồ sơ nào được tiếp nhận</h3>
-                <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-                  Kéo thả file CV vào khung bên dưới để tự động tạo hồ sơ ứng viên và khử định danh PII.
-                </p>
+            <div className="card" style={{ padding: "2.5rem 1.5rem", textAlign: "center" }}>
+              <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(56, 189, 248, 0.12)", color: "var(--accent-cyan)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
+                <IconUpload size={24} color="var(--accent-cyan)" />
               </div>
-              <BatchDropzone requisitionId={id} onUploadComplete={loadData} />
+              <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.35rem" }}>Chưa có hồ sơ nào được tiếp nhận</h3>
+              <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", maxWidth: "520px", margin: "0 auto 1.5rem auto", lineHeight: 1.6 }}>
+                Đợt tuyển dụng chưa có hồ sơ ứng viên. Bạn có thể kéo thả hàng loạt 10–50 tệp CV (PDF hoặc DOCX) để hệ thống tự động bóc tách và che thông tin định danh PII.
+              </p>
+              {canManage && requisition.status === "open" && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setShowUploadModal(true)}
+                  style={{ margin: "0 auto" }}
+                >
+                  <IconUpload size={16} />
+                  <span>Kéo thả / Tiếp nhận hồ sơ CV ngay</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="card" style={{ padding: "0.5rem" }}>
@@ -368,17 +416,16 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Mã Ẩn Danh (Public Label)</th>
+                      <th>Mã hồ sơ</th>
                       <th>Thời Gian Nộp (FIFO)</th>
                       <th>Trạng Thái Hồ Sơ</th>
-                      <th>Thế Hệ (Gen)</th>
-                      <th>Đánh giá AI</th>
-                      <th>Quyết Định Hội Đồng</th>
+                      <th>CV đã che / Cảnh báo</th>
+                      {!canReviewIndependently && <><th>Tiến độ công việc</th><th>Đánh giá AI</th><th>Quyết định HR</th></>}
                       <th style={{ textAlign: "right" }}>Thao Tác</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {applications.map((app, index) => (
+                    {displayedApplications.filter(app => app.public_label.toLowerCase().includes(search.trim().toLowerCase()) && (!stageFilter || queueByApplication.get(app.id)?.workflow_stage === stageFilter)).map((app, index) => (
                       <tr key={app.id}>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -399,15 +446,22 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                           </span>
                         </td>
                         <td>
+                          <span className={`badge ${queueByApplication.get(app.id)?.sanitized_status === "approved" ? "badge-open" : "badge-paused"}`}>
+                            {queueError ? "Chưa xác định" : queueByApplication.get(app.id)?.sanitized_status === "approved" ? "Đã rà soát" : queueByApplication.get(app.id)?.sanitized_status === "draft" ? "Chờ rà soát" : "Chưa sẵn sàng"}
+                          </span>
+                          {queueByApplication.get(app.id)?.risk_flags.includes("contact_data") && <small role="alert" style={{ display: "block", color: "var(--rose-text)" }}>Còn dấu hiệu thông tin liên hệ</small>}
+                          {queueByApplication.get(app.id)?.risk_flags.includes("parse_quality") && <small style={{ display: "block", color: "var(--rose-text)" }}>Cần kiểm tra chất lượng trích xuất</small>}
+                        </td>
+                        {!canReviewIndependently && <><td>
                           <span className="badge badge-subtle" style={{ fontFamily: "var(--font-mono)", fontSize: "0.725rem" }}>
-                            gen-{app.generation}
+                            {stageLabels[queueByApplication.get(app.id)?.workflow_stage || ""] || "Chưa xác định"}
                           </span>
                         </td>
                         <td>
                           {app.current_assessment_run_id ? (
                             <span className="badge badge-open">
                               <IconCheckCircle size={12} color="#34d399" />
-                              <span>Đã Có Bằng Chứng</span>
+                              <span>Có bản đánh giá</span>
                             </span>
                           ) : (
                             <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>Chưa chạy</span>
@@ -419,18 +473,66 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                           ) : (
                             <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>Chờ duyệt</span>
                           )}
-                        </td>
+                        </td></>}
                         <td style={{ textAlign: "right" }}>
-                          <Link href={`/applications/${app.id}`} className="btn btn-secondary btn-sm">
+                          {canReviewIndependently && <Link href={`/applications/${app.id}/independent-review`} className="btn btn-outline btn-sm" style={{ marginRight: "0.4rem" }}>
+                            Chấm độc lập
+                          </Link>}
+                          {!canReviewIndependently && <Link href={`/applications/${app.id}`} className="btn btn-secondary btn-sm">
                             <span>Không Gian Xét Duyệt</span>
                             <IconArrowRight size={14} />
-                          </Link>
+                          </Link>}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "comparison" && (
+        <div className="card" style={{ padding: "1.25rem" }}>
+          {!canCompare ? (
+            <div style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
+              <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(245, 158, 11, 0.12)", color: "var(--amber-text)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
+                <IconShield size={24} color="var(--amber-text)" />
+              </div>
+              <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.5rem" }}>
+                Quyền Xem Ma Trận So Sánh Ứng Viên
+              </h3>
+              <p style={{ color: "var(--text-secondary)", maxWidth: "540px", margin: "0 auto 1.25rem auto", fontSize: "0.875rem", lineHeight: 1.6 }}>
+                Bảng ma trận so sánh đa chiều và điểm xếp hạng được bảo vệ theo nguyên tắc phòng ngừa thiên kiến đối chiếu. Chỉ <strong>Chủ sở hữu đợt tuyển dụng (Owner)</strong> mới có quyền tổng hợp và đối chiếu toàn bộ ứng viên.
+              </p>
+              <div style={{ display: "inline-block", padding: "0.4rem 0.85rem", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                Vai trò hiện tại của bạn: <strong style={{ color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>{requisition.my_role?.toUpperCase() || "THÀNH VIÊN"}</strong>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h2>So sánh theo rubric hiện hành</h2>
+              <p className="muted">Chỉ Owner xem được bảng này. Điểm không đủ bằng chứng hoặc đánh giá đã cũ không được xếp hạng.</p>
+              {comparisonError ? <p role="alert" className="notice notice-error">{comparisonError}</p> : !comparison ? <p>Đang tải ma trận…</p> : (
+                <div className="table-wrapper">
+                  <table className="data-table">
+                    <thead><tr><th>Ứng viên</th>{comparison.criteria.map((criterion) => <th key={criterion.id}>{criterion.label}</th>)}<th>Độ phủ</th><th>Điểm so sánh</th><th>Trạng thái</th></tr></thead>
+                    <tbody>{comparison.candidates.map((candidate) => (
+                      <tr key={candidate.application_id}>
+                        <td><Link href={`/applications/${candidate.application_id}`}>{candidate.public_label}</Link></td>
+                        {comparison.criteria.map((criterion) => {
+                          const value = candidate.criteria[criterion.id];
+                          return <td key={criterion.id}>{value?.status === "assessed" && value.score !== null ? `${value.score}/4` : "Cần làm rõ"}</td>;
+                        })}
+                        <td>{candidate.coverage === null ? "—" : `${Math.round(candidate.coverage * 100)}%`}</td>
+                        <td>{candidate.comparable_score === null ? "Không so sánh" : `${candidate.comparable_score.toFixed(1)}/100`}</td>
+                        <td>{candidate.assessment_status === "succeeded" ? (candidate.recommendation || "Đã đánh giá") : "Chưa có đánh giá hiện hành"}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -481,6 +583,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             )}
           </div>
 
+          {requisition.current_rubric_version_id && <QuestionBankSetup rubricId={requisition.current_rubric_version_id} canManage={canCompare && requisition.status !== "closed"} />}
           {/* Rubric Card */}
           <div className="card">
             <div className="card-header" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
@@ -603,6 +706,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                 </div>
               </div>
               <button
+                disabled={uploadBusy}
                 onClick={() => setShowUploadModal(false)}
                 style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
                 aria-label="Đóng hộp thoại"
@@ -622,7 +726,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--accent-cyan)", fontWeight: 600, marginBottom: "0.2rem" }}>
                 <IconLock size={14} color="var(--accent-cyan)" />
-                <span>Khử định danh tự động (Zero-PII Pipeline)</span>
+                <span>Tự động che thông tin · HR cần rà soát</span>
               </div>
               Tất cả file được tiếp nhận vào hàng đợi xử lý độc lập. HR sẽ kiểm tra bản che trước khi kích hoạt đánh giá.
             </div>
@@ -630,14 +734,16 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             <BatchDropzone
               requisitionId={id}
               onUploadComplete={async () => {
-                await loadData();
+                await loadData(true);
               }}
+              onBusyChange={setUploadBusy}
               onClose={() => setShowUploadModal(false)}
             />
 
             <div className="modal-footer" style={{ marginTop: "1rem" }}>
               <button
                 type="button"
+                disabled={uploadBusy}
                 onClick={() => setShowUploadModal(false)}
                 className="btn btn-secondary"
               >

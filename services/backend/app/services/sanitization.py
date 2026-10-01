@@ -30,6 +30,7 @@ from app.services.audit import record_audit_event
 from app.services.sanitizer import (
     build_source_spans_from_canonical,
     normalize_text_nfc_lf,
+    residual_contact_types,
 )
 from app.services.storage import read_private_blob
 
@@ -316,7 +317,6 @@ async def edit_sanitized_version(
     doc = (await db.execute(stmt_doc)).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tài liệu không tồn tại.")
-
     await _verify_membership_and_grant(
         db=db,
         requisition_id=doc.application.requisition_id,
@@ -324,6 +324,15 @@ async def edit_sanitized_version(
         ctx=ctx,
         require_raw_grant=True,
     )
+    if doc.application.current_document_id != doc.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="DOCUMENT_STALE: Chỉ được sửa CV hiện hành.")
+
+    base_version = (await db.execute(select(SanitizedVersion).where(
+        SanitizedVersion.id == payload.base_version_id,
+        SanitizedVersion.document_id == doc.id,
+    ))).scalar_one_or_none()
+    if not base_version:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bản đã che nguồn không thuộc CV hiện hành.")
 
     # Normalize canonical text
     canonical_text = normalize_text_nfc_lf(payload.canonical_text)
@@ -419,6 +428,12 @@ async def approve_sanitized_version(
     )
 
     app_obj = v.application
+    if v.document_id != app_obj.current_document_id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="DOCUMENT_STALE: Chỉ được duyệt CV hiện hành.")
+    if v.status != SanitizedVersionStatus.DRAFT:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Chỉ được duyệt bản đã che ở trạng thái nháp.")
+    if not payload.acknowledged:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Cần xác nhận đã kiểm tra bản CV sau khi che thông tin.")
 
     # Invariant: Must match expected application row version
     if app_obj.row_version != payload.expected_application_version:
@@ -432,6 +447,12 @@ async def approve_sanitized_version(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="HASH_MISMATCH: SHA256 nội dung đã duyệt không khớp với nội dung lưu trữ.",
+        )
+
+    if residual_contact_types(v.canonical_text):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="RESIDUAL_CONTACT_DATA: Bản CV đã che vẫn chứa thông tin liên hệ; cần sửa trước khi duyệt.",
         )
 
     now = datetime.now(timezone.utc)
@@ -518,6 +539,7 @@ async def revoke_sanitized_version(
     # If this was the current active sanitized version, clear it
     if app_obj.current_sanitized_version_id == v.id:
         app_obj.current_sanitized_version_id = None
+        app_obj.current_assessment_run_id = None
 
     app_obj.generation += 1
     app_obj.row_version += 1

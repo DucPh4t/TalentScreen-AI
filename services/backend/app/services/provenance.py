@@ -165,7 +165,8 @@ async def get_source_span(
             RawAccessGrant.expires_at > now,
             RawAccessGrant.revoked_at.is_(None),
         )
-        if not (await db.execute(stmt_grant)).scalar_one_or_none():
+        grants = (await db.execute(stmt_grant)).scalars().all()
+        if not any("raw_cv" in grant.scopes for grant in grants):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Source Span thuộc phiên bản đã bị thu hồi (revoked); chỉ người có Raw Grant mới có quyền tra cứu.",

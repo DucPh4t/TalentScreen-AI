@@ -36,14 +36,31 @@ def test_pilot_env_requires_valid_pilot_stage():
     settings_shadow = Settings(
         APP_ENV="pilot",
         PILOT_STAGE="shadow",
+        SECRET_KEY="a" * 64,
+        APP_ORIGIN="https://talentscreen.example.edu",
     )
     assert settings_shadow.PILOT_STAGE == "shadow"
 
     settings_assisted = Settings(
         APP_ENV="pilot",
         PILOT_STAGE="assisted",
+        SECRET_KEY="a" * 64,
+        APP_ORIGIN="https://talentscreen.example.edu",
     )
     assert settings_assisted.PILOT_STAGE == "assisted"
+
+
+def test_pilot_rejects_insecure_deployment_configuration():
+    secure = dict(_env_file=None, APP_ENV="pilot", PILOT_STAGE="shadow",
+                  SECRET_KEY="a" * 64, APP_ORIGIN="https://hr.example.edu")
+    with pytest.raises(ValueError, match="non-default SECRET_KEY"):
+        Settings(**{**secure, "SECRET_KEY": "dev_secret_key"})
+    with pytest.raises(ValueError, match="HTTPS APP_ORIGIN"):
+        Settings(**{**secure, "APP_ORIGIN": "http://hr.example.edu"})
+    with pytest.raises(ValueError, match="without path"):
+        Settings(**{**secure, "APP_ORIGIN": "https://hr.example.edu/api"})
+    with pytest.raises(ValueError, match="REQUIRE_SANITIZED_APPROVAL"):
+        Settings(**{**secure, "REQUIRE_SANITIZED_APPROVAL": False})
 
 
 def test_sandbox_env_forbids_pilot_stage():

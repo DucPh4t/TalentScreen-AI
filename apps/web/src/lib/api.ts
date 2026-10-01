@@ -12,6 +12,7 @@ export interface UserAccount {
 }
 
 export interface RequisitionItem {
+  my_role?: "owner" | "admin" | "reviewer" | "recruiter";
   id: string;
   title: string;
   department?: string;
@@ -78,6 +79,46 @@ export interface ReviewWorkspaceData {
   latest_decision?: any;
 }
 
+export interface ReviewQueueItem {
+  application_id: string;
+  public_label: string;
+  received_at: string;
+  document_status: string;
+  sanitized_status: string;
+  risk_flags: string[];
+  assessment_available: boolean;
+  workflow_stage?: string;
+}
+
+export interface CandidateComparison {
+  rubric_version_id: string | null;
+  criteria: Array<{ id: string; label: string }>;
+  candidates: Array<{
+    application_id: string;
+    public_label: string;
+    assessment_status: string;
+    coverage: number | null;
+    observed_score: number | null;
+    comparable_score: number | null;
+    recommendation: string | null;
+    criteria: Record<string, { status: string; score: number | null }>;
+  }>;
+}
+
+export interface IndependentReviewContext {
+  requisition_id?: string;
+  application_id: string;
+  public_label: string;
+  application_generation: number;
+  document_id: string;
+  sanitized_version_id: string;
+  rubric_version_id: string;
+  sanitized_text: string;
+  criteria: Array<{ id: string; label: string; description: string; anchors: Record<string, unknown> }>;
+  already_submitted: boolean;
+  enforced_blind: boolean;
+}
+
 // Global CSRF token cache
 let cachedCsrfToken: string | null = null;
 const csrfStorageKey = "talentscreen_csrf_token";
@@ -136,7 +177,7 @@ async function apiRequest<T>(
     let errDetail = `HTTP ${res.status}: ${res.statusText}`;
     try {
       const errJson = await res.json();
-      errDetail = errJson.detail || errDetail;
+      errDetail = typeof errJson.detail === "string" ? errJson.detail : Array.isArray(errJson.detail) ? errJson.detail.map((item: { msg?: string }) => item.msg || "Dữ liệu chưa hợp lệ").join("; ") : errDetail;
     } catch {
       // ignore
     }
@@ -168,6 +209,7 @@ export const api = {
   async logout(): Promise<void> {
     await apiRequest<void>("/auth/logout", { method: "POST" });
     setCsrfToken("");
+    Object.keys(sessionStorage).filter(key => key.startsWith("ts-upload:")).forEach(key => sessionStorage.removeItem(key));
   },
 
   // Requisitions
@@ -238,23 +280,60 @@ export const api = {
     return apiRequest<ApplicationItem[]>(`/requisitions/${requisitionId}/applications`);
   },
 
+  async getReviewQueue(requisitionId: string): Promise<ReviewQueueItem[]> {
+    return apiRequest<ReviewQueueItem[]>(`/requisitions/${requisitionId}/review-queue`);
+  },
+
+  async getCandidateComparison(requisitionId: string): Promise<CandidateComparison> {
+    return apiRequest<CandidateComparison>(`/requisitions/${requisitionId}/comparison`);
+  },
+
+  async getIndependentReviewWorklist(requisitionId: string): Promise<Array<{ application_id: string; public_label: string; ready: boolean; submitted: boolean; received_at: string }>> {
+    return apiRequest(`/requisitions/${requisitionId}/independent-reviews/mine`);
+  },
+  async getIndependentReviewDraft(applicationId: string): Promise<any> { return apiRequest(`/applications/${applicationId}/independent-review/draft`); },
+  async saveIndependentReviewDraft(applicationId: string, payload: any): Promise<any> { return apiRequest(`/applications/${applicationId}/independent-review/draft`, { method: "PUT", body: JSON.stringify(payload) }); },
+  async getIndependentReviewContext(applicationId: string): Promise<IndependentReviewContext> {
+    return apiRequest<IndependentReviewContext>(`/applications/${applicationId}/independent-review/context`);
+  },
+
+  async submitIndependentReview(applicationId: string, payload: {
+    review_kind: "hr" | "it";
+    expected_generation: number;
+    expected_document_id: string;
+    expected_sanitized_version_id: string;
+    expected_rubric_version_id: string;
+    criterion_scores: Record<string, number | null>;
+    criterion_statuses: Record<string, "assessed" | "insufficient_evidence" | "conflicting_evidence">;
+    criterion_quotes: Record<string, string | null>;
+    criterion_notes: Record<string, string>;
+    recommendation: "consider_next_round" | "needs_clarification" | "review_required";
+  }): Promise<{ id: string; submitted_at: string; snapshot_hash: string }> {
+    return apiRequest(`/applications/${applicationId}/independent-review`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
   async getApplication(id: string): Promise<ApplicationItem> {
     return apiRequest<ApplicationItem>(`/applications/${id}`);
   },
 
-  async createApplication(requisitionId: string): Promise<ApplicationItem> {
+  async createApplication(requisitionId: string, idempotencyKey?: string): Promise<ApplicationItem> {
     return apiRequest<ApplicationItem>(`/requisitions/${requisitionId}/applications`, {
       method: "POST",
       body: JSON.stringify({}),
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     });
   },
 
-  async uploadDocument(applicationId: string, file: File): Promise<any> {
+  async uploadDocument(applicationId: string, file: File, idempotencyKey?: string): Promise<any> {
     const formData = new FormData();
     formData.append("file", file);
     return apiRequest<any>(`/applications/${applicationId}/documents`, {
       method: "POST",
       body: formData,
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     });
   },
 
@@ -328,6 +407,12 @@ export const api = {
     return apiRequest<AssessmentRunData>(`/applications/${applicationId}/assessments/${runId}`);
   },
 
+  async getApprovedSpans(applicationId: string): Promise<any[]> { return apiRequest(`/applications/${applicationId}/approved-spans`); },
+  async getSourceSpan(spanId: string): Promise<any> { return apiRequest(`/source-spans/${spanId}`); },
+  async updateHRRevision(revisionId: string, payload: any): Promise<any> { return apiRequest(`/hr-revisions/${revisionId}`, { method: "PUT", body: JSON.stringify(payload) }); },
+  async getApplicationProgress(applicationId: string): Promise<any> { return apiRequest(`/applications/${applicationId}/progress`); },
+  async askCopilot(applicationId: string, message: string): Promise<any> { return apiRequest(`/applications/${applicationId}/copilot`, { method: "POST", body: JSON.stringify({ message }) }); },
+
   // HR Revisions & Final Decision
   async listHRRevisions(applicationId: string): Promise<any[]> {
     return apiRequest<any[]>(`/applications/${applicationId}/hr-revisions`);
@@ -370,6 +455,12 @@ export const api = {
     return apiRequest<any[]>(`/rubrics/${rubricId}/interview-question-banks`);
   },
 
+  async createSeedQuestionBank(rubricId: string): Promise<any> {
+    return apiRequest<any>(`/rubrics/${rubricId}/interview-question-banks`, {
+      method: "POST", body: JSON.stringify({ source: "seed" }),
+    });
+  },
+
   async approveQuestionBank(bankId: string, expected_rubric_version_id: string): Promise<any> {
     return apiRequest<any>(`/interview-question-banks/${bankId}/approve`, {
       method: "POST",
@@ -389,6 +480,10 @@ export const api = {
 
   async getInterviewDraftDetail(draftId: string): Promise<any> {
     return apiRequest<any>(`/interview-drafts/${draftId}`);
+  },
+
+  async getLatestInterviewDraft(applicationId: string): Promise<any | null> {
+    return apiRequest<any | null>(`/applications/${applicationId}/interview-drafts/latest`);
   },
 
   async saveInterviewRevision(draftId: string, payload: any): Promise<any> {

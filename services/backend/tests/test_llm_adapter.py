@@ -6,11 +6,13 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import uuid
 import pytest
+from sqlalchemy import select, update
 from httpx import ASGITransport, AsyncClient
 
 from app.db.models import (
     Application,
     BudgetReservation,
+    BudgetPeriod,
     Candidate,
     Document,
     Job,
@@ -279,6 +281,53 @@ async def test_budget_ledger_atomic_reservation_and_outcome_unknown(test_session
 
 
 @pytest.mark.asyncio
+async def test_first_budget_period_is_shared_by_concurrent_workers(test_session_factory, monkeypatch):
+    async with test_session_factory() as session:
+        *_, job = await setup_llm_test_context(session)
+        job_id = job.id
+        await session.execute(update(BudgetPeriod).where(BudgetPeriod.scope == BudgetScope.DEVELOPMENT)
+                              .values(period_end=datetime.now(timezone.utc) - timedelta(seconds=1)))
+        await session.commit()
+
+    winner_committed = asyncio.Event()
+
+    async def reserve(wait_for_winner=False):
+        async with test_session_factory() as session:
+            if wait_for_winner:
+                execute = session.execute
+
+                async def delayed_lock(statement, *args, **kwargs):
+                    if "pg_advisory_xact_lock" in str(statement):
+                        await winner_committed.wait()
+                    return await execute(statement, *args, **kwargs)
+
+                monkeypatch.setattr(session, "execute", delayed_lock)
+            try:
+                reservation = await reserve_budget(session, job_id, Decimal("8"), BudgetScope.DEVELOPMENT)
+                await session.commit()
+                return reservation.id
+            except BudgetExceededError:
+                await session.rollback()
+                return None
+            finally:
+                if not wait_for_winner:
+                    winner_committed.set()
+    # The first caller enters earlier but acquires the lock after the second
+    # caller creates its period. A timestamp captured before locking is stale.
+    results = await asyncio.wait_for(asyncio.gather(reserve(True), reserve()), timeout=10)
+    admitted = [result for result in results if result is not None]
+    assert len(admitted) == 1
+    async with test_session_factory() as session:
+        # Repeated settlement must not charge the same completion twice.
+        await settle_budget(session, admitted[0], Decimal("1"))
+        await settle_budget(session, admitted[0], Decimal("1"))
+        period = await get_or_create_active_budget_period(session, BudgetScope.DEVELOPMENT)
+        assert period.spent_usd == Decimal("1")
+        assert period.reserved_usd == Decimal("0")
+        await session.commit()
+
+
+@pytest.mark.asyncio
 async def test_bounded_orchestrator_preconditions(test_session_factory):
     """Test attempt bounding (max 2/stage, max 4/run) and unapproved CV egress block."""
     unapproved_version_id = uuid.uuid4()
@@ -324,6 +373,22 @@ async def test_bounded_orchestrator_preconditions(test_session_factory):
                 stage_attempt_no=1,
             )
         assert "CANNOT_EGRESS_UNAPPROVED_CV" in str(exc_info.value)
+
+    # A legacy or manually altered APPROVED version must still be blocked at egress.
+    async with test_session_factory() as session:
+        version = await session.get(SanitizedVersion, approved_version_id)
+        version.canonical_text = "Python developer. Contact: 0912 345 678."
+        await session.commit()
+    async with test_session_factory() as session:
+        with pytest.raises(PreconditionViolationError) as exc_info:
+            await verify_llm_preconditions(
+                session,
+                job_id=job_id,
+                task_kind="assessment",
+                sanitized_version_id=approved_version_id,
+                stage_attempt_no=1,
+            )
+        assert "RESIDUAL_CONTACT_DATA" in str(exc_info.value)
 
     # 2. Stage attempt > 2 -> MUST FAIL
     async with test_session_factory() as session:

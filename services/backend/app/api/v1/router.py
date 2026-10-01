@@ -1,6 +1,8 @@
 """API v1 router for TalentScreen AI."""
 from datetime import datetime, timezone
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.domain.authorization import require_role
+from app.domain.enums import AccountRole
 from app.config import get_settings
 from app.api.v1.admin import router as admin_router
 from app.api.v1.assessment import router as assessment_router
@@ -15,6 +17,9 @@ from app.api.v1.onboarding import router as onboarding_router
 from app.api.v1.requisitions import router as requisitions_router
 from app.api.v1.rubrics import router as rubrics_router
 from app.api.v1.sanitization import router as sanitization_router
+from app.api.v1.workflow import router as workflow_router
+from app.api.v1.independent_review import router as independent_review_router
+from app.api.v1.copilot import router as copilot_router
 
 router = APIRouter(prefix="/v1")
 router.include_router(auth_router)
@@ -23,6 +28,9 @@ router.include_router(rubrics_router)
 router.include_router(intake_router)
 router.include_router(jobs_router)
 router.include_router(sanitization_router)
+router.include_router(workflow_router)
+router.include_router(independent_review_router)
+router.include_router(copilot_router)
 router.include_router(llm_router)
 router.include_router(assessment_router)
 router.include_router(decision_router)
@@ -47,7 +55,7 @@ async def health_check():
     }
 
 
-@router.get("/config/diagnostic", tags=["System"])
+@router.get("/config/diagnostic", tags=["System"], dependencies=[Depends(require_role(AccountRole.ADMIN))])
 async def diagnostic_config():
     """Diagnostic configuration endpoint returning redacted settings."""
     settings = get_settings()

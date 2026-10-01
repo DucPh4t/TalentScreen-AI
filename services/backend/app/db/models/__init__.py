@@ -37,6 +37,7 @@ from app.db.models.decision import (
     ReviewAttestation,
     Decision,
 )
+from app.db.models.independent_review import IndependentReview, IndependentReviewDraft
 from app.db.models.interview import (
     InterviewQuestionBank,
     InterviewDraft,
@@ -80,6 +81,8 @@ __all__ = [
     "CriterionEvidence",
     "HRRevision",
     "ReviewAttestation",
+    "IndependentReview",
+    "IndependentReviewDraft",
     "Decision",
     "InterviewQuestionBank",
     "InterviewDraft",

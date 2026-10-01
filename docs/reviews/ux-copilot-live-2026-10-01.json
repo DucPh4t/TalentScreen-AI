@@ -1,0 +1,28 @@
+{
+  "synthetic_only": true,
+  "external_attempts_requested": 1,
+  "http_status": 200,
+  "latency_seconds": 1.04,
+  "provider": "deepseek",
+  "mode": "questions",
+  "criterion_ids": [
+    "python_backend"
+  ],
+  "questions_count": 1,
+  "prompt_version": "copilot-select-v1",
+  "total_external_test_calls": 2,
+  "first_attempt": {
+    "http_status": 503,
+    "latency_seconds": 4.587,
+    "ledger_status": "outcome_unknown",
+    "reserved_usd": "0.00052170",
+    "automatic_retry": false
+  },
+  "final_usage": {
+    "model": "deepseek-flash",
+    "input_tokens": 467,
+    "output_tokens": 17,
+    "estimated_peak_cost_usd": "0.00016050",
+    "rate_card_version": "deepseek-2026-09-26-peak"
+  }
+}

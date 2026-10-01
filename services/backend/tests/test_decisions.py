@@ -638,6 +638,49 @@ async def test_technical_information_request_basis(test_session_factory, sample_
 
 
 @pytest.mark.asyncio
+async def test_decision_rejects_attestation_after_application_changes(test_session_factory, sample_docx_cv):
+    async with test_session_factory() as session:
+        ctx = await setup_test_context(session, sample_docx_cv)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies={SESSION_COOKIE_NAME: ctx["o_token"]},
+        headers={"X-CSRF-Token": ctx["o_csrf"]},
+    ) as client:
+        att = await client.post(
+            f"/api/v1/applications/{ctx['app_id']}/review-attestations",
+            json={
+                "decision_basis": "technical_information_request",
+                "document_id": str(ctx["doc_id"]),
+                "expected_document_sha256": "c" * 64,
+                "failure_ref": {"kind": "document", "id": str(ctx["doc_id"])},
+                "technical_failure_code": "OCR_QUALITY_FAILED",
+                "reviewed_criterion_ids": [],
+                "acknowledged": True,
+            },
+        )
+        assert att.status_code == 201
+
+        async with test_session_factory() as session:
+            application = await session.get(Application, ctx["app_id"])
+            application.generation += 1
+            await session.commit()
+
+        decision = await client.post(
+            f"/api/v1/applications/{ctx['app_id']}/decisions",
+            json={
+                "decision_basis": "technical_information_request",
+                "outcome": "request_information",
+                "reason": "Yêu cầu ứng viên cung cấp lại tài liệu để đối chiếu.",
+                "attestation_id": att.json()["id"],
+            },
+        )
+        assert decision.status_code == 409
+        assert "ATTESTATION_STALE" in decision.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_manual_document_review_with_raw_grant(test_session_factory, sample_docx_cv):
     """Manual document review requires active raw_cv grant and override reason."""
     async with test_session_factory() as session:

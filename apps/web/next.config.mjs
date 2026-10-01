@@ -2,6 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   devIndicators: false,
+  // Keep dev assets separate from production builds. Running `next build` while
+  // the local dev server is open must not replace CSS/JS referenced by that server.
+  distDir: process.env.NODE_ENV === 'development' ? '.next-dev' : '.next',
   async rewrites() {
     return [
       {

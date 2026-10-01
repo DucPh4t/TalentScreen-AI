@@ -106,6 +106,14 @@ async def create_assessment_run(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="CANNOT_EGRESS_UNAPPROVED_CV: Bản sanitized phải được HR phê duyệt (APPROVED) trước khi thực hiện đánh giá.",
         )
+    if (
+        sanitized.document_id != app_obj.current_document_id
+        or sanitized.id != app_obj.current_sanitized_version_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="ASSESSMENT_INPUT_STALE: Chỉ được chấm bản CV đã che hiện hành của hồ sơ.",
+        )
 
     # Rubric check: MUST BE APPROVED
     stmt_r = select(RubricVersion).where(RubricVersion.id == payload.rubric_version_id)
@@ -114,6 +122,11 @@ async def create_assessment_run(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Rubric phải ở trạng thái APPROVED.",
+        )
+    if rubric.id != app_obj.requisition.current_rubric_version_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="ASSESSMENT_INPUT_STALE: Chỉ được chấm theo rubric hiện hành của đợt tuyển dụng.",
         )
 
     # Next run number
@@ -212,17 +225,34 @@ async def execute_assessment_job(
     await db.flush()
 
     # SEC-10 Initial Tombstone / Deletion check
-    stmt_app_check = select(Application.status, Application.generation).where(Application.id == run.application_id)
+    stmt_app_check = (
+        select(
+            Application.status,
+            Application.generation,
+            Application.current_document_id,
+            Application.current_sanitized_version_id,
+            Requisition.current_rubric_version_id,
+        )
+        .join(Requisition, Requisition.id == Application.requisition_id)
+        .where(Application.id == run.application_id)
+    )
     app_check = (await db.execute(stmt_app_check)).first()
-    if not app_check or app_check[0] == "deleted" or app_check[1] > run.application.generation:
-        logger.warning(f"Application {run.application_id} is deleted or generation bumped. Aborting assessment.")
+    if (
+        not app_check
+        or app_check[0] == "deleted"
+        or app_check[1] != run.application_generation
+        or app_check[2] != run.document_id
+        or app_check[3] != run.sanitized_version_id
+        or app_check[4] != run.rubric_version_id
+    ):
+        logger.warning("Assessment %s input snapshot is stale before model call.", run.id)
         run.status = "failed"
-        run.failure_code = "APPLICATION_TOMBSTONED"
+        run.failure_code = "APPLICATION_TOMBSTONED" if not app_check or app_check[0] == "deleted" else "ASSESSMENT_INPUT_STALE"
         run.completed_at = now
         await db.flush()
         return
 
-    # 2. Load Rubric criteria and Sanitized Source Spans
+    # 2. Load Rubric criteria, policy, and Sanitized Source Spans
     stmt_crit = (
         select(RubricCriterion)
         .where(RubricCriterion.rubric_version_id == run.rubric_version_id)
@@ -230,6 +260,9 @@ async def execute_assessment_job(
     )
     rubric_criteria = (await db.execute(stmt_crit)).scalars().all()
     weights_by_id = {c.criterion_id: c.weight for c in rubric_criteria}
+
+    stmt_rubric = select(RubricVersion).where(RubricVersion.id == run.rubric_version_id)
+    rubric_ver = (await db.execute(stmt_rubric)).scalar_one_or_none()
 
     stmt_spans = (
         select(SourceSpan)
@@ -294,20 +327,37 @@ async def execute_assessment_job(
         return
 
     # SEC-10 Late Arrival / Deletion Check
-    stmt_app_check = select(Application.status, Application.generation).where(Application.id == run.application_id)
     app_check = (await db.execute(stmt_app_check)).first()
-    if not app_check or app_check[0] == "deleted" or app_check[1] > run.application.generation:
-        logger.warning(f"Application {run.application_id} was deleted or generation incremented during LLM call. Discarding output.")
+    if (
+        not app_check
+        or app_check[0] == "deleted"
+        or app_check[1] != run.application_generation
+        or app_check[2] != run.document_id
+        or app_check[3] != run.sanitized_version_id
+        or app_check[4] != run.rubric_version_id
+    ):
+        logger.warning("Assessment %s input snapshot changed during model call; discarding output.", run.id)
         run.status = "failed"
-        run.failure_code = "APPLICATION_TOMBSTONED"
+        run.failure_code = "APPLICATION_TOMBSTONED" if not app_check or app_check[0] == "deleted" else "ASSESSMENT_INPUT_STALE"
         run.completed_at = datetime.now(timezone.utc)
         await db.flush()
         return
 
     # 5. Deterministic Scoring
+    threshold_val = Decimal("70.0")
+    core_mins = None
+    if rubric_ver and rubric_ver.threshold_config:
+        cfg = rubric_ver.threshold_config
+        if "threshold" in cfg:
+            threshold_val = Decimal(str(cfg["threshold"]))
+        if "core_minimum_scores" in cfg and isinstance(cfg["core_minimum_scores"], dict):
+            core_mins = cfg["core_minimum_scores"]
+
     obs_score, coverage, comp_score, rec, reasons = calculate_deterministic_scores(
         evaluations=validated_output.criteria,
         rubric_weights=weights_by_id,
+        threshold=threshold_val,
+        core_minimum_scores=core_mins,
     )
 
     run.observed_score = float(obs_score) if obs_score is not None else None
@@ -392,6 +442,18 @@ async def get_assessment_run_detail(
     mem = (await db.execute(stmt_mem)).scalar_one_or_none()
     if not is_admin and not mem:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Không có quyền truy cập kết quả này.")
+
+    from app.api.v1.independent_review import enforce_shadow_blind
+    await enforce_shadow_blind(db, run.application, ctx)
+
+    version_status = (await db.execute(
+        select(SanitizedVersion.status).where(SanitizedVersion.id == run.sanitized_version_id)
+    )).scalar_one_or_none()
+    if version_status == SanitizedVersionStatus.REVOKED:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="ASSESSMENT_QUARANTINED: Kết quả dùng bản CV đã che bị thu hồi; không được sử dụng để quyết định.",
+        )
 
     # Group evidence by criterion_id
     evidence_by_crit: dict[str, list[CriterionEvidenceResponse]] = {}

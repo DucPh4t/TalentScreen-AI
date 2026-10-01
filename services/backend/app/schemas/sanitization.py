@@ -39,7 +39,7 @@ class SanitizedEditRequest(BaseModel):
 class SanitizedApproveRequest(BaseModel):
     expected_application_version: int
     expected_sha256: str = Field(min_length=64, max_length=64, description="SHA256 của canonical_text để kiểm tra tính toàn vẹn")
-    acknowledged: bool = Field(default=True, description="Xác nhận đã rà soát trước khi cho phép AI xử lý")
+    acknowledged: bool = Field(description="Xác nhận đã rà soát trước khi cho phép AI xử lý")
 
 
 class SanitizedRevokeRequest(BaseModel):

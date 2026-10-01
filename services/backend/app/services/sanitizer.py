@@ -34,7 +34,7 @@ ROLE_HEADER_WORDS = {
 
 # Regex patterns for contact and demographic attributes
 PHONE_REGEX = re.compile(
-    r"(?:\+?84|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9[0-9])[\s.-]?\d{3}[\s.-]?\d{4}\b"
+    r"(?<!\w)(?:\+?84[\s().-]*|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9[0-9])(?:[\s().-]*\d){7}(?!\d)"
     r"|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b"
     r"|(?<!\w)\+[1-9]\d{0,2}(?:[ \t().-]*\d){7,12}\b",
     re.IGNORECASE,
@@ -50,6 +50,19 @@ URL_SOCIAL_REGEX = re.compile(
     r"|\b(?:linkedin\.com/in/|github\.com/|facebook\.com/)[^\s<>'\"`]+\b",
     re.IGNORECASE,
 )
+
+
+def residual_contact_types(text: str) -> list[str]:
+    """Return contact-data categories still present after sanitization, without values."""
+    found = []
+    for category, pattern in (
+        ("phone", PHONE_REGEX),
+        ("email", EMAIL_REGEX),
+        ("url", URL_SOCIAL_REGEX),
+    ):
+        if pattern.search(text):
+            found.append(category)
+    return found
 
 DOB_AGE_REGEX = re.compile(
     r"(?:ngày\s*sinh|dob|date\s*of\s*birth|birthdate|sinh\s*ngày|năm\s*sinh)[\s:]*([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{4}|[0-9]{4})"

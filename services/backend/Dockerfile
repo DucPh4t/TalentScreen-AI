@@ -9,9 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
+COPY services/backend/pyproject.toml services/backend/README.md ./
+COPY services/backend/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir --upgrade pip uv \
-    && uv pip install --system --no-cache .
+    && uv pip install --system --no-cache -r requirements.lock
+COPY services/backend/app ./app
+RUN uv pip install --system --no-cache --no-deps .
 
 # Production Runtime Stage
 FROM python:3.12-slim AS runner
@@ -38,9 +41,11 @@ RUN groupadd -g 10001 appgroup && \
     useradd -u 10001 -g appgroup -s /bin/bash -m appuser
 
 # Copy application source and migrations
-COPY app ./app
-COPY alembic ./alembic
-COPY alembic.ini pyproject.toml ./
+COPY services/backend/app ./services/backend/app
+COPY services/backend/alembic ./services/backend/alembic
+COPY alembic.ini ./
+COPY talentscreen-mvp-plan/examples ./talentscreen-mvp-plan/examples
+ENV PYTHONPATH=/app/services/backend
 
 # Ensure storage directory exists and owned by appuser
 RUN mkdir -p /app/private_storage && chown -R appuser:appgroup /app

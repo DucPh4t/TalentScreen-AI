@@ -352,6 +352,8 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
         )
         session.add(rubric)
         await session.flush()
+        req.current_rubric_version_id = rubric.id
+        await session.flush()
 
         for cid in CriterionId:
             crit = RubricCriterion(

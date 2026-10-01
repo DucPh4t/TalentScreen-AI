@@ -39,6 +39,7 @@ from app.domain.enums import (
     MembershipRole,
     RequisitionStatus,
     RubricStatus,
+    SanitizedVersionStatus,
 )
 from app.domain.rubric_policy import scan_forbidden_criteria
 from app.schemas.decision import EffectiveResultRef
@@ -62,8 +63,10 @@ from app.services.interview_prompts import (
     build_interview_user_prompt,
     validate_interview_output,
 )
-from app.services.llm.provider import BaseLLMProvider, get_llm_provider
+from app.services.llm.provider import BaseLLMProvider
 from app.services.llm.types import CompletionRequest
+from app.services.llm.orchestrator import execute_bounded_llm_call
+from app.services.sanitizer import residual_contact_types
 
 logger = logging.getLogger(__name__)
 
@@ -520,6 +523,23 @@ async def execute_interview_job(
     bank = draft.bank
     snapshot = draft.source_snapshot
 
+    sanitized_id = uuid.UUID(snapshot["sanitized_version_id"])
+    version = (await db.execute(
+        select(SanitizedVersion).where(SanitizedVersion.id == sanitized_id)
+    )).scalar_one_or_none()
+    if (
+        app_obj.status != "active"
+        or app_obj.generation != snapshot.get("application_generation")
+        or app_obj.current_document_id != uuid.UUID(snapshot["document_id"])
+        or app_obj.current_sanitized_version_id != sanitized_id
+        or not version
+        or version.status != SanitizedVersionStatus.APPROVED
+        or residual_contact_types(version.canonical_text)
+    ):
+        draft.status = "failed"
+        await db.flush()
+        return
+
     # 1. Load rubric criteria
     rubric_id = uuid.UUID(snapshot["rubric_version_id"])
     stmt_crit = select(RubricCriterion).where(RubricCriterion.rubric_version_id == rubric_id)
@@ -559,7 +579,6 @@ async def execute_interview_job(
         assessment_data = hr_rev.criteria_payload.get("criteria", [])
 
     # 4. Load allowed source spans
-    sanitized_id = uuid.UUID(snapshot["sanitized_version_id"])
     stmt_spans = select(SourceSpan).where(SourceSpan.sanitized_version_id == sanitized_id)
     spans = (await db.execute(stmt_spans)).scalars().all()
     valid_span_ids = {s.span_id for s in spans}
@@ -568,16 +587,20 @@ async def execute_interview_job(
     sys_prompt = build_interview_system_prompt()
     user_prompt = build_interview_user_prompt(rubric_data, core_questions, assessment_data, spans)
 
-    provider = provider_override or get_llm_provider()
-
     # Attempt 1
-    llm_resp = await provider.complete(
-        CompletionRequest(
+    llm_resp = await execute_bounded_llm_call(
+        db=db,
+        job_id=job_id,
+        logical_step="interview_attempt_1",
+        attempt_no=1,
+        sanitized_version_id=sanitized_id,
+        provider_override=provider_override,
+        request=CompletionRequest(
             task_kind="interview",
             system_prompt=sys_prompt,
             user_prompt=user_prompt,
             temperature=0.2,
-        )
+        ),
     )
 
     validated_output = None
@@ -587,13 +610,19 @@ async def execute_interview_job(
         logger.warning(f"Interview attempt 1 failed validation: {e}. Executing bounded repair attempt 2.")
         # Attempt 2 Bounded Repair
         repair_user_prompt = build_interview_repair_prompt(user_prompt, e.errors)
-        llm_resp2 = await provider.complete(
-            CompletionRequest(
+        llm_resp2 = await execute_bounded_llm_call(
+            db=db,
+            job_id=job_id,
+            logical_step="interview_attempt_2",
+            attempt_no=2,
+            sanitized_version_id=sanitized_id,
+            provider_override=provider_override,
+            request=CompletionRequest(
                 task_kind="repair",
                 system_prompt=sys_prompt,
                 user_prompt=repair_user_prompt,
                 temperature=0.0,
-            )
+            ),
         )
         validated_output = validate_interview_output(llm_resp2.content, valid_span_ids)
 
@@ -645,6 +674,19 @@ async def get_interview_draft_detail(
 
     from app.services.decision import _verify_application_and_membership
     await _verify_application_and_membership(db, draft.application_id, ctx)
+    from app.api.v1.independent_review import enforce_shadow_blind
+    await enforce_shadow_blind(db, draft.application, ctx)
+
+    version_status = (await db.execute(
+        select(SanitizedVersion.status).where(
+            SanitizedVersion.id == uuid.UUID(draft.source_snapshot["sanitized_version_id"])
+        )
+    )).scalar_one_or_none()
+    if version_status == SanitizedVersionStatus.REVOKED:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="INTERVIEW_QUARANTINED: Câu hỏi dùng CV đã che bị thu hồi.",
+        )
 
     core_q_list = draft.bank.questions_payload.get("questions", [])
     ai_followups_list = (draft.questions_payload or {}).get("followups", [])
@@ -695,6 +737,25 @@ async def get_interview_draft_detail(
         stale_reasons=stale_reasons,
         created_at=draft.created_at,
     )
+
+
+async def get_latest_interview_draft(
+    db: AsyncSession,
+    application_id: uuid.UUID,
+    ctx: AuthenticatedContext,
+) -> Optional[InterviewDraftResponse]:
+    """Return the most recent visible draft for an application, including after page reload."""
+    from app.services.decision import _verify_application_and_membership
+    await _verify_application_and_membership(db, application_id, ctx, require_open=False)
+    draft_id = (await db.execute(
+        select(InterviewDraft.id)
+        .where(InterviewDraft.application_id == application_id)
+        .order_by(InterviewDraft.created_at.desc(), InterviewDraft.id.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+    if draft_id is None:
+        return None
+    return await get_interview_draft_detail(db, draft_id, ctx)
 
 
 async def create_interview_revision(
@@ -811,6 +872,9 @@ async def list_interview_revisions(
 
     from app.services.decision import _verify_application_and_membership
     await _verify_application_and_membership(db, draft.application_id, ctx)
+    application = await db.get(Application, draft.application_id)
+    from app.api.v1.independent_review import enforce_shadow_blind
+    await enforce_shadow_blind(db, application, ctx)
 
     stmt = (
         select(InterviewRevision)

@@ -29,6 +29,7 @@ from app.services.llm.exceptions import (
 from app.services.llm.ledger import reserve_budget, settle_budget
 from app.services.llm.provider import BaseLLMProvider, get_llm_provider
 from app.services.llm.types import CompletionRequest, CompletionResult
+from app.services.sanitizer import residual_contact_types
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +69,17 @@ async def verify_llm_preconditions(
             f"MAX_RUN_EXTERNAL_CALLS_EXCEEDED: Total external calls ({total_calls}) reached run limit of {MAX_EXTERNAL_CALLS_PER_RUN}."
         )
 
-    # Invariant 3: Sanitized version must be APPROVED before assessment egress
-    if task_kind == "assessment" and sanitized_version_id:
+    # Invariant 3: Every candidate-derived prompt needs an approved, contact-free source.
+    if sanitized_version_id:
         stmt_v = select(SanitizedVersion).where(SanitizedVersion.id == sanitized_version_id)
         version = (await db.execute(stmt_v)).scalar_one_or_none()
         if not version or version.status != SanitizedVersionStatus.APPROVED:
             raise PreconditionViolationError(
                 "CANNOT_EGRESS_UNAPPROVED_CV: Bản sanitized phải được HR duyệt (APPROVED) trước khi gửi ra mô hình AI ngoài."
+            )
+        if residual_contact_types(version.canonical_text):
+            raise PreconditionViolationError(
+                "RESIDUAL_CONTACT_DATA: Bản sanitized vẫn chứa thông tin liên hệ; chặn gửi ra mô hình AI ngoài."
             )
 
 

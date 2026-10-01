@@ -88,6 +88,14 @@ class MockLLMProvider(BaseLLMProvider):
         # a real provider. It deliberately assigns no scores or fabricated quotes.
         if self.custom_content is not None:
             content = self.custom_content
+        elif request.task_kind == "copilot":
+            context = json.loads(request.user_prompt)
+            question = context["question"].lower()
+            mode = "questions" if "câu hỏi" in question else "missing" if "thiếu" in question else "explain"
+            matches = [fact["criterion_id"] for fact in context["facts"] if fact["criterion_id"].split("_")[0] in question]
+            content = json.dumps({"mode": mode, "criterion_ids": matches or [fact["criterion_id"] for fact in context["facts"]][:3]})
+        elif request.task_kind == "interview":
+            content = json.dumps({"followups": []})
         elif request.task_kind == "assessment":
             from app.schemas.assessment import CANONICAL_CRITERIA_SET
 

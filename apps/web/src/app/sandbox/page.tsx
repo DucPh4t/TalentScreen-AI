@@ -77,7 +77,8 @@ const FALLBACK_SCENARIOS: Scenario[] = [
     ai_preliminary_assessment: {
       criterion_id: "security_privacy",
       criterion_label: "Bảo Mật & Quyền Riêng Tư",
-      ai_score: 1,
+      ai_score: null,
+      status: "insufficient_evidence",
       evidence_quote: "Hiểu biết về bảo mật hệ thống và OWASP Top 10.",
       span_id: "spn_sandbox_02_sec",
       provenance_hash: "sha256:2c624232cdd221771294dfbb310aca000a0df6ec8b660466192ac11425b4fa66",
@@ -96,8 +97,8 @@ const FALLBACK_SCENARIOS: Scenario[] = [
     id: "scenario_3_hr_override",
     title: "Tình huống 3: Ghi Đè Đánh Giá (HR Revision Override)",
     category: "human_override",
-    learning_objective: "Thực hành quyền can thiệp của con người: Khi phát hiện AI đánh giá khắt khe hoặc bỏ sót dự án mã nguồn mở uy tín, HR điều chỉnh điểm và ghi rõ lý do bắt buộc.",
-    description: "AI chỉ chấm 1/4 cho tiêu chí API Design vì CV dùng từ 'Microservices RPC nội bộ', nhưng HR qua phỏng vấn sơ bộ biết ứng viên là maintainer của một framework mã nguồn mở.",
+    learning_objective: "Thực hành quyền can thiệp của con người: Khi phát hiện AI bỏ sót đóng góp kỹ thuật có bằng chứng, HR đối chiếu nguồn rồi điều chỉnh kèm lý do.",
+    description: "AI chỉ chấm 1/4 cho tiêu chí API Design dù hồ sơ có mô tả rõ phần ứng viên trực tiếp thiết kế và kiểm thử giao diện gRPC/Protobuf.",
     candidate_profile: {
       public_label: "SANDBOX-CAND-03",
       experience_summary: "5 năm chuyên sâu kiến trúc hệ thống phân tán và protocol thiết kế.",
@@ -113,8 +114,8 @@ const FALLBACK_SCENARIOS: Scenario[] = [
       missing_info: ["CV không đề cập REST OpenAPI spec."],
     },
     instructions: [
-      "1. Nhập điểm mới điều chỉnh: 3 (Thành thạo kiến trúc API gRPC/Protobuf hiệu năng cao).",
-      "2. Nhập lý do ghi đè bắt buộc (tối thiểu 10 ký tự, không chứa thuộc tính nhân khẩu học).",
+      "1. Đối chiếu đoạn CV mô tả tác vụ cá nhân với anchor của rubric trước khi chỉnh điểm.",
+      "2. Nhập điểm điều chỉnh và lý do có dẫn nguồn; không dùng danh tiếng dự án hay thuộc tính nhân khẩu học.",
       "3. Bấm 'Ghi Đè & Tính Lại Điểm' để xác thực điểm số chuẩn hóa cập nhật tự động.",
     ],
   },
@@ -138,14 +139,14 @@ const FALLBACK_SCENARIOS: Scenario[] = [
     instructions: [
       "1. Đọc biên bản cam kết thẩm định (ReviewAttestation) và snapshot hash.",
       "2. Chọn quyết định tuyển dụng: 'advance' (Chuyển sang phỏng vấn kỹ thuật).",
-      "3. Ký số điện tử và lưu quyết định bất biến.",
+      "3. Xác nhận cam kết và lưu quyết định có dấu vết kiểm toán.",
     ],
   },
   {
     id: "scenario_5_audit_trail",
     title: "Tình huống 5: Kiểm Tra Dấu Vết Kiểm Toán (Audit Trail)",
     category: "audit_trace",
-    learning_objective: "Đảm bảo tính giải trình và minh bạch: Mọi thao tác xem, sửa, phê duyệt đều được ghi nhận vào sổ cái kiểm toán bất biến với timestamp UTC và actor ID.",
+    learning_objective: "Đảm bảo tính giải trình: các thao tác chính được ghi vào audit log chỉ-ghi-thêm ở tầng ứng dụng với thời gian UTC và actor ID.",
     description: "Xem lại toàn bộ lịch sử chuỗi sự kiện kiểm toán từ lúc tiếp nhận hồ sơ, làm sạch PII, chạy AI, HR ghi đè đến khi ký quyết định cuối cùng.",
     candidate_profile: {
       public_label: "SANDBOX-CAND-05",
@@ -154,7 +155,7 @@ const FALLBACK_SCENARIOS: Scenario[] = [
     },
     ai_preliminary_assessment: {
       audit_events_count: 5,
-      tamper_evident: true,
+      tamper_evident: false,
     },
     instructions: [
       "1. Xem dòng thời gian kiểm toán và xác nhận mã băm bảo toàn chuỗi.",
@@ -690,7 +691,7 @@ export default function SandboxPage() {
                   gap: "0.45rem"
                 }}>
                   <IconShield size={16} color="var(--accent-cyan)" />
-                  <span>Cam kết bảo mật: Zero Demographics, Không lưu PII trong Audit Log, Chuỗi sự kiện bất biến.</span>
+                  <span>Kiểm soát cần rà: không dùng thuộc tính nhạy cảm để chấm, không lưu PII trong audit log, ghi sự kiện chỉ-ghi-thêm ở tầng ứng dụng.</span>
                 </div>
 
                 <button
@@ -724,7 +725,7 @@ export default function SandboxPage() {
                   <span>CHÚC MỪNG: BẠN ĐÃ HOÀN THÀNH HUẤN LUYỆN HR ONBOARDING!</span>
                 </div>
                 <p style={{ color: "#cbd5e1", fontSize: "0.875rem", maxWidth: "560px", margin: "0 auto 1.25rem auto", lineHeight: 1.6 }}>
-                  Bạn đã nắm vững toàn bộ 5 nguyên tắc bất biến của hệ thống TalentScreen AI. Bây giờ bạn hoàn toàn sẵn sàng thẩm định các đợt tuyển dụng thực tế.
+                  Bạn đã hoàn thành 5 tình huống tập huấn. Trước khi dùng trên đợt thật, HR vẫn cần duyệt JD/rubric và thực hành đối chiếu bằng chứng với hồ sơ thực tế.
                 </p>
                 <Link href="/requisitions" className="btn btn-primary">
                   <span>Mở Workspace Đợt Tuyển Dụng Thật</span>

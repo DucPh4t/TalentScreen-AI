@@ -49,6 +49,7 @@ htmlcov/
 # Node & Next.js
 node_modules/
 .next/
+.next-dev/
 out/
 .turbo/
 npm-debug.log*
@@ -78,5 +79,4 @@ Thumbs.db
 
 # Large zip archives (keep handoff zip ignored or tracked as needed)
 *.tar.gz
-
 

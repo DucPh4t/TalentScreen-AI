@@ -111,6 +111,21 @@ async def _verify_application_and_membership(
     return app_obj, membership
 
 
+async def _validate_revision_sources(db, app_obj, document_id, sanitized_id, generation, criteria):
+    if (document_id != app_obj.current_document_id or sanitized_id != app_obj.current_sanitized_version_id
+            or generation != app_obj.generation):
+        raise HTTPException(409, "SNAPSHOT_MISMATCH: Hồ sơ đã thay đổi; tải lại trước khi sửa đánh giá.")
+    version = await db.get(SanitizedVersion, sanitized_id)
+    if not version or version.status != SanitizedVersionStatus.APPROVED:
+        raise HTTPException(409, "Cần bản CV đã che được duyệt.")
+    spans = {span.span_id: span for span in (await db.execute(select(SourceSpan).where(SourceSpan.sanitized_version_id == sanitized_id))).scalars().all()}
+    for criterion in criteria:
+        for evidence in criterion.evidence:
+            span = spans.get(evidence.span_id)
+            if not span or evidence.quote != span.text or span.text not in version.canonical_text:
+                raise HTTPException(422, "INVALID_EVIDENCE: Đoạn trích không khớp CV hiện hành.")
+
+
 # ---------------- HR Revision Domain Methods ---------------- #
 
 
@@ -189,8 +204,19 @@ async def create_hr_revision(
                 detail=f"FORBIDDEN_DEMOGRAPHIC_ATTRIBUTE: Ghi chú thay đổi cho tiêu chí '{c_id}' nhắc đến thuộc tính cấm: '{f_cr}'.",
             )
 
-    # Compute deterministic scores server-side
-    obs, cov, comp, rec, _ = calculate_deterministic_scores(payload.criteria, weights_by_id)
+    await _validate_revision_sources(db, app_obj, ref.document_id, ref.sanitized_version_id, ref.application_generation, payload.criteria)
+
+    # Compute deterministic scores server-side with dynamic rubric policy
+    policy = rubric.threshold_config or {}
+    t_val = Decimal(str(policy.get("threshold", "70.0")))
+    core_mins = policy.get("core_minimum_scores") if isinstance(policy.get("core_minimum_scores"), dict) else None
+
+    obs, cov, comp, rec, _ = calculate_deterministic_scores(
+        payload.criteria,
+        weights_by_id,
+        threshold=t_val,
+        core_minimum_scores=core_mins,
+    )
 
     # Determine revision sequence number
     stmt_max = select(func.max(HRRevision.revision_no)).where(HRRevision.application_id == application_id)
@@ -254,6 +280,17 @@ async def get_hr_revision_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bản chỉnh sửa HR không tồn tại.")
 
     await _verify_application_and_membership(db, rev.application_id, ctx, require_open=False)
+    from app.api.v1.independent_review import enforce_shadow_blind
+    await enforce_shadow_blind(db, rev.application, ctx)
+
+    version_status = (await db.execute(
+        select(SanitizedVersion.status).where(SanitizedVersion.id == rev.sanitized_version_id)
+    )).scalar_one_or_none()
+    if version_status == SanitizedVersionStatus.REVOKED:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="REVISION_QUARANTINED: Bản rà soát dùng CV đã che bị thu hồi.",
+        )
 
     # Check staleness
     app_obj = rev.application
@@ -290,7 +327,7 @@ async def update_hr_revision(
     if not rev:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bản chỉnh sửa HR không tồn tại.")
 
-    _, membership = await _verify_application_and_membership(db, rev.application_id, ctx)
+    app_obj, membership = await _verify_application_and_membership(db, rev.application_id, ctx)
 
     # Only author or Owner can edit draft
     if rev.created_by != ctx.user.id and membership.membership_role != MembershipRole.OWNER:
@@ -329,11 +366,24 @@ async def update_hr_revision(
                 detail=f"FORBIDDEN_DEMOGRAPHIC_ATTRIBUTE: Ghi chú thay đổi cho tiêu chí '{c_id}' nhắc đến thuộc tính cấm: '{f_cr}'.",
             )
 
+    await _validate_revision_sources(db, app_obj, rev.document_id, rev.sanitized_version_id, rev.application_generation, payload.criteria)
+
     stmt_crit = select(RubricCriterion).where(RubricCriterion.rubric_version_id == rev.rubric_version_id)
     criteria_defs = (await db.execute(stmt_crit)).scalars().all()
     weights_by_id = {c.criterion_id: c.weight for c in criteria_defs}
 
-    obs, cov, comp, rec, _ = calculate_deterministic_scores(payload.criteria, weights_by_id)
+    stmt_rubric = select(RubricVersion).where(RubricVersion.id == rev.rubric_version_id)
+    rubric_obj = (await db.execute(stmt_rubric)).scalar_one_or_none()
+    policy = (rubric_obj.threshold_config or {}) if rubric_obj else {}
+    t_val = Decimal(str(policy.get("threshold", "70.0")))
+    core_mins = policy.get("core_minimum_scores") if isinstance(policy.get("core_minimum_scores"), dict) else None
+
+    obs, cov, comp, rec, _ = calculate_deterministic_scores(
+        payload.criteria,
+        weights_by_id,
+        threshold=t_val,
+        core_minimum_scores=core_mins,
+    )
 
     rev.criteria_payload = {"criteria": [c.model_dump() for c in payload.criteria]}
     rev.change_reasons = {k: v.model_dump() for k, v in payload.change_reasons.items()}
@@ -388,6 +438,12 @@ async def finalize_hr_revision(
             detail="RUBRIC_MISMATCH: Phiên bản Rubric không khớp với phiên bản dự kiến.",
         )
 
+    from app.schemas.assessment import AssessmentOutputSchema
+    validated = AssessmentOutputSchema.model_validate(rev.criteria_payload)
+    await _validate_revision_sources(db, app_obj, rev.document_id, rev.sanitized_version_id, rev.application_generation, validated.criteria)
+    if app_obj.requisition.current_rubric_version_id and app_obj.requisition.current_rubric_version_id != rev.rubric_version_id:
+        raise HTTPException(409, "RUBRIC_MISMATCH: Tiêu chí hiện hành đã thay đổi.")
+
     # Compute deterministic content hash of finalized payload
     serialized = json.dumps(rev.criteria_payload, sort_keys=True, ensure_ascii=False)
     content_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
@@ -423,10 +479,14 @@ async def list_hr_revisions(
     ctx: AuthenticatedContext,
 ) -> list[HRRevisionResponse]:
     """List all HR revisions for an application ordered by revision_no desc."""
-    await _verify_application_and_membership(db, application_id, ctx, require_open=False)
+    application, _ = await _verify_application_and_membership(db, application_id, ctx, require_open=False)
+    from app.api.v1.independent_review import enforce_shadow_blind
+    await enforce_shadow_blind(db, application, ctx)
     stmt = (
         select(HRRevision)
+        .join(SanitizedVersion, HRRevision.sanitized_version_id == SanitizedVersion.id)
         .where(HRRevision.application_id == application_id)
+        .where(SanitizedVersion.status != SanitizedVersionStatus.REVOKED)
         .order_by(HRRevision.revision_no.desc())
     )
     rows = (await db.execute(stmt)).scalars().all()
@@ -647,6 +707,24 @@ async def create_decision(
             detail="ATTESTATION_ACTOR_MISMATCH: Quyết định phải do chính Owner đã thực hiện rà soát và ký attestation ban hành.",
         )
 
+    if (
+        attestation.application_generation != app_obj.generation
+        or attestation.document_id != app_obj.current_document_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="ATTESTATION_STALE: Hồ sơ đã thay đổi sau khi ký rà soát; cần rà soát và ký lại.",
+        )
+    if attestation.run_id:
+        attested_run = (await db.execute(
+            select(AssessmentRun).where(AssessmentRun.id == attestation.run_id)
+        )).scalar_one_or_none()
+        if not attested_run or attested_run.sanitized_version_id != app_obj.current_sanitized_version_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="ASSESSMENT_QUARANTINED: Kết quả AI không còn dựa trên bản CV đã che hiện hành.",
+            )
+
     # Invariant: Matching decision basis
     if attestation.decision_basis != payload.decision_basis:
         raise HTTPException(
@@ -777,7 +855,9 @@ async def list_decisions(
     ctx: AuthenticatedContext,
 ) -> list[DecisionResponse]:
     """List historical decisions for an application ordered by sequence_no desc."""
-    await _verify_application_and_membership(db, application_id, ctx, require_open=False)
+    application, _ = await _verify_application_and_membership(db, application_id, ctx, require_open=False)
+    from app.api.v1.independent_review import enforce_shadow_blind
+    await enforce_shadow_blind(db, application, ctx)
     stmt = (
         select(Decision)
         .where(Decision.application_id == application_id)

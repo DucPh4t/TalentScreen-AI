@@ -1,6 +1,6 @@
 "use client";
 
-import React, { use, useEffect, useState } from "react";
+import React, { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, AssessmentRunData, UserAccount } from "@/lib/api";
 import {
@@ -19,6 +19,9 @@ import {
   IconSliders
 } from "@/components/Icons";
 import { useToast } from "@/components/Toast";
+import HRRevisionEditor from "@/components/HRRevisionEditor";
+import CandidateCopilot from "@/components/CandidateCopilot";
+import { stageLabels } from "@/lib/workflow";
 import { SkeletonDossier } from "@/components/Skeleton";
 
 interface PageProps {
@@ -42,7 +45,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   const [interviewDraft, setInterviewDraft] = useState<any>(null);
   const [questionBanks, setQuestionBanks] = useState<any[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"assessment" | "sanitization" | "revision" | "interview">("assessment");
+  const [activeTab, setActiveTab] = useState<"assessment" | "sanitization" | "revision" | "interview">("sanitization");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,7 +70,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   const [deleting, setDeleting] = useState(false);
 
   // Decision Form state
-  const [decisionOutcome, setDecisionOutcome] = useState<"advance" | "request_information" | "not_advance">("advance");
+  const [decisionOutcome, setDecisionOutcome] = useState<"advance" | "request_information" | "not_advance">("request_information");
   const [decisionReason, setDecisionReason] = useState("");
   const [attestCheck1, setAttestCheck1] = useState(false);
   const [attestCheck2, setAttestCheck2] = useState(false);
@@ -77,85 +80,82 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   // Interview state
   const [triggeringInterview, setTriggeringInterview] = useState(false);
 
-  async function loadData() {
-    setLoading(true);
+  const [progress, setProgress] = useState<any>(null);
+  const [loadWarnings, setLoadWarnings] = useState<string[]>([]);
+  const [editingCriterion, setEditingCriterion] = useState<string | null>(null);
+  const [reviewedIds, setReviewedIds] = useState<string[]>([]);
+  const initialTab = useRef(false);
+  const refreshing = useRef(false);
+  const canManage = requisition?.my_role === "owner";
+  const effectiveRevision = hrRevisions.find(r => r.status === "finalized" && !r.is_stale && r.application_generation === application?.generation && r.document_id === application?.current_document_id && r.sanitized_version_id === application?.current_sanitized_version_id && r.rubric_version_id === requisition?.current_rubric_version_id);
+
+  async function loadData(silent = false) {
+    if (refreshing.current) return;
+    refreshing.current = true;
+    if (!silent) setLoading(true);
     setError(null);
-    setSanitizedVersion(null);
     try {
-      setCurrentUser(await api.getMe());
-      const app = await api.getApplication(id);
-      setApplication(app);
-
-      if (app.requisition_id) {
-        try {
-          const req = await api.getRequisition(app.requisition_id);
-          setRequisition(req);
-          if (req.current_rubric_version_id) {
-            const rub = await api.getRubric(req.current_rubric_version_id);
-            setRubric(rub);
-
-            try {
-              const banks = await api.getQuestionBank(req.current_rubric_version_id);
-              setQuestionBanks(banks);
-            } catch (err) {
-              console.warn("Could not load question banks:", err);
-            }
-          }
-        } catch (err) {
-          console.warn("Could not load requisition:", err);
-        }
+      const user = await api.getMe(); setCurrentUser(user);
+      const app = await api.getApplication(id); setApplication(app);
+      const req: any = await api.getRequisition(app.requisition_id); setRequisition(req);
+      if (req.my_role === "reviewer") {
+        const independent = await api.getIndependentReviewContext(id);
+        if (!independent.already_submitted) { window.location.replace(`/applications/${id}/independent-review`); return; }
       }
-
-      if (app.current_document_id) {
-        try {
-          const sanList = await api.listSanitizedVersions(app.current_document_id);
-          if (sanList.length > 0) {
-            const latestId = app.current_sanitized_version_id || sanList[0].id;
-            const sanDetail = await api.getSanitizedDetail(latestId);
-            setSanitizedVersion(sanDetail);
-          }
-        } catch (err) {
-          console.warn("Could not load sanitized versions:", err);
-        }
+      const requests = [
+        req.current_rubric_version_id ? api.getRubric(req.current_rubric_version_id) : Promise.resolve(null),
+        req.current_rubric_version_id ? api.getQuestionBank(req.current_rubric_version_id) : Promise.resolve([]),
+        app.current_sanitized_version_id ? api.getSanitizedDetail(app.current_sanitized_version_id) : Promise.resolve(null),
+        app.current_assessment_run_id ? api.getAssessmentRun(id, app.current_assessment_run_id) : Promise.resolve(null),
+        api.listHRRevisions(id), api.listDecisions(id), api.getLatestInterviewDraft(id), api.getApplicationProgress(id),
+      ];
+      const results = await Promise.allSettled(requests);
+      const value = (index: number, fallback: any) => results[index].status === "fulfilled" ? (results[index] as PromiseFulfilledResult<any>).value : fallback;
+      const names = ["tiêu chí", "câu hỏi chuẩn", "CV đã che", "đánh giá AI", "bản điều chỉnh HR", "quyết định", "gợi ý phỏng vấn", "trạng thái xử lý"];
+      const warnings = results.flatMap((result, index) => result.status === "rejected" && !(index === 2 && String(result.reason.message).includes("403")) ? [`Không tải được ${names[index]}: ${result.reason.message}`] : []);
+      setLoadWarnings(warnings);
+      setRubric(value(0, null)); setQuestionBanks(value(1, [])); setSanitizedVersion(value(2, null));
+      const run = value(3, null); setAssessmentRun(run?.status === "succeeded" && !run.is_stale && value(7, null)?.assessment_status === "succeeded" ? run : null);
+      setHrRevisions(value(4, [])); setDecisions(value(5, [])); setInterviewDraft(value(6, null)); setProgress(value(7, null));
+      if (!initialTab.current) {
+        setActiveTab(value(2, null)?.status !== "approved" ? "sanitization" : value(5, []).length ? "interview" : "assessment");
+        initialTab.current = true;
       }
-
-      if (app.current_assessment_run_id) {
-        try {
-          const run = await api.getAssessmentRun(app.id, app.current_assessment_run_id);
-          setAssessmentRun(run);
-        } catch (err) {
-          console.warn("Could not load assessment run:", err);
-        }
-      }
-
-      try {
-        const revs = await api.listHRRevisions(app.id);
-        setHrRevisions(revs);
-      } catch (err) {
-        console.warn("Could not load HR revisions:", err);
-      }
-
-      try {
-        const decs = await api.listDecisions(app.id);
-        setDecisions(decs);
-      } catch (err) {
-        console.warn("Could not load decisions:", err);
-      }
-    } catch (err: any) {
-      setError(err.message || "Không thể tải không gian xét duyệt hồ sơ");
-    } finally {
-      setLoading(false);
-    }
+    } catch (err: any) { setError(err.message || "Không tải được hồ sơ. Hãy thử lại."); }
+    finally { setLoading(false); refreshing.current = false; }
   }
 
   useEffect(() => {
-    loadData();
+    if (!progress?.pending && !["reading", "analyzing"].includes(progress?.stage)) return;
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void loadData(true); }, 4000);
+    return () => window.clearInterval(timer);
+  }, [id, progress?.pending, progress?.stage]);
+
+  useEffect(() => { setReviewedIds([]); setAttestCheck1(false); setAttestCheck2(false); setAttestCheck3(false); }, [application?.generation, assessmentRun?.id, effectiveRevision?.id]);
+
+  useEffect(() => {
+    initialTab.current = false;
+    void loadData();
   }, [id]);
+
+  useEffect(() => {
+    if (!interviewDraft?.id || !["queued", "running"].includes(interviewDraft.status)) return;
+    let active = true;
+    const timer = window.setInterval(async () => {
+      try {
+        const latest = await api.getInterviewDraftDetail(interviewDraft.id);
+        if (active) setInterviewDraft(latest);
+      } catch (err) {
+        if (active) console.warn("Could not refresh interview draft:", err);
+      }
+    }, 2500);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [interviewDraft?.id, interviewDraft?.status]);
 
   async function handleApproveSanitization() {
     if (!sanitizedVersion) return;
     if (!acknowledgedSanitization) {
-      warning("Vui lòng tích chọn xác nhận đã kiểm tra khử định danh PII.");
+      warning("Vui lòng tích chọn xác nhận đã kiểm tra thông tin đã che.");
       return;
     }
     setApprovingSanitized(true);
@@ -163,6 +163,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       await api.approveSanitizedVersion(sanitizedVersion.id, application.row_version, sanitizedVersion.sha256);
       success("Đã phê duyệt phiên bản khử định danh thành công!");
       await loadData();
+      setActiveTab("assessment");
     } catch (err: any) {
       toastError(err.message || "Lỗi phê duyệt khử định danh");
     } finally {
@@ -216,7 +217,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
   async function handleTriggerAssessment() {
     if (sanitizedVersion?.status !== "approved" || !requisition?.current_rubric_version_id) {
-      warning("Cần HR duyệt bản đã che thông tin và có rubric được phê duyệt.");
+      warning("Cần HR duyệt bản đã che thông tin và có bộ tiêu chí được phê duyệt.");
       return;
     }
     setTriggeringAssessment(true);
@@ -237,7 +238,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
   async function handleSubmitDecision(e: React.FormEvent) {
     e.preventDefault();
-    if (!attestCheck1 || !attestCheck2 || !attestCheck3) {
+    if (!attestCheck1 || !attestCheck2 || !attestCheck3 || reviewedIds.length !== rubric?.criteria?.length || loadWarnings.length > 0) {
       warning("Bạn phải cam kết đầy đủ cả 3 điều khoản ký duyệt trước khi ban hành quyết định.");
       return;
     }
@@ -250,16 +251,16 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
     try {
       let effectiveKind: "assessment_run" | "hr_revision" = "assessment_run";
       let effectiveId = assessmentRun?.id;
-      if (hrRevisions.length > 0 && hrRevisions[0].status === "finalized") {
+      if (effectiveRevision) {
         effectiveKind = "hr_revision";
-        effectiveId = hrRevisions[0].id;
+        effectiveId = effectiveRevision.id;
       }
 
       if (!effectiveId) {
         throw new Error("Chưa có kết quả đánh giá hoặc bản sửa đổi HR hợp lệ để làm cơ sở ra quyết định.");
       }
-      if (!rubric?.criteria || rubric.criteria.length !== 6) {
-        throw new Error("Không tải được 6 tiêu chí từ rubric đã duyệt. Vui lòng tải lại trước khi ký duyệt.");
+      if (!rubric?.criteria || rubric.criteria.length === 0) {
+        throw new Error("Không tải được tiêu chí từ rubric đã duyệt. Vui lòng tải lại trước khi ký duyệt.");
       }
 
       const attestation = await api.createReviewAttestation(id, {
@@ -268,7 +269,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
           kind: effectiveKind,
           id: effectiveId,
         },
-        reviewed_criterion_ids: rubric.criteria.map((criterion: { id: string }) => criterion.id),
+        reviewed_criterion_ids: reviewedIds,
         acknowledged: true,
       });
 
@@ -290,18 +291,18 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   }
 
   async function handleTriggerInterview() {
-    if (!questionBanks || questionBanks.length === 0) {
-      warning("Chưa có ngân hàng câu hỏi chuẩn cho Rubric này.");
+    const activeBank = questionBanks.find((bank) => bank.status === "approved");
+    if (!activeBank) {
+      warning("Chưa có ngân hàng câu hỏi đã duyệt cho bộ tiêu chí này.");
       return;
     }
     setTriggeringInterview(true);
     try {
-      const activeBank = questionBanks.find((b) => b.is_active) || questionBanks[0];
       let effectiveKind = "assessment_run";
       let effectiveId = assessmentRun?.id;
-      if (hrRevisions.length > 0 && hrRevisions[0].status === "finalized") {
+      if (effectiveRevision) {
         effectiveKind = "hr_revision";
-        effectiveId = hrRevisions[0].id;
+        effectiveId = effectiveRevision.id;
       }
 
       const draft = await api.triggerInterviewDraft(
@@ -310,7 +311,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         activeBank.id
       );
       setInterviewDraft(draft);
-      success("Đã tạo kế hoạch phỏng vấn và câu hỏi đào sâu!");
+      info("Đã xếp hàng tạo câu hỏi. Kết quả sẽ hiện khi xử lý xong.");
     } catch (err: any) {
       toastError(err.message || "Lỗi tạo câu hỏi phỏng vấn");
     } finally {
@@ -376,7 +377,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               {application.status.toUpperCase()}
             </span>
             <span className="badge badge-subtle">
-              Thế hệ gen-{application.generation} • Khóa v{application.row_version}
+              Bản hồ sơ {application.generation}
             </span>
           </div>
 
@@ -397,37 +398,19 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Tabs Switcher */}
-      <div className="tabs-container">
-        <button
-          className={`tab-btn ${activeTab === "assessment" ? "active" : ""}`}
-          onClick={() => setActiveTab("assessment")}
-        >
-          <IconCheckCircle size={16} />
-          <span>1. Đánh Giá &amp; Bằng Chứng ({assessmentRun ? "Đã có kết quả" : "Chưa chạy"})</span>
-        </button>
-        <button
-          className={`tab-btn ${activeTab === "sanitization" ? "active" : ""}`}
-          onClick={() => setActiveTab("sanitization")}
-        >
-          <IconLock size={16} />
-          <span>2. Hồ Sơ Đã Khử PII ({sanitizedVersion?.status === "approved" ? "Đã duyệt" : "Chờ duyệt"})</span>
-        </button>
-        <button
-          className={`tab-btn ${activeTab === "revision" ? "active" : ""}`}
-          onClick={() => setActiveTab("revision")}
-        >
-          <IconUserCheck size={16} />
-          <span>3. HR Ký Duyệt Quyết Định ({decisions.length > 0 ? "Đã ban hành" : "Chờ quyết định"})</span>
-        </button>
-        <button
-          className={`tab-btn ${activeTab === "interview" ? "active" : ""}`}
-          onClick={() => setActiveTab("interview")}
-        >
-          <IconMessageSquare size={16} />
-          <span>4. Kế Hoạch Phỏng Vấn &amp; Đào Sâu</span>
-        </button>
-      </div>
+      {loadWarnings.length > 0 && <div role="alert" className="notice notice-error">{loadWarnings.map(message => <p key={message}>{message}</p>)}<button className="btn btn-secondary" onClick={() => void loadData()}>Thử tải lại</button></div>}
+      <section className="workflow-next card" role="status" aria-live="polite">
+        <div><strong>{stageLabels[progress?.stage] || "Chưa xác định trạng thái"}</strong><p className="muted">{progress?.failure_code ? `Lỗi: ${progress.failure_code}. Kiểm tra nguồn trước khi thử lại.` : "Rà soát CV → phân tích → kiểm tra bằng chứng → quyết định → chuẩn bị phỏng vấn."}</p></div>
+        {!progress?.pending && <button className="btn btn-primary" disabled={!!loadWarnings.length || !progress || application.status !== "active"} onClick={() => {
+          if (["awaiting_upload", "reading", "needs_review"].includes(progress.stage)) setActiveTab("sanitization");
+          else if (progress.stage === "ready_for_ai") { setActiveTab("assessment"); if (canManage) void handleTriggerAssessment(); }
+          else if (progress.stage === "completed") setActiveTab("interview"); else setActiveTab("assessment");
+        }}>{progress?.stage === "ready_for_ai" && canManage ? "Phân tích CV" : progress?.stage === "completed" ? "Chuẩn bị phỏng vấn" : progress?.stage === "needs_review" ? "Rà soát CV" : "Xem bước cần xử lý"}</button>}
+      </section>
+      <nav className="tabs-container" aria-label="Các bước xử lý hồ sơ">
+        {([['sanitization','1. Rà soát CV'],['assessment','2. Đánh giá và bằng chứng'],['revision','3. Quyết định của HR'],['interview','4. Chuẩn bị phỏng vấn']] as const).map(([tab,label]) =>
+          <button key={tab} className={`tab-btn ${activeTab === tab ? "active" : ""}`} aria-current={activeTab === tab ? "step" : undefined} onClick={() => setActiveTab(tab)}>{label}</button>)}
+      </nav>
 
       {/* Tab 1: Evidence-first Assessment */}
       {activeTab === "assessment" && (
@@ -438,7 +421,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                 <IconSparkles size={28} color="#38bdf8" />
               </div>
               <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>
-                Hồ sơ chưa có kết quả đánh giá AI
+                {progress?.stage === "analyzing" ? "AI đang phân tích hồ sơ" : progress?.stage === "error" ? "Phân tích gặp lỗi" : "Hồ sơ chưa có kết quả đánh giá AI"}
               </h2>
               <p style={{ color: "var(--text-secondary)", maxWidth: "620px", margin: "0 auto 1.5rem auto", fontSize: "0.875rem", lineHeight: 1.6 }}>
                 Hệ thống sẽ đối chiếu nội dung CV đã khử định danh với 6 tiêu chí Rubric chuẩn mực. Mỗi nhận định đều buộc phải có trích dẫn chuỗi ký tự nguyên văn để con người kiểm chứng.
@@ -446,7 +429,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               <button
                 className="btn btn-primary"
                 onClick={handleTriggerAssessment}
-                disabled={triggeringAssessment || sanitizedVersion?.status !== "approved" || !requisition?.current_rubric_version_id}
+                disabled={!canManage || !!loadWarnings.length || progress?.pending || triggeringAssessment || sanitizedVersion?.status !== "approved" || !requisition?.current_rubric_version_id}
               >
                 <IconSparkles size={16} />
                 <span>{triggeringAssessment ? "Đang xử lý đánh giá AI…" : "Chạy Đánh Giá Bằng Chứng AI Ngay"}</span>
@@ -460,7 +443,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
           ) : (
             <div>
               {/* Recommendation & Confidence Banner */}
-              <div className="card" style={{ marginBottom: "1.5rem" }}>
+              <div className="card assessment-summary" style={{ marginBottom: "1.5rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1.25rem" }}>
                   <div>
                     <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
@@ -468,28 +451,37 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                     </span>
                     <div style={{ marginTop: "0.35rem" }}>
                       <span className={`badge ${assessmentRun.recommendation === "consider_next_round" ? "badge-rec-advance" : assessmentRun.recommendation === "needs_clarification" ? "badge-rec-clarify" : "badge-rec-review"}`} style={{ fontSize: "0.875rem", padding: "0.35rem 0.85rem" }}>
-                        {assessmentRun.recommendation === "consider_next_round" && "Đề xuất phỏng vấn vòng sau (Consider Next Round)"}
-                        {assessmentRun.recommendation === "needs_clarification" && "Cần làm rõ thêm thông tin kỹ thuật (Needs Clarification)"}
-                        {assessmentRun.recommendation === "review_required" && "Yêu cầu HR đối chiếu trực tiếp (Review Required)"}
+                        {assessmentRun.recommendation === "consider_next_round" && "Cân nhắc vòng tiếp theo"}
+                        {assessmentRun.recommendation === "needs_clarification" && "Cần làm rõ thông tin"}
+                        {assessmentRun.recommendation === "review_required" && "Cần HR đối chiếu trực tiếp"}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: "2.5rem", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Độ Phủ Bằng Chứng</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", alignItems: "center" }}>
+                    <div title="Tỷ lệ trọng số các tiêu chí tìm thấy bằng chứng trích dẫn trong CV">
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                        <span>Độ Phủ Bằng Chứng</span>
+                        <span style={{ cursor: "help", color: "var(--text-muted)", fontSize: "0.75rem" }} title="Tỷ lệ trọng số các tiêu chí tìm thấy bằng chứng trích dẫn trong CV">ⓘ</span>
+                      </div>
                       <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
                         {(assessmentRun.coverage * 100).toFixed(0)}%
                       </div>
                     </div>
-                    <div>
-                      <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Điểm Quan Sát</div>
+                    <div title="Điểm chuẩn hóa quy đổi trên thang 100 dựa trên các tiêu chí đã có bằng chứng xác thực trong hồ sơ">
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                        <span>Điểm Quan Sát</span>
+                        <span style={{ cursor: "help", color: "var(--accent-cyan)", fontSize: "0.75rem" }} title="Điểm chuẩn hóa quy đổi trên thang 100 dựa trên các tiêu chí đã có bằng chứng xác thực trong hồ sơ">ⓘ</span>
+                      </div>
                       <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
                         {assessmentRun.observed_score ?? "N/A"}<span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>/100</span>
                       </div>
                     </div>
-                    <div>
-                      <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Điểm Đối Chiếu</div>
+                    <div title="Điểm dùng để xếp hạng ứng viên với nhau. Chỉ xuất hiện khi 100% tiêu chí được đánh giá đầy đủ, không thiếu bằng chứng hoặc mâu thuẫn">
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                        <span>Điểm Đối Chiếu</span>
+                        <span style={{ cursor: "help", color: "var(--text-muted)", fontSize: "0.75rem" }} title="Điểm dùng để xếp hạng ứng viên với nhau. Chỉ xuất hiện khi 100% tiêu chí được đánh giá đầy đủ, không thiếu bằng chứng hoặc mâu thuẫn">ⓘ</span>
+                      </div>
                       <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
                         {assessmentRun.comparable_score ?? "N/A"}<span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>/100</span>
                       </div>
@@ -498,15 +490,34 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                 </div>
               </div>
 
-              {/* 6 Criteria Evidence Cards */}
+              {/* Criteria Evidence Cards */}
               <div className="card">
-                <div className="card-header">
+                <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
                   <div>
-                    <h2 className="card-title">Bảng 6 Tiêu Chí Năng Lực &amp; Chuỗi Bằng Chứng Minh Bạch</h2>
+                    <h2 className="card-title">Bảng Tiêu Chí Năng Lực &amp; Chuỗi Bằng Chứng Minh Bạch</h2>
                     <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
-                      Nhấp vào từng trích dẫn bằng chứng để mở Quote Drawer đối chiếu vị trí ký tự gốc trong CV
+                      Mở đoạn trích để đối chiếu với CV. Chưa đủ bằng chứng không đồng nghĩa ứng viên không có năng lực.
                     </p>
                   </div>
+                  {rubric?.criteria && rubric.criteria.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        const allIds = rubric.criteria.map((c: any) => c.id);
+                        const isAllSelected = allIds.every((critId: string) => reviewedIds.includes(critId));
+                        setReviewedIds(isAllSelected ? [] : allIds);
+                      }}
+                      title="Đánh dấu tất cả tiêu chí đã được rà soát đối chiếu"
+                    >
+                      <IconCheckCircle size={14} color="var(--accent-cyan)" />
+                      <span>
+                        {rubric.criteria.every((c: any) => reviewedIds.includes(c.id))
+                          ? "Bỏ chọn tất cả tiêu chí"
+                          : `Rà soát tất cả tiêu chí (${reviewedIds.length}/${rubric.criteria.length})`}
+                      </span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="table-wrapper" style={{ border: "none" }}>
@@ -517,18 +528,18 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                         <th style={{ width: "12%" }}>Trạng Thái</th>
                         <th style={{ width: "10%" }}>Điểm (0..4)</th>
                         <th style={{ width: "32%" }}>Giải Trình Đánh Giá Của AI</th>
-                        <th>Trích Dẫn Bằng Chứng (Click Mở Drawer)</th>
+                        <th>Bằng chứng và thao tác rà soát</th>
                       </tr>
                     </thead>
                     <tbody>
                       {assessmentRun.criteria.map((c) => (
                         <tr key={c.criterion_id}>
                           <td>
-                            <strong style={{ fontSize: "0.88rem", color: "var(--text-primary)" }}>{c.criterion_id}</strong>
+                            <strong style={{ fontSize: "0.88rem", color: "var(--text-primary)" }}>{rubric?.criteria?.find((criterion: any) => criterion.id === c.criterion_id)?.label || c.criterion_id}</strong>
                           </td>
                           <td>
                             <span className={`badge ${c.status === "assessed" ? "badge-open" : "badge-draft"}`}>
-                              {c.status === "assessed" ? "Đã Đánh Giá" : c.status}
+                              {c.status === "assessed" ? "Có bằng chứng" : c.status === "insufficient_evidence" ? "Cần làm rõ" : "Bằng chứng mâu thuẫn"}
                             </span>
                           </td>
                           <td>
@@ -560,11 +571,11 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                           <td>
                             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                               {c.evidence.map((ev) => (
-                                <div
+                                <button type="button"
                                   key={ev.span_id}
                                   onClick={() => setSelectedEvidence(ev)}
                                   className="evidence-quote-box card-interactive"
-                                  title="Nhấp để đối chiếu trích dẫn trong Quote Drawer"
+                                  title="Mở đoạn trích để đối chiếu với CV"
                                   style={{ margin: 0, padding: "0.6rem 0.85rem" }}
                                 >
                                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
@@ -573,14 +584,16 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                                       {ev.span_id} [{ev.resolved_start_cp}..{ev.resolved_end_cp}]
                                     </span>
                                     <span style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", textDecoration: "underline" }}>
-                                      Mở Drawer →
+                                      Xem đoạn trích →
                                     </span>
                                   </div>
-                                  <div style={{ color: "#e2e8f0", fontStyle: "italic", fontSize: "0.8rem" }}>
+                                  <div style={{ color: "var(--text-secondary)", fontStyle: "italic", fontSize: "0.8rem" }}>
                                     &ldquo;{ev.quote.slice(0, 95)}{ev.quote.length > 95 ? "…" : ""}&rdquo;
                                   </div>
-                                </div>
+                                </button>
                               ))}
+                              {canManage && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingCriterion(c.criterion_id)}>Điều chỉnh đánh giá</button>}
+                              <label className="rubric-ack"><input type="checkbox" checked={reviewedIds.includes(c.criterion_id)} onChange={event => setReviewedIds(previous => event.target.checked ? [...previous.filter(x => x !== c.criterion_id), c.criterion_id] : previous.filter(x => x !== c.criterion_id))} />Tôi đã đối chiếu tiêu chí này</label>
                               {c.evidence.length === 0 && (
                                 <span style={{ color: "var(--text-muted)", fontSize: "0.775rem" }}>
                                   Chưa có trích dẫn được xác thực cho tiêu chí này
@@ -596,6 +609,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               </div>
             </div>
           )}
+          {assessmentRun && canManage && rubric && <HRRevisionEditor application={application} rubric={rubric} run={assessmentRun} revisions={hrRevisions} selectedCriterion={editingCriterion} onSaved={() => loadData(true)} />}
+          {assessmentRun && canManage && <CandidateCopilot applicationId={id} snapshotKey={`${application.generation}:${assessmentRun.id}:${requisition.current_rubric_version_id}`} onEvidence={setSelectedEvidence} />}
         </div>
       )}
 
@@ -614,7 +629,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               {sanitizedVersion && (
                 <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
                   <span className={`badge ${sanitizedVersion.status === "approved" ? "badge-open" : "badge-paused"}`}>
-                    {sanitizedVersion.status === "approved" ? "✓ ĐÃ PHÊ DUYỆT PII" : "CHỜ DUYỆT PII"}
+                    {sanitizedVersion.status === "approved" ? "✓ ĐÃ DUYỆT BẢN ĐÃ CHE" : "CHỜ DUYỆT BẢN ĐÃ CHE"}
                   </span>
                   {sanitizedVersion.status === "draft" && (
                     <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -629,10 +644,10 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                       <button
                         className="btn btn-primary btn-sm"
                         onClick={handleApproveSanitization}
-                        disabled={approvingSanitized || !acknowledgedSanitization}
+                        disabled={!canManage || !!loadWarnings.length || approvingSanitized || !acknowledgedSanitization}
                       >
                         <IconCheckCircle size={14} />
-                        <span>Phê Duyệt PII (Owner)</span>
+                        <span>Duyệt bản đã che</span>
                       </button>
                     </div>
                   )}
@@ -706,17 +721,17 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
             ) : application.current_sanitized_version_id ? (
               <div>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: "1rem" }}>
-                  Bản nháp đã tạo nhưng cần quyền xem CV gốc có thời hạn để Owner kiểm tra trước khi phê duyệt.
+                  Bản nháp đã sẵn sàng. Người phụ trách cần mở quyền xem có thời hạn để kiểm tra thông tin đã che. Lần mở này được ghi vào nhật ký.
                 </p>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={handleGrantRawAccess} disabled={grantingRawAccess}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={handleGrantRawAccess} disabled={grantingRawAccess || !canManage}>
                   <IconLock size={14} />
-                  <span>{grantingRawAccess ? "Đang cấp quyền…" : "Owner: cấp quyền xem bản nháp 30 phút"}</span>
+                  <span>{grantingRawAccess ? "Đang cấp quyền…" : "Bắt đầu rà soát · quyền xem 30 phút"}</span>
                 </button>
                 {rawAccessError && <p role="alert" style={{ color: "var(--rose-text)", marginTop: "0.75rem" }}>{rawAccessError}</p>}
               </div>
             ) : (
               <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                Hồ sơ đang được xử lý. Hãy làm mới trạng thái sau khi tệp được trích xuất.
+                {progress?.stage === "error" ? "Đọc tệp gặp lỗi. Kiểm tra định dạng CV và tải bản phù hợp từ đợt tuyển dụng." : progress?.stage === "awaiting_upload" ? "Hồ sơ chưa có tệp CV. Quay về đợt tuyển dụng để tải lên." : "Hệ thống đang đọc tệp; trạng thái sẽ tự cập nhật khi trang đang mở."}
               </p>
             )}
           </div>
@@ -726,12 +741,13 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       {/* Tab 3: HR Revision & Attested Hiring Decision */}
       {activeTab === "revision" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+          {!decisions.length && <p className="notice">Đã xác nhận đối chiếu {reviewedIds.length}/{rubric?.criteria?.length || 6} tiêu chí. <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab("assessment")}>Kiểm tra bằng chứng và điều chỉnh</button>{effectiveRevision && <span> Căn cứ quyết định: bản HR #{effectiveRevision.revision_no} đã hoàn tất.</span>}</p>}
           <div className="card">
             <div className="card-header">
               <div>
-                <h2 className="card-title">Quyết Định Tuyển Dụng Có Cam Kết (Attested Hiring Decision)</h2>
+                <h2 className="card-title">Quyết định tuyển dụng của HR</h2>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
-                  AI chỉ đóng vai trò phân tích bằng chứng; Trưởng bộ phận tuyển dụng (Owner) trực tiếp đưa ra quyết định cuối cùng
+                  AI chỉ đóng vai trò phân tích bằng chứng; Người phụ trách đợt tuyển dụng trực tiếp đưa ra quyết định cuối cùng
                 </p>
               </div>
             </div>
@@ -740,7 +756,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               <div style={{ padding: "1.5rem", background: "var(--bg-surface-elevated)", border: "1px solid var(--border-medium)", borderRadius: "var(--radius-md)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                   <span className={`badge ${decisions[0].outcome === "advance" ? "badge-rec-advance" : "badge-rec-review"}`} style={{ fontSize: "1rem", padding: "0.4rem 0.9rem" }}>
-                    KẾT LUẬN: {decisions[0].outcome.toUpperCase()}
+                    KẾT LUẬN: {decisions[0].outcome === "advance" ? "Mời vào vòng tiếp theo" : decisions[0].outcome === "request_information" ? "Yêu cầu bổ sung thông tin" : "Chưa chuyển vòng"}
                   </span>
                   <span style={{ fontSize: "0.825rem", color: "var(--text-muted)" }}>
                     Ban hành: {new Date(decisions[0].created_at).toLocaleString("vi-VN")}
@@ -784,6 +800,51 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                     <span>Xác nhận của người duyệt trước khi ra quyết định:</span>
                   </div>
 
+                  {rubric?.criteria && reviewedIds.length !== rubric.criteria.length ? (
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: "0.5rem",
+                      padding: "0.65rem 0.85rem",
+                      background: "rgba(245, 158, 11, 0.12)",
+                      border: "1px solid var(--amber-border)",
+                      borderRadius: "var(--radius-sm)",
+                      fontSize: "0.8rem",
+                      color: "var(--amber-text)"
+                    }}>
+                      <span>
+                        Chưa hoàn tất đối chiếu tiêu chí (Đã đối chiếu <strong>{reviewedIds.length}/{rubric.criteria.length}</strong> tiêu chí).
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setReviewedIds(rubric.criteria.map((c: any) => c.id));
+                        }}
+                        style={{ padding: "0.25rem 0.65rem", fontSize: "0.75rem" }}
+                      >
+                        ✓ Xác nhận đối chiếu tất cả
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      padding: "0.45rem 0.75rem",
+                      background: "rgba(16, 185, 129, 0.08)",
+                      border: "1px solid rgba(16, 185, 129, 0.2)",
+                      borderRadius: "var(--radius-sm)",
+                      fontSize: "0.775rem",
+                      color: "var(--emerald-text)"
+                    }}>
+                      <IconCheckCircle size={14} color="var(--emerald-text)" />
+                      <span>Đã đối chiếu đủ tất cả {rubric?.criteria?.length || 0} tiêu chí năng lực.</span>
+                    </div>
+                  )}
+
                   <label style={{ fontSize: "0.825rem", display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: "pointer", color: "var(--text-primary)" }}>
                     <input
                       type="checkbox"
@@ -818,10 +879,10 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                 <button
                   type="submit"
                   className="btn btn-primary btn-lg"
-                  disabled={submittingDecision || !attestCheck1 || !attestCheck2 || !attestCheck3}
+                  disabled={!canManage || !!loadWarnings.length || reviewedIds.length !== rubric?.criteria?.length || submittingDecision || !attestCheck1 || !attestCheck2 || !attestCheck3}
                 >
                   <IconCheckCircle size={18} />
-                  <span>{submittingDecision ? "Đang ký duyệt…" : "Ký Cam Kết & Ban Hành Quyết Định (Owner)"}</span>
+                  <span>{submittingDecision ? "Đang ký duyệt…" : "Xác nhận và ghi quyết định"}</span>
                 </button>
               </form>
             )}
@@ -832,10 +893,11 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       {/* Tab 4: Interview Guide */}
       {activeTab === "interview" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+          <div className="card"><h2>Câu hỏi chuẩn của đợt tuyển dụng</h2><p>{questionBanks.some(bank => bank.status === "approved") ? "Đã có bộ câu hỏi được duyệt. Bạn có thể tạo gợi ý phỏng vấn theo hồ sơ." : "Cần chuẩn bị và duyệt câu hỏi chuẩn một lần trong thiết lập đợt tuyển dụng."}</p><Link href={`/requisitions/${application.requisition_id}?setup=1`}>Mở thiết lập JD, tiêu chí và câu hỏi →</Link></div>
           <div className="card">
             <div className="card-header" style={{ flexWrap: "wrap", gap: "0.85rem" }}>
               <div>
-                <h2 className="card-title">Bộ Câu Hỏi Phỏng Vấn &amp; Đào Sâu (Interview Guide)</h2>
+                <h2 className="card-title">Hướng dẫn phỏng vấn theo hồ sơ</h2>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
                   Bao gồm câu hỏi chuẩn từ ngân hàng Rubric và tối đa 3 câu hỏi đào sâu do AI gợi ý dựa trên lỗ hổng bằng chứng
                 </p>
@@ -844,26 +906,39 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               <button
                 className="btn btn-primary btn-sm"
                 onClick={handleTriggerInterview}
-                disabled={triggeringInterview || !assessmentRun}
+                disabled={!canManage || !!loadWarnings.length || triggeringInterview || !assessmentRun || !questionBanks.some((bank) => bank.status === "approved")}
               >
                 <IconSparkles size={14} />
-                <span>{triggeringInterview ? "Đang tạo câu hỏi…" : "Tạo Câu Hỏi Đào Sâu Bằng AI"}</span>
+                <span>{triggeringInterview ? "Đang tạo câu hỏi…" : "Tạo gợi ý phỏng vấn"}</span>
               </button>
             </div>
 
             {interviewDraft ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {interviewDraft.candidate_followups && interviewDraft.candidate_followups.map((q: any, idx: number) => (
+                {(["queued", "running"].includes(interviewDraft.status)) && (
+                  <p role="status" className="muted">Đang xử lý câu hỏi phỏng vấn…</p>
+                )}
+                {interviewDraft.status === "failed" && (
+                  <p role="alert" className="notice notice-error">Không tạo được câu hỏi AI. Vui lòng kiểm tra job và thử lại.</p>
+                )}
+                {(interviewDraft.core_questions || []).map((q: any) => (
+                  <div key={q.question_id} className="surface" style={{ padding: "1rem" }}>
+                    <strong>Câu hỏi chuẩn · {q.criterion_id}</strong>
+                    <p>{q.question_vi}</p>
+                    <small className="muted">Mục đích: {q.purpose_vi}</small>
+                  </div>
+                ))}
+                {(interviewDraft.ai_followups || []).map((q: any, idx: number) => (
                   <div key={idx} style={{ padding: "1.25rem", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-medium)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                       <span className="badge badge-rec-clarify">Câu hỏi đào sâu {idx + 1} (Tiêu chí: {q.criterion_id})</span>
-                      <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>Trọng tâm: {q.focus_area}</span>
                     </div>
                     <p style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
-                      {q.question_text}
+                      {q.question_vi}
                     </p>
                     <div style={{ fontSize: "0.825rem", color: "var(--text-secondary)" }}>
-                      <strong>Dấu hiệu cần tìm kiếm:</strong> {q.what_to_look_for}
+                      <strong>Mục đích:</strong> {q.purpose_vi}<br />
+                      <strong>Dấu hiệu cần tìm:</strong> {(q.answer_indicators || []).join("; ")}
                     </div>
                   </div>
                 ))}
@@ -875,16 +950,9 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                 </div>
                 <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "0.35rem" }}>Chưa tạo bộ câu hỏi phỏng vấn riêng</h3>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: "1.25rem" }}>
-                  Bấm &quot;Tạo Câu Hỏi Đào Sâu Bằng AI&quot; để engine tự động phân tích điểm yếu trong CV và soạn câu hỏi phỏng vấn tương ứng.
+                  Tạo gợi ý phỏng vấn để làm rõ phần đóng góp cá nhân và những thông tin CV chưa cung cấp đủ.
                 </p>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleTriggerInterview}
-                  disabled={triggeringInterview || !assessmentRun}
-                >
-                  <IconSparkles size={16} />
-                  <span>Tạo Câu Hỏi Đào Sâu Ngay</span>
-                </button>
+
               </div>
             )}
           </div>

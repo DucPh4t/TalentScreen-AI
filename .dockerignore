@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+.venv
+.codex
+.agents
+apps
+private_storage
+backups
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+services/backend/tests
+docs
+fixtures
+*.zip
+*.tar.gz

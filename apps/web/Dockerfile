@@ -13,6 +13,8 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ARG BACKEND_API_URL=http://backend:8000/api/:path*
+ENV BACKEND_API_URL=${BACKEND_API_URL}
 
 RUN npm run build
 
@@ -31,6 +33,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/next.config.mjs ./next.config.mjs
 
 USER nextjs
 

@@ -123,6 +123,17 @@ def test_sanitizer_redacts_unlabeled_location_and_suffix_school_name():
     assert "Python APIs" in sanitized
 
 
+def test_sanitizer_redacts_spaced_vietnamese_phone():
+    from app.services.sanitizer import residual_contact_types
+
+    raw = "Backend Python developer. Điện thoại: 0912 345 678. Xây dựng REST API."
+    sanitized, _, _ = sanitize_text(raw)
+    assert "0912 345 678" not in sanitized
+    assert "[SỐ_ĐIỆN_THOẠI]" in sanitized
+    assert residual_contact_types(sanitized) == []
+    assert residual_contact_types("Liên hệ: 0912 345 678") == ["phone"]
+
+
 def test_source_spans_exact_codepoints():
     """Verify source span codepoints exactly match canonical_text[start:end] == span.text."""
     text = normalize_text_nfc_lf(
@@ -512,3 +523,42 @@ async def test_approve_and_revoke_lifecycle(test_session_factory):
         blocked_res = await client.get(f"/api/v1/sanitized-versions/{ctx['sanitized_id']}")
         assert blocked_res.status_code == 403
         assert "RAW_GRANT_REQUIRED" in blocked_res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_approval_blocks_residual_contact_data(test_session_factory):
+    """An HR acknowledgement must not bypass contact-data inspection."""
+    async with test_session_factory() as session:
+        ctx = await setup_test_context(session)
+        version = await session.get(SanitizedVersion, ctx["sanitized_id"])
+        version.canonical_text = "Backend Python developer. Điện thoại: 0912 345 678."
+        version.sha256 = hashlib.sha256(version.canonical_text.encode("utf-8")).hexdigest()
+        await session.commit()
+        current_hash = version.sha256
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies={SESSION_COOKIE_NAME: ctx["o_token"]},
+        headers={"X-CSRF-Token": ctx["o_csrf"]},
+    ) as client:
+        grant = await client.post(
+            f"/api/v1/applications/{ctx['app_id']}/raw-grants",
+            json={
+                "grantee_user_id": str(ctx["owner"].id),
+                "scopes": ["raw_cv"],
+                "expires_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+                "reason": "Owner review grant",
+            },
+        )
+        assert grant.status_code == 201
+        approval = await client.post(
+            f"/api/v1/sanitized-versions/{ctx['sanitized_id']}/approve",
+            json={
+                "expected_application_version": 1,
+                "expected_sha256": current_hash,
+                "acknowledged": True,
+            },
+        )
+        assert approval.status_code == 422
+        assert "RESIDUAL_CONTACT_DATA" in approval.json()["detail"]

@@ -12,7 +12,7 @@ import logging
 from typing import Optional
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -29,6 +29,12 @@ async def get_or_create_active_budget_period(
     for_update: bool = False,
 ) -> BudgetPeriod:
     """Retrieve the current active budget period or initialize one if absent."""
+    # A row lock cannot protect a period that does not exist yet. Serialize the
+    # first-period creation too, so concurrent workers share one expenditure cap.
+    lock_key = 74201001 if scope == BudgetScope.DEVELOPMENT else 74201002
+    await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+    # A caller waiting on the lock must inspect the period at the time it owns
+    # the lock, not an earlier timestamp that predates the winner's new period.
     now = datetime.now(timezone.utc)
 
     stmt = (
@@ -81,6 +87,9 @@ async def reserve_budget(
 ) -> BudgetReservation:
     """Atomically reserve funds in the active budget period before initiating an external LLM request."""
     now = datetime.now(timezone.utc)
+    # Mock requests legitimately reserve zero; negative reservations never do.
+    if amount_usd < 0:
+        raise ValueError("Budget reservation cannot be negative")
     period = await get_or_create_active_budget_period(db, scope=scope, for_update=True)
 
     current_reserved = Decimal(str(period.reserved_usd))
@@ -131,6 +140,8 @@ async def settle_budget(
     reservation = (await db.execute(stmt)).scalar_one_or_none()
     if not reservation:
         raise ValueError(f"Reservation {reservation_id} not found.")
+    if reservation.status in ("settled", "released"):
+        return reservation
 
     # Lock associated period
     stmt_p = select(BudgetPeriod).where(BudgetPeriod.id == reservation.budget_period_id).with_for_update()
@@ -150,6 +161,8 @@ async def settle_budget(
         )
     elif actual_cost_usd is not None:
         cost = Decimal(str(actual_cost_usd))
+        if cost < 0:
+            raise ValueError("Settled provider cost cannot be negative")
         period.reserved_usd = float(max(Decimal(0), current_reserved - res_amount))
         period.spent_usd = float(current_spent + cost)
         period.updated_at = now

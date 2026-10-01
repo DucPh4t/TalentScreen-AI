@@ -109,6 +109,20 @@ async def post_create_interview_draft(
 
 
 @router.get(
+    "/applications/{id}/interview-drafts/latest",
+    response_model=InterviewDraftResponse | None,
+)
+async def get_latest_application_interview_draft(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """Retrieve the latest interview job state and its questions for page reloads."""
+    from app.services.interview import get_latest_interview_draft
+    return await get_latest_interview_draft(db, id, ctx)
+
+
+@router.get(
     "/interview-drafts/{id}",
     response_model=InterviewDraftResponse,
 )

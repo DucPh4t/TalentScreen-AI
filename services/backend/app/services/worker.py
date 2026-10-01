@@ -254,6 +254,8 @@ async def execute_job_handler(
     elif job_type == JobType.PURGE_DATA:
         from app.services.deletion import execute_purge_job
         await execute_purge_job(db, job_id=job_id)
+    elif job_type == JobType.COPILOT_SELECT:
+        raise RuntimeError("COPILOT_INTERRUPTED: HTTP request ended; never replay a paid call automatically")
     else:
         logger.info(f"Handler for job type {job_type} executed (mock or pending).")
 

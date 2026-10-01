@@ -96,6 +96,7 @@ class JobType(str, Enum):
     ASSESS_APPLICATION = "assess_application"
     DRAFT_INTERVIEW = "draft_interview"
     PURGE_DATA = "purge_data"
+    COPILOT_SELECT = "copilot_select"
 
 
 class JobStatus(str, Enum):

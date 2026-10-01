@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, File, Header, Response, UploadFile, stat
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.config import get_settings
+from fastapi import HTTPException
 from app.domain.authorization import AuthenticatedContext, get_current_context
 from app.schemas.intake import (
     ApplicationCreateRequest,
@@ -40,11 +42,35 @@ async def get_applications_by_requisition(
 async def post_create_application(
     id: uuid.UUID,
     payload: ApplicationCreateRequest,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
     db: AsyncSession = Depends(get_db),
     ctx: AuthenticatedContext = Depends(get_current_context),
 ):
     """Create a new candidate application under a requisition."""
-    return await create_application(db, id, payload, ctx)
+    from app.services.intake import check_requisition_access, get_application_detail
+    from app.services.idempotency import get_or_start_idempotency, complete_idempotency
+    import hashlib, json
+    await check_requisition_access(db, id, ctx)
+    record = None
+    if idempotency_key:
+        if len(idempotency_key) > 128:
+            raise HTTPException(422, "Idempotency-Key quá dài.")
+        # Serialize equal keys even if both callers arrive before a record exists.
+        from sqlalchemy import text
+        scope = f"create-application:{id}"
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                         {"key": f"{ctx.user.id}:{scope}:{idempotency_key}"})
+        request_hash = hashlib.sha256(json.dumps(payload.model_dump(mode="json"), sort_keys=True).encode()).hexdigest()
+        record, cached = await get_or_start_idempotency(db, actor_id=ctx.user.id, method="POST",
+            route_scope=scope, key=idempotency_key, request_hash=request_hash)
+        if cached:
+            if record.request_hash != request_hash:
+                raise HTTPException(409, "Idempotency-Key đã dùng cho nội dung khác.")
+            return await get_application_detail(db, uuid.UUID(record.resource_ref["application_id"]), ctx)
+    result = await create_application(db, id, payload, ctx)
+    if record:
+        await complete_idempotency(db, record, 201, {"application_id": str(result.id)})
+    return result
 
 
 @router.get("/applications/{id}", response_model=ApplicationDetailResponse)
@@ -92,7 +118,10 @@ async def post_upload_document(
         except ValueError:
             pass
 
-    content = await file.read()
+    max_bytes = min(get_settings().UPLOAD_MAX_BYTES, 10 * 1024 * 1024)
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "FILE_TOO_LARGE: CV vượt giới hạn tải lên.")
     filename = file.filename or "uploaded_document.pdf"
 
     result_dto, status_code = await upload_application_document(

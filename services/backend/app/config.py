@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Literal, Optional
+from urllib.parse import urlsplit
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -149,6 +150,15 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "PILOT_STAGE must be 'shadow' or 'assisted' when APP_ENV is 'pilot'"
                 )
+            if len(self.SECRET_KEY) < 32 or self.SECRET_KEY.startswith("dev_secret_key"):
+                raise ValueError("Pilot requires a non-default SECRET_KEY of at least 32 characters")
+            origin = urlsplit(self.APP_ORIGIN)
+            if origin.scheme != "https" or not origin.hostname or origin.username or origin.password:
+                raise ValueError("Pilot requires an HTTPS APP_ORIGIN")
+            if origin.path not in ("", "/") or origin.query or origin.fragment:
+                raise ValueError("APP_ORIGIN must be an origin, without path, query or fragment")
+            if not self.REQUIRE_SANITIZED_APPROVAL:
+                raise ValueError("Pilot requires REQUIRE_SANITIZED_APPROVAL=true")
         elif self.APP_ENV == "sandbox":
             if self.PILOT_STAGE is not None:
                 raise ValueError("PILOT_STAGE must be null/None when APP_ENV is 'sandbox'")

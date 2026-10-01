@@ -478,3 +478,55 @@ async def test_interview_draft_generation_and_worker_execution(test_session_fact
         assert latest_rev["followups"][0]["question_vi"] == edited_followups[0]["question_vi"]
         # Verify core questions STILL unaltered
         assert len(reload_res.json()["core_questions"]) == 6
+
+
+@pytest.mark.asyncio
+async def test_interview_worker_blocks_revoked_cv_before_provider_call(test_session_factory, sample_docx_cv):
+    async with test_session_factory() as session:
+        ctx = await setup_interview_test_context(session, sample_docx_cv)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies={SESSION_COOKIE_NAME: ctx["o_token"]},
+        headers={"X-CSRF-Token": ctx["o_csrf"]},
+    ) as client:
+        bank_res = await client.post(
+            f"/api/v1/rubrics/{ctx['rubric_id']}/interview-question-banks",
+            json={"source": "seed"},
+        )
+        bank_id = bank_res.json()["id"]
+        approved = await client.post(
+            f"/api/v1/interview-question-banks/{bank_id}/approve",
+            json={"expected_rubric_version_id": str(ctx["rubric_id"]), "acknowledged": True},
+        )
+        assert approved.status_code == 200
+        draft_res = await client.post(
+            f"/api/v1/applications/{ctx['app_id']}/interview-drafts",
+            json={
+                "effective_result": {"kind": "assessment_run", "id": str(ctx["run_id"])},
+                "expected_question_bank_id": bank_id,
+            },
+        )
+        assert draft_res.status_code == 202
+
+    async with test_session_factory() as session:
+        version = await session.get(SanitizedVersion, ctx["sanitized_id"])
+        version.status = SanitizedVersionStatus.REVOKED
+        await session.commit()
+
+    provider = MockLLMProvider()
+    async with test_session_factory() as session:
+        await execute_interview_job(session, uuid.UUID(draft_res.json()["job_id"]), provider_override=provider)
+        await session.commit()
+        draft = await session.get(InterviewDraft, uuid.UUID(draft_res.json()["id"]))
+        assert draft.status == "failed"
+    assert provider.invocation_count == 0
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        cookies={SESSION_COOKIE_NAME: ctx["o_token"]},
+    ) as client:
+        quarantined = await client.get(f"/api/v1/interview-drafts/{draft_res.json()['id']}")
+        assert quarantined.status_code == 410

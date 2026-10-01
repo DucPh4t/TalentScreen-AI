@@ -342,6 +342,16 @@ async def test_jobs_api_flow(test_session_factory):
         await session.commit()
         job_id = job.id
 
+    from tests.test_admin_observability import create_reviewer_user
+    async with test_session_factory() as session:
+        _, outsider_token, outsider_csrf = await create_reviewer_user(session)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test",
+                           cookies={SESSION_COOKIE_NAME: outsider_token},
+                           headers={"X-CSRF-Token": outsider_csrf}) as outsider:
+        assert (await outsider.get(f"/api/v1/jobs/{job_id}")).status_code == 404
+        assert (await outsider.post(f"/api/v1/jobs/{job_id}/cancel", json={"reason": "Out of scope attempt"})).status_code == 404
+        assert (await outsider.post("/api/v1/jobs/sweep")).status_code == 403
+
     transport = ASGITransport(app=app)
     cookies = {SESSION_COOKIE_NAME: token}
     headers = {"X-CSRF-Token": csrf}

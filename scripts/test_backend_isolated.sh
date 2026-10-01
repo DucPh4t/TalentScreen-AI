@@ -35,6 +35,10 @@ docker exec "$container_name" psql -U postgres -d talentscreen_test -c 'CREATE E
 docker exec "$container_name" psql -U postgres -d talentscreen_test -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"' >/dev/null
 
 export TALENTSCREEN_TEST_DB_ISOLATED=1
+export APP_ENV=sandbox
+export PILOT_STAGE=
+export LLM_PROVIDER=mock
+export DEEPSEEK_API_KEY=
 export DATABASE_URL="postgresql+asyncpg://postgres:postgres@127.0.0.1:${test_port}/talentscreen_test"
 export DATABASE_SYNC_URL="postgresql://postgres:postgres@127.0.0.1:${test_port}/talentscreen_test"
 export PYTHONPATH=services/backend

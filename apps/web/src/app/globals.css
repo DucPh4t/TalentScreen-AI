@@ -2223,3 +2223,45 @@ textarea::placeholder {
   outline: 2px solid #0d9488 !important;
   outline-offset: 2px !important;
 }
+
+/* Recruitment workspace: opaque reading surfaces and task-first controls. */
+.workspace-shell { background: #f4f6f8; min-height: 100vh; --bg-surface: #fff; --bg-surface-elevated: #fff; --bg-surface-reading: #fff; --bg-surface-subtle: #f8fafc; --bg-surface-hover: #f1f5f9; }
+.workspace-shell .surface, .workspace-shell .card, .workspace-shell .app-header, .workspace-shell .modal-card { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.workspace-shell .page-title, .workspace-shell h1, .workspace-shell h2 { font-family: var(--font-sans); }
+.workspace-shell .page-title { font-size: 1.7rem; }
+.workspace-shell .data-table td { font-size: 14px; }
+.workspace-shell .data-table th:first-child, .workspace-shell .data-table td:first-child { position: sticky; left: 0; background: #fff; z-index: 1; }
+.workflow-actions, .workflow-next { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
+.workflow-next { justify-content: space-between; padding: 18px; }
+.upload-panel { display: grid; gap: 16px; }
+.upload-drop { border: 2px dashed #94a3b8; border-radius: 12px; padding: 24px; background: #f8fafc; }
+.upload-drop.is-dragging { border-color: #0f766e; background: #f0fdfa; }
+.upload-drop input { margin-top: 12px; max-width: 100%; }
+.upload-files { list-style: none; display: grid; gap: 10px; max-height: 380px; overflow: auto; }
+.upload-files li { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.upload-files li div { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.upload-files small { display: block; }
+.criterion-edit { margin: 16px 0; padding: 16px 0; border-bottom: 1px solid #e2e8f0; }
+.criterion-edit label, .revision-editor > label, .copilot-panel label { display: block; margin: 12px 0; }
+.span-picker { max-height: 300px; overflow: auto; }
+.span-picker label { display: flex; gap: 10px; align-items: flex-start; }
+.copilot-answer article { margin: 16px 0; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+.copilot-answer button.evidence-quote-box { display: block; color: #374151; text-align: left; width: 100%; margin-top: 8px; }
+.blind-review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.blind-cv-pane { position: sticky; top: 100px; }
+.blind-cv-text { white-space: pre-wrap; max-height: calc(100vh - 260px); overflow: auto; padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; }
+.workspace-shell details { margin: 12px 0; }
+.workspace-shell summary { cursor: pointer; color: #0f766e; }
+.workspace-shell .evidence-quote-box { text-align: left; color: #374151; }
+.workspace-shell :focus-visible { outline: 3px solid #0f766e; outline-offset: 3px; }
+@media (max-width: 800px) { .blind-review-grid { grid-template-columns: 1fr; } .blind-cv-pane { position: static; } .blind-cv-text { max-height: 360px; } .workflow-next { align-items: flex-start; } }
+
+/* Keep navigation within narrow viewports without hiding task links. */
+@media (max-width: 780px) {
+  .nav-links { width: 100%; min-width: 0; flex-wrap: wrap; gap: 0.25rem; }
+  .nav-link { padding: 0.45rem 0.6rem; }
+  .header-inner > * { min-width: 0; }
+}
+
+.assessment-summary > div > div { min-width: 0; max-width: 100%; }
+.assessment-summary .badge { white-space: normal; overflow-wrap: anywhere; }

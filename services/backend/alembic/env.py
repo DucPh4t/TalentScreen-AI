@@ -51,10 +51,12 @@ def do_run_migrations(connection: Connection) -> None:
     # Ensure PostgreSQL extensions are created prior to running migrations
     connection.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'))
     connection.execute(text('CREATE EXTENSION IF NOT EXISTS "vector";'))
+    connection.commit()  # Own the migration transaction so enum autocommit blocks can run.
 
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
+        transaction_per_migration=True,
     )
 
     with context.begin_transaction():

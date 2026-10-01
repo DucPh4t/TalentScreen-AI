@@ -29,6 +29,8 @@ def calculate_deterministic_scores(
     rubric_weights: dict[str, int],
     threshold: Decimal = DEFAULT_THRESHOLD,
     core_floor: int = DEFAULT_CORE_FLOOR,
+    core_criteria_ids: Optional[set[str]] = None,
+    core_minimum_scores: Optional[dict[str, int]] = None,
 ) -> tuple[Optional[Decimal], Decimal, Optional[Decimal], Recommendation, list[str]]:
     """Compute observed score, coverage, comparable score, recommendation, and reason codes.
     Returns:
@@ -78,13 +80,26 @@ def calculate_deterministic_scores(
         recommendation = Recommendation.NEEDS_CLARIFICATION
     else:
         assert comparable_score is not None
-        # Check core criteria floor
+        # Check core criteria floor dynamically
         core_floor_passed = True
-        for core_id in CORE_CRITERIA_IDS:
-            s = scores_by_id.get(core_id, 0)
-            if s < core_floor:
-                core_floor_passed = False
-                reason_codes.append(f"CORE_FLOOR_FAILED:{core_id}({s}<{core_floor})")
+        if core_minimum_scores:
+            for cid, floor_val in core_minimum_scores.items():
+                if cid in rubric_weights or cid in scores_by_id:
+                    s = scores_by_id.get(cid, 0)
+                    if s < floor_val:
+                        core_floor_passed = False
+                        reason_codes.append(f"CORE_FLOOR_FAILED:{cid}({s}<{floor_val})")
+        else:
+            if core_criteria_ids is not None:
+                active_core_ids = set(core_criteria_ids)
+            else:
+                active_core_ids = {cid for cid in CORE_CRITERIA_IDS if cid in rubric_weights or cid in scores_by_id}
+
+            for core_id in active_core_ids:
+                s = scores_by_id.get(core_id, 0)
+                if s < core_floor:
+                    core_floor_passed = False
+                    reason_codes.append(f"CORE_FLOOR_FAILED:{core_id}({s}<{core_floor})")
 
         # Invariant: No premature rounding before threshold comparison (e.g. 69.9999 < 70)
         if comparable_score >= threshold and core_floor_passed:

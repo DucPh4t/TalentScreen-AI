@@ -13,7 +13,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <>
+    <div className="workspace-shell">
       {/* Global App Header for internal pages matching Travertine Liquid Glass Luxury */}
       <header className="app-header">
         <div className="header-inner">
@@ -23,7 +23,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <div className="brand-copy">
               <span className="brand-name">TalentScreen AI</span>
-              <span className="brand-pill">Ed. 2025</span>
+              <span className="brand-pill">MVP nội bộ</span>
             </div>
           </Link>
 
@@ -49,9 +49,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="header-actions">
             <div className="header-audit-badge">
               <span className="audit-dot" />
-              <span>SOC2 &amp; ISO 27001 AUDITED</span>
+              <span>Đánh giá có HR kiểm duyệt</span>
             </div>
-            <span className="header-context">Cổng HR (2004)</span>
+            <span className="header-context">Cổng nhân sự</span>
           </div>
         </div>
       </header>
@@ -59,7 +59,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="env-banner" role="note">
         <div className="env-banner-inner">
           <span className="env-status-dot" aria-hidden="true" />
-          <span>AI đưa ra đánh giá tham khảo đối chiếu rubric. HR kiểm tra bằng chứng và quyết định tuyển dụng cuối cùng.</span>
+          <span>AI đưa ra đánh giá tham khảo theo tiêu chí đã duyệt. HR kiểm tra bằng chứng và quyết định tuyển dụng cuối cùng.</span>
         </div>
       </div>
 
@@ -72,15 +72,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="footer-left">
             <strong>TalentScreen AI</strong>
             <span>•</span>
-            <span>Nền tảng kiểm định nhân tài thế hệ mới © 2025</span>
+            <span>Trợ lý sàng lọc CV nội bộ • Bản thử nghiệm</span>
           </div>
           <div className="footer-right">
-            <span>Tiêu chuẩn ISO 27001</span>
+            <span>Dữ liệu truy cập theo phân quyền</span>
             <span>•</span>
-            <span>Bảo vệ quyền riêng tư &amp; Zero-Bias</span>
+            <span>HR quyết định cuối cùng</span>
           </div>
         </div>
       </footer>
-    </>
+    </div>
   );
 }

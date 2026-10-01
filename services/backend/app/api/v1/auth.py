@@ -57,7 +57,7 @@ async def login(
 
     settings = get_settings()
     # In sandbox/local dev, secure=False allows testing over loopback HTTP
-    is_secure = settings.APP_ENV == "pilot"
+    is_secure = settings.APP_ENV == "pilot" or settings.APP_ORIGIN.startswith("https://")
 
     response.set_cookie(
         key=SESSION_COOKIE_NAME,

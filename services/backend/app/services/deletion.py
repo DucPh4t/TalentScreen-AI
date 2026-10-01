@@ -334,6 +334,9 @@ async def execute_purge_job(
     }
     del_req.inventory = inventory
 
+    from app.db.models import IndependentReviewDraft
+    await db.execute(IndependentReviewDraft.__table__.delete().where(IndependentReviewDraft.application_id.in_(target_app_ids)))
+
     # 3. Physically Delete Blobs from Storage
     files_unlinked = 0
     files_failed = 0

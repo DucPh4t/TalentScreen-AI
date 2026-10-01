@@ -22,7 +22,7 @@ doctor:
 bootstrap:
 	@echo "Setting up Python virtual environment with uv..."
 	uv venv --python 3.12 .venv
-	uv pip install -e "services/backend[dev]"
+	uv pip install -r services/backend/requirements.lock -e "services/backend[dev]"
 	@echo "Installing frontend dependencies..."
 	cd apps/web && npm install
 	@echo "Bootstrap completed."

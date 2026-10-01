@@ -1,6 +1,7 @@
 """Integration tests for Admin Observability, SLIs, and Readiness (Task B23)."""
 from datetime import datetime, timezone
 import uuid
+from types import SimpleNamespace
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -10,6 +11,8 @@ from app.domain.enums import AccountRole, UserStatus
 from app.domain.security import hash_password
 from app.main import app
 from app.services.auth import create_session
+from app.api.v1 import admin
+from app.config import Settings
 
 
 async def create_admin_user(session) -> tuple[User, str, str]:
@@ -57,14 +60,25 @@ async def test_readiness_probe():
         assert data["status"] == "ready"
         assert data["database"] is True
         assert data["storage"] is True
+        assert data["schema"] is True
 
 
 @pytest.mark.asyncio
-async def test_admin_metrics_endpoint_role_protected(test_session_factory):
+async def test_readiness_rejects_schema_that_needs_migration(monkeypatch):
+    monkeypatch.setattr(admin.ScriptDirectory, "from_config", lambda _: SimpleNamespace(get_heads=lambda: ["future_revision"]))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/v1/admin/readiness")
+        assert response.status_code == 503
+        assert response.json()["detail"]["schema"] is False
+
+
+@pytest.mark.asyncio
+async def test_admin_metrics_endpoint_role_protected(test_session_factory, monkeypatch):
     """Verify non-admin cannot access metrics, while admin receives SLIs and telemetry."""
     async with test_session_factory() as session:
         _, rev_token, rev_csrf = await create_reviewer_user(session)
         _, adm_token, adm_csrf = await create_admin_user(session)
+    monkeypatch.setattr(admin, "get_settings", lambda: Settings(_env_file=None, RATE_CARD_VERIFIED_AT=None))
 
     transport = ASGITransport(app=app)
 
@@ -94,6 +108,8 @@ async def test_admin_metrics_endpoint_role_protected(test_session_factory):
         assert "budget_summary" in metrics
         assert "worker_health" in metrics
         assert "sli_report" in metrics
+        assert metrics["budget_summary"]["rate_card_verified"] is False
+        assert metrics["latencies"]["avg_queue_wait_seconds"] is None
 
         sli = metrics["sli_report"]
         assert "queue_latency_ok" in sli
