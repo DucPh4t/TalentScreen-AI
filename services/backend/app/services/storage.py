@@ -13,6 +13,7 @@ from app.config import get_settings
 
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB limit for MVP CV uploads
 PDF_MAGIC = b"%PDF-"
+PDF_HEADER_SCAN_BYTES = 1024
 DOCX_MAGIC = b"PK\x03\x04"
 
 SAFE_FILENAME_RE = re.compile(r"[^a-zA-Z0-9_.-]")
@@ -72,7 +73,17 @@ def detect_and_validate_file_type(content: bytes, filename: str) -> str:
 
     lower_name = filename.lower()
 
-    if content.startswith(PDF_MAGIC):
+    # Some real-world PDFs include a leading newline/space before the header.
+    # Accept only ASCII whitespace before %PDF- and only within the PDF
+    # specification's first-1024-byte header window; arbitrary prefixes remain
+    # rejected so this does not weaken magic-byte validation.
+    pdf_prefix = content[:PDF_HEADER_SCAN_BYTES]
+    pdf_header_offset = pdf_prefix.find(PDF_MAGIC)
+    has_valid_pdf_header = (
+        pdf_header_offset >= 0
+        and not pdf_prefix[:pdf_header_offset].strip(b" \t\r\n\f\x00")
+    )
+    if has_valid_pdf_header:
         if not lower_name.endswith(".pdf"):
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,

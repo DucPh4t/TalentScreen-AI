@@ -27,7 +27,12 @@ from app.domain.enums import (
 from app.domain.security import hash_password
 from app.main import app
 from app.services.auth import create_session
-from app.services.storage import MAX_FILE_SIZE_BYTES, resolve_blob_path, sanitize_filename
+from app.services.storage import (
+    MAX_FILE_SIZE_BYTES,
+    detect_and_validate_file_type,
+    resolve_blob_path,
+    sanitize_filename,
+)
 
 
 VALID_PDF_BYTES = b"%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF"
@@ -90,6 +95,16 @@ def test_storage_path_traversal_guards():
     with pytest.raises(Exception) as exc_info:
         resolve_blob_path("../../../etc/shadow")
     assert "PATH_TRAVERSAL_DETECTED" in str(exc_info.value.detail)
+
+
+def test_pdf_magic_accepts_leading_whitespace_but_rejects_other_prefixes():
+    """Accept a valid PDF header after harmless whitespace, not arbitrary bytes."""
+    assert detect_and_validate_file_type(b"\n" + VALID_PDF_BYTES, "candidate.pdf") == "application/pdf"
+    assert detect_and_validate_file_type(b" \r\n" + VALID_PDF_BYTES, "candidate.pdf") == "application/pdf"
+
+    with pytest.raises(Exception) as exc_info:
+        detect_and_validate_file_type(b"prefix" + VALID_PDF_BYTES, "candidate.pdf")
+    assert "UNSUPPORTED_FILE_TYPE" in str(exc_info.value.detail)
 
 
 @pytest.mark.asyncio
