@@ -29,7 +29,7 @@ from app.services.llm.exceptions import (
 from app.services.llm.types import CompletionRequest, CompletionResult
 from app.services.llm.provider import BaseLLMProvider
 
-JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
+JEV_ENDPOINT = "https://openrouter.ai/api/v1/systemone"
 
 
 class JevQuestion(BaseModel):
@@ -112,7 +112,7 @@ def _valid_probabilities(value: Any) -> bool:
 
 
 class JevHTTPXProvider(BaseLLMProvider):
-    """HTTPX client for TypeSafe's System One endpoint; never logs request content."""
+    """HTTPX client for OpenRouter's typed Jev System One endpoint; never logs request content."""
 
     def __init__(
         self,

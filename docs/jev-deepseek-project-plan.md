@@ -10,10 +10,10 @@ HR tạo nhiều đợt tuyển dụng với JD khác nhau, nhận CV, xem mức
 
 - **Parser + code xác định:** đọc PDF/DOCX, chuẩn hóa văn bản, tách đoạn, khử định danh, lưu hash/source spans, xác thực schema/trích dẫn, tính tổng điểm và kiểm tra quyền, ngân sách, trạng thái hồ sơ.
 - **DeepSeek:** tác vụ sinh/hiểu ngôn ngữ cần diễn giải: trích xuất yêu cầu JD thành bản rubric nháp; ghép bằng chứng CV vào từng tiêu chí; viết giải thích tham khảo; tạo câu hỏi làm rõ/phỏng vấn. Chỉ nhận bản CV đã che được HR duyệt. Không giao quyền quyết định cuối.
-- **Jev (TypeSafe):** tác vụ phán đoán hẹp, đầu ra có kiểu: chấm một chiều kỹ năng theo các anchor đã định nghĩa, mức độ bằng chứng hỗ trợ, hoặc mức cần HR xem lại. Chỉ nhận trạng thái JSON tối thiểu gồm tiêu chí và các đoạn bằng chứng đã chọn, không nhận tên/ID/ảnh/thông tin liên hệ/CV thô. Chạy shadow trước; không thay điểm DeepSeek hoặc recommendation cho đến khi được đánh giá và phê duyệt riêng.
+- **Jev 1.13 (TypeSafe qua OpenRouter):** tác vụ phán đoán hẹp, đầu ra có kiểu: chấm một chiều kỹ năng theo các anchor đã định nghĩa, mức độ bằng chứng hỗ trợ, hoặc mức cần HR xem lại. Dùng System One API tại `https://openrouter.ai/api/v1/systemone` với model ID `typesafe/jev-1.13`, không dùng Jev Router/chat-completions. Chỉ nhận trạng thái JSON tối thiểu gồm tiêu chí và các đoạn bằng chứng đã chọn, không nhận tên/ID/ảnh/thông tin liên hệ/CV thô. Chạy shadow trước; không thay điểm DeepSeek hoặc recommendation cho đến khi được đánh giá và phê duyệt riêng.
 - **Orchestrator:** gọi theo chính sách, không cho hai model tự sửa output của nhau. Validator và code là nơi quyết định tính hợp lệ; bất đồng/thiếu bằng chứng/độ chắc chắn thấp thì gắn cờ HR.
 
-Jev trả score/probabilities/confidence cho thang mức mô tả; confidence không phải xác suất đúng đã được hiệu chuẩn trên dữ liệu tuyển dụng của trường. Model version phải được ghim, không dùng alias tự trôi trong đánh giá chính thức. Tham khảo: [TypeSafe API quick start](https://docs.typesafe.ai/introduction/quickstart), [Score primitive](https://docs.typesafe.ai/primitives/score), [model versions](https://jev-ai.org/docs/models/).
+Jev trả score/probabilities/confidence cho thang mức mô tả; confidence không phải xác suất đúng đã được hiệu chuẩn trên dữ liệu tuyển dụng của trường. Model version phải được ghim, không dùng alias tự trôi trong đánh giá chính thức. Tham khảo: [OpenRouter Jev 1.13 và Decisions API](https://openrouter.ai/blog/insights/what-is-jev/), [TypeSafe Score primitive](https://docs.typesafe.ai/primitives/score), [model versions](https://jev-ai.org/docs/models/).
 
 ## Các phương án kiến trúc và đánh đổi
 
@@ -105,7 +105,7 @@ Không tuyên bố production-ready chỉ vì build/tests qua. Việc bật Jev 
 
 ## Trạng thái triển khai trong repo (2026-10-05)
 
-- Đã thêm adapter HTTPX cho TypeSafe System One, contract cho Score/Choice/Noul, kiểm tra output và giới hạn dữ liệu request; chưa gọi API thật.
+- Adapter HTTPX dùng typed System One của OpenRouter cho Jev 1.13 (`typesafe/jev-1.13`), contract cho Score/Choice/Noul, kiểm tra output và giới hạn dữ liệu request; đã có regression test bằng HTTP mock, chưa gọi API thật.
 - `JEV_MODE=off` là mặc định. Muốn bật shadow, cấu hình còn yêu cầu API key, model pin, giá input đã xác minh, ngày xác minh và cờ phê duyệt xử lý dữ liệu riêng cho Jev.
 - Assessment có thể gửi sang Jev đúng các đoạn trích đã được DeepSeek validator xác minh cho tiêu chí có điểm; không gửi các tiêu chí thiếu bằng chứng, không gửi CV đầy đủ hay identity ID. Jev được ghi ở `secondary_model_output`, có cost ledger và audit event; lỗi Jev không đổi điểm chính/recommendation.
 - Trang hồ sơ có bảng so sánh Jev/DeepSeek và chú thích confidence, vẫn giữ HR là người kiểm tra và quyết định.

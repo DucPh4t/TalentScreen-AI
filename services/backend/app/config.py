@@ -78,8 +78,8 @@ class Settings(BaseSettings):
     # the institution approves this processor and verifies its rate card.
     JEV_MODE: Literal["off", "shadow"] = Field(default="off")
     JEV_API_KEY: Optional[str] = Field(default=None)
-    JEV_BASE_URL: str = Field(default="https://api.typesafe.ai/v1/systemone")
-    JEV_MODEL: str = Field(default="jev-1.13.0")
+    JEV_BASE_URL: str = Field(default="https://openrouter.ai/api/v1/systemone")
+    JEV_MODEL: str = Field(default="typesafe/jev-1.13")
     JEV_DATA_PROCESSING_APPROVED: bool = Field(default=False)
     JEV_INPUT_PRICE_PER_MILLION_USD: Optional[float] = Field(default=None)
     JEV_RATE_CARD_VERIFIED_AT: Optional[str] = Field(default=None)
@@ -148,13 +148,15 @@ class Settings(BaseSettings):
         parsed = urlsplit(value)
         if (
             parsed.scheme != "https"
-            or parsed.hostname != "api.typesafe.ai"
+            or parsed.hostname not in {"api.typesafe.ai", "openrouter.ai"}
             or parsed.username
             or parsed.password
             or parsed.query
             or parsed.fragment
+            or (parsed.hostname == "api.typesafe.ai" and parsed.path != "/v1/systemone")
+            or (parsed.hostname == "openrouter.ai" and parsed.path != "/api/v1/systemone")
         ):
-            raise ValueError("JEV_BASE_URL must use the approved https://api.typesafe.ai host without credentials/query/fragment")
+            raise ValueError("JEV_BASE_URL must be the HTTPS TypeSafe or OpenRouter System One endpoint without credentials/query/fragment")
         return value.rstrip("/")
 
     @property
@@ -178,8 +180,10 @@ class Settings(BaseSettings):
                 raise ValueError("JEV_API_KEY is required when JEV_MODE is 'shadow'")
             if not self.JEV_DATA_PROCESSING_APPROVED:
                 raise ValueError("JEV_DATA_PROCESSING_APPROVED must be true before enabling JEV shadow processing")
-            if not re.fullmatch(r"jev-\d+\.\d+(?:\.\d+)?", self.JEV_MODEL):
-                raise ValueError("JEV_MODEL must be a pinned model version; rolling aliases are not permitted")
+            is_openrouter = urlsplit(self.JEV_BASE_URL).hostname == "openrouter.ai"
+            model_pattern = r"typesafe/jev-\d+\.\d+" if is_openrouter else r"jev-\d+\.\d+(?:\.\d+)?"
+            if not re.fullmatch(model_pattern, self.JEV_MODEL):
+                raise ValueError("JEV_MODEL must be a pinned Jev model ID compatible with the configured System One provider; rolling aliases are not permitted")
             if self.JEV_INPUT_PRICE_PER_MILLION_USD is None or self.JEV_INPUT_PRICE_PER_MILLION_USD <= 0:
                 raise ValueError("A verified positive JEV_INPUT_PRICE_PER_MILLION_USD is required")
             if not self.JEV_RATE_CARD_VERIFIED_AT:
