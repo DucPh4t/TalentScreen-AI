@@ -160,5 +160,8 @@ async def get_document_raw_preview_endpoint(
         headers={
             "X-Content-Type-Options": "nosniff",
             "Content-Disposition": "inline",
+            "Cache-Control": "private, no-store, max-age=0",
+            "Pragma": "no-cache",
+            "Cross-Origin-Resource-Policy": "same-origin",
         },
     )

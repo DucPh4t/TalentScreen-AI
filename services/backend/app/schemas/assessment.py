@@ -7,16 +7,7 @@ from typing import Any, Optional
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.domain.enums import CriterionId, CriterionOutcome, Recommendation
-
-CANONICAL_CRITERIA_SET = {
-    CriterionId.PYTHON_BACKEND.value,
-    CriterionId.API_DESIGN.value,
-    CriterionId.SQL_DATA.value,
-    CriterionId.TESTING_DEBUGGING.value,
-    CriterionId.SECURITY_PRIVACY.value,
-    CriterionId.DELIVERY_OPS.value,
-}
+from app.domain.enums import CriterionOutcome, Recommendation
 
 
 class EvidenceItemSchema(BaseModel):
@@ -29,7 +20,7 @@ class EvidenceItemSchema(BaseModel):
 class CriterionAssessmentSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    criterion_id: str
+    criterion_id: str = Field(pattern=r"^[a-z][a-z0-9_]{1,49}$")
     status: CriterionOutcome
     score: Optional[int] = Field(default=None, ge=0, le=4)
     evidence: list[EvidenceItemSchema] = Field(default_factory=list, max_length=6)
@@ -38,9 +29,6 @@ class CriterionAssessmentSchema(BaseModel):
 
     @model_validator(mode="after")
     def validate_conditional_invariants(self) -> CriterionAssessmentSchema:
-        if self.criterion_id not in CANONICAL_CRITERIA_SET:
-            raise ValueError(f"Tiêu chí '{self.criterion_id}' không thuộc danh mục tiêu chí chuẩn đã phê duyệt.")
-
         # Invariant checks for assessed status
         if self.status == CriterionOutcome.ASSESSED:
             if self.score is None:
@@ -75,19 +63,16 @@ class CriterionAssessmentSchema(BaseModel):
 
 
 class AssessmentOutputSchema(BaseModel):
-    """Authoritative schema for LLM model output. Strictly enforces 6 canonical criteria."""
+    """Strictly validate a unique set of criteria from the approved role rubric."""
     model_config = ConfigDict(extra="forbid")
 
-    criteria: list[CriterionAssessmentSchema] = Field(min_length=6, max_length=6)
+    criteria: list[CriterionAssessmentSchema] = Field(min_length=2, max_length=12)
 
     @model_validator(mode="after")
-    def validate_complete_canonical_criteria(self) -> AssessmentOutputSchema:
+    def validate_unique_criteria(self) -> AssessmentOutputSchema:
         present_ids = [c.criterion_id for c in self.criteria]
-        if len(present_ids) != 6 or len(set(present_ids)) != 6:
-            raise ValueError("Đầu ra phải chứa chính xác 6 tiêu chí không trùng lặp.")
-        if set(present_ids) != CANONICAL_CRITERIA_SET:
-            diff = CANONICAL_CRITERIA_SET - set(present_ids)
-            raise ValueError(f"Thiếu các tiêu chí bắt buộc: {diff}")
+        if len(present_ids) != len(set(present_ids)):
+            raise ValueError("Đầu ra chứa criterion_id trùng lặp.")
         return self
 
 
@@ -124,5 +109,6 @@ class AssessmentRunResponse(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     failure_code: Optional[str] = None
+    secondary_model_output: Optional[dict[str, Any]] = None
     criteria: list[CriterionAssessmentResponse] = []
     is_stale: bool = False

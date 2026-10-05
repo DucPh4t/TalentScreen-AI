@@ -17,6 +17,7 @@ class CompletionRequest:
     response_format: Optional[dict[str, str]] = field(default_factory=lambda: {"type": "json_object"})
     thinking_mode: Optional[Literal["enabled", "disabled"]] = None
     manifest_id: Optional[str] = None
+    provider: Literal["deepseek", "jev"] = "deepseek"
 
 
 @dataclass

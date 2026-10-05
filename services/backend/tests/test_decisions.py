@@ -161,6 +161,7 @@ async def setup_test_context(session, sample_docx_cv):
     )
     session.add(rubric)
     await session.flush()
+    req.current_rubric_version_id = rubric.id
 
     for cid in CriterionId:
         crit = RubricCriterion(

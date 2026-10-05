@@ -34,9 +34,7 @@ class CriterionDTO(BaseModel):
 
 class RecommendationPolicyDTO(BaseModel):
     threshold: int = Field(default=70, ge=1, le=100)
-    core_minimum_scores: dict[str, int] = Field(
-        default_factory=lambda: {"python_backend": 2, "api_design": 2, "sql_data": 2}
-    )
+    core_minimum_scores: dict[str, int] = Field(default_factory=dict)
     require_full_coverage: bool = True
 
 

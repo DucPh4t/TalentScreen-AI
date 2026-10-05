@@ -7,7 +7,6 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.db.models.document import SourceSpan
-from app.domain.enums import CriterionId
 from app.domain.rubric_policy import scan_forbidden_criteria
 from app.schemas.interview import CoreQuestionSchema, FollowupQuestionSchema, InterviewOutputSchema
 
@@ -79,6 +78,7 @@ class InterviewValidationError(Exception):
 def validate_interview_output(
     raw_content: str,
     valid_span_ids: set[str],
+    valid_criterion_ids: set[str] | None = None,
 ) -> InterviewOutputSchema:
     """Validate model output against schema, span ownership, and anti-discrimination rules."""
     if not raw_content or not raw_content.strip():
@@ -103,7 +103,7 @@ def validate_interview_output(
 
     # Cross-verification
     errors = []
-    valid_cids = {c.value for c in CriterionId}
+    valid_cids = valid_criterion_ids or set()
 
     for idx, f in enumerate(output.followups):
         if f.criterion_id not in valid_cids:

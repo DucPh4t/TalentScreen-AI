@@ -59,3 +59,17 @@ def calculate_actual_cost(
     out_cost = (Decimal(output_tokens) / Decimal(1_000_000)) * pricing["output_per_million"]
 
     return (miss_cost + hit_cost + out_cost).quantize(Decimal("0.00000001"))
+
+
+def estimate_jev_request_cost(input_tokens: int, price_per_million_usd: float) -> Decimal:
+    """Conservative Jev reservation; Jev currently bills input tokens, not generated text."""
+    if input_tokens < 0 or price_per_million_usd <= 0:
+        raise ValueError("Jev cost estimate requires non-negative usage and a verified positive rate")
+    return (
+        Decimal(input_tokens) / Decimal(1_000_000) * Decimal(str(price_per_million_usd))
+    ).quantize(Decimal("0.00000001"))
+
+
+def calculate_jev_actual_cost(input_tokens: int, price_per_million_usd: float) -> Decimal:
+    """Settle Jev using reported input-token usage and the configured verified rate."""
+    return estimate_jev_request_cost(input_tokens, price_per_million_usd)

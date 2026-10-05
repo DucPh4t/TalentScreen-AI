@@ -67,7 +67,15 @@ Dự án được xây dựng theo bộ đặc tả chi tiết tại thư mục 
    ```
    * Truy cập giao diện tại: `http://localhost:2004`
 
-6. **Chạy kiểm thử tự động:** `make test` tạo PostgreSQL/pgvector tạm thời trên một cổng riêng, chạy migration và pytest, rồi xóa container. Không dùng database ứng dụng trong `.env` để chạy test.
+6. **Khởi chạy Worker (Terminal 3):**
+   ```bash
+   make dev-worker
+   ```
+   Backend và worker chạy từ thư mục gốc để đọc đúng `.env` và dùng cùng đường dẫn lưu CV.
+   Nếu cổng 8000 đang được ứng dụng khác dùng, chạy `make dev-backend BACKEND_PORT=8001`
+   và `make dev-web BACKEND_PORT=8001` trong hai terminal; frontend vẫn ở cổng 2004.
+
+7. **Chạy kiểm thử tự động:** `make test` tạo PostgreSQL/pgvector tạm thời trên một cổng riêng, chạy migration và pytest, rồi xóa container. Không dùng database ứng dụng trong `.env` để chạy test.
    ```bash
    make test
    ```

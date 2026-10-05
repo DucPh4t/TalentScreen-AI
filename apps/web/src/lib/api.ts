@@ -63,6 +63,19 @@ export interface AssessmentRunData {
   coverage: number;
   comparable_score: number | null;
   recommendation: "consider_next_round" | "needs_clarification" | "review_required";
+  secondary_model_output?: {
+    status: "succeeded" | "failed" | "skipped_insufficient_evidence" | string;
+    requested_model?: string;
+    reported_model?: string;
+    error_code?: string;
+    evaluations?: Record<string, {
+      score: number;
+      confidence: number;
+      probabilities: Record<string, number>;
+      deepseek_score: number;
+      delta_from_deepseek: number;
+    }>;
+  } | null;
   criteria: CriterionAssessmentData[];
   completed_at?: string;
   failure_code?: string;
@@ -263,6 +276,13 @@ export const api = {
     });
   },
 
+  async updateRubric(id: string, rubric: any): Promise<any> {
+    return apiRequest<any>(`/rubrics/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ rubric }),
+    });
+  },
+
   async approveRubric(id: string, expectedRequisitionVersion: number, expectedJdVersionId: string): Promise<any> {
     return apiRequest<any>(`/rubrics/${id}/approve`, {
       method: "POST",
@@ -390,6 +410,25 @@ export const api = {
         reason,
       }),
     });
+  },
+
+  async getRawDocumentPreview(documentId: string): Promise<Blob> {
+    const res = await fetch(`/api/v1/documents/${encodeURIComponent(documentId)}/raw-preview`, {
+      credentials: "include",
+      cache: "no-store",
+      headers: { Accept: "application/pdf" },
+    });
+    if (!res.ok) {
+      if (res.status === 403) throw new Error("Quyền xem CV gốc đã hết hạn hoặc chưa được cấp. Hãy cấp lại quyền rồi thử lại.");
+      throw new Error("Không thể tải PDF. Hãy làm mới hồ sơ và thử lại.");
+    }
+    const contentType = res.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase();
+    if (contentType !== "application/pdf") {
+      throw new Error("Xem trực tiếp hiện hỗ trợ PDF. Tệp này chưa có bản PDF để xem trong ứng dụng.");
+    }
+    const blob = await res.blob();
+    if (!blob.size) throw new Error("Tệp PDF rỗng.");
+    return blob;
   },
 
   // Assessment

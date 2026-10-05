@@ -673,7 +673,7 @@ export default function SandboxPage() {
                 }}>
                   <div>[2026-09-26T08:00:00Z] INTAKE_RECEIVED: CAND-SANDBOX-05 (Hash: a8f9...31c)</div>
                   <div>[2026-09-26T08:00:05Z] SANITIZATION_APPROVED: PII Stripped, 0 contact leaked</div>
-                  <div>[2026-09-26T08:01:20Z] AI_ASSESSMENT_RUN: 6 criteria evaluated</div>
+                  <div>[2026-09-26T08:01:20Z] AI_ASSESSMENT_RUN: rubric criteria evaluated</div>
                   <div>[2026-09-26T08:05:42Z] HR_REVISION_LOGGED: Criteria sql_data modified by Owner</div>
                   <div>[2026-09-26T08:07:15Z] ATTESTATION_SIGNED: Signed by Owner (Signature valid)</div>
                 </div>

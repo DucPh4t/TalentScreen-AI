@@ -82,7 +82,7 @@ def calculate_deterministic_scores(
         assert comparable_score is not None
         # Check core criteria floor dynamically
         core_floor_passed = True
-        if core_minimum_scores:
+        if core_minimum_scores is not None:
             for cid, floor_val in core_minimum_scores.items():
                 if cid in rubric_weights or cid in scores_by_id:
                     s = scores_by_id.get(cid, 0)

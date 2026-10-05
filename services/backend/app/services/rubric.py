@@ -90,7 +90,7 @@ async def check_requisition_owner_guard(
     return req
 
 
-def criterion_model_to_dto(c: RubricCriterion) -> CriterionDTO:
+def criterion_model_to_dto(c: RubricCriterion, core_ids: set[str] | None = None) -> CriterionDTO:
     """Convert RubricCriterion DB model to typed CriterionDTO."""
     anchors_dto = []
     raw_anchors = c.anchors or []
@@ -129,7 +129,7 @@ def criterion_model_to_dto(c: RubricCriterion) -> CriterionDTO:
         label=c.label_vi,
         description=c.description_vi,
         weight=c.weight,
-        core=c.criterion_id in {"python_backend", "api_design", "sql_data"},
+        core=c.criterion_id in (core_ids or set()),
         source_requirements=source_requirements_dto,
         scoring_anchors=anchors_dto,
         bilingual_terms=c.bilingual_terms,
@@ -138,7 +138,8 @@ def criterion_model_to_dto(c: RubricCriterion) -> CriterionDTO:
 
 def rubric_model_to_dto(r: RubricVersion) -> RubricResponse:
     """Convert RubricVersion DB model to RubricResponse DTO."""
-    criteria_dtos = [criterion_model_to_dto(c) for c in (r.criteria or [])]
+    core_ids = set((r.threshold_config or {}).get("core_minimum_scores", {}).keys())
+    criteria_dtos = [criterion_model_to_dto(c, core_ids) for c in (r.criteria or [])]
     return RubricResponse(
         id=r.id,
         requisition_id=r.requisition_id,
@@ -257,6 +258,11 @@ async def create_rubric_draft(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
         threshold_config = payload.rubric.get("recommendation_policy") or payload.rubric.get("threshold_config", {})
+        threshold_config = dict(threshold_config)
+        threshold_config.setdefault(
+            "core_minimum_scores",
+            {c.get("id") or c.get("criterion_id"): 2 for c in payload.rubric["criteria"] if c.get("core")},
+        )
         for c in payload.rubric["criteria"]:
             cid = c.get("id") or c.get("criterion_id")
             label = c.get("label") or c.get("label_vi")
@@ -426,6 +432,11 @@ async def update_rubric_draft(
 
     raw_criteria = payload.rubric.get("criteria", [])
     threshold_config = payload.rubric.get("recommendation_policy") or payload.rubric.get("threshold_config", {})
+    threshold_config = dict(threshold_config)
+    threshold_config.setdefault(
+        "core_minimum_scores",
+        {c.get("id") or c.get("criterion_id"): 2 for c in raw_criteria if c.get("core")},
+    )
 
     # Delete existing criteria
     for old_c in rubric.criteria:

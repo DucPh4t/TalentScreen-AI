@@ -14,7 +14,12 @@ from app.config import get_settings
 from app.db.models.document import SanitizedVersion
 from app.db.models.ops import LLMInvocation
 from app.domain.enums import BudgetScope, LLMInvocationStatus, SanitizedVersionStatus
-from app.services.llm.cost import calculate_actual_cost, estimate_request_cost
+from app.services.llm.cost import (
+    calculate_actual_cost,
+    calculate_jev_actual_cost,
+    estimate_jev_request_cost,
+    estimate_request_cost,
+)
 from app.services.llm.exceptions import (
     LLMAuthenticationError,
     LLMEmptyResponseError,
@@ -107,11 +112,19 @@ async def execute_bounded_llm_call(
     # 2. Reserve budget
     # Estimate prompt token count
     estimated_input_tokens = len(request.system_prompt + request.user_prompt) // 3 + 200
-    estimated_cost = estimate_request_cost(
-        input_tokens=estimated_input_tokens,
-        max_output_tokens=request.max_output_tokens,
-        model=request.model,
-    )
+    if request.provider == "jev":
+        settings = get_settings()
+        if settings.JEV_MODE != "shadow" or not settings.JEV_DATA_PROCESSING_APPROVED:
+            raise PreconditionViolationError("JEV_EGRESS_DISABLED: Jev shadow processing is not approved and enabled.")
+        if settings.JEV_INPUT_PRICE_PER_MILLION_USD is None or not settings.JEV_RATE_CARD_VERIFIED_AT:
+            raise PreconditionViolationError("JEV_RATE_CARD_UNVERIFIED: Jev budget rate must be verified before egress.")
+        estimated_cost = estimate_jev_request_cost(estimated_input_tokens, settings.JEV_INPUT_PRICE_PER_MILLION_USD)
+    else:
+        estimated_cost = estimate_request_cost(
+            input_tokens=estimated_input_tokens,
+            max_output_tokens=request.max_output_tokens,
+            model=request.model,
+        )
     budget_scope = BudgetScope.DEVELOPMENT if get_settings().APP_ENV == "sandbox" else BudgetScope.PILOT
     reservation = await reserve_budget(db, job_id=job_id, amount_usd=estimated_cost, scope=budget_scope)
     await db.commit()  # commit reservation before network I/O
@@ -174,11 +187,20 @@ async def execute_bounded_llm_call(
             await settle_budget(db, reservation_id=reservation.id, actual_cost_usd=None)
         else:
             # Success case
-            actual_cost = calculate_actual_cost(
-                input_tokens=result.input_tokens or estimated_input_tokens,
-                output_tokens=result.output_tokens or 0,
-                model=request.model,
-            )
+            if request.provider == "jev":
+                price = get_settings().JEV_INPUT_PRICE_PER_MILLION_USD
+                if price is None:
+                    raise ValueError("Jev price card became unavailable during settlement")
+                actual_cost = calculate_jev_actual_cost(
+                    input_tokens=result.input_tokens or estimated_input_tokens,
+                    price_per_million_usd=price,
+                )
+            else:
+                actual_cost = calculate_actual_cost(
+                    input_tokens=result.input_tokens or estimated_input_tokens,
+                    output_tokens=result.output_tokens or 0,
+                    model=request.model,
+                )
 
             inv_record.status = LLMInvocationStatus.SUCCEEDED
             inv_record.model_resolved = result.reported_model or request.model

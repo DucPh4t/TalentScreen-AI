@@ -8,7 +8,6 @@ import uuid
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.enums import (
-    CriterionId,
     CriterionOutcome,
     DecisionBasis,
     DecisionOutcome,
@@ -42,7 +41,7 @@ class HRRevisionCreateRequest(BaseModel):
     expected_application_version: int = Field(ge=1)
     base_run_id: Optional[uuid.UUID] = None
     source_snapshot_ref: SourceSnapshotRefSchema
-    criteria: list[CriterionAssessmentSchema] = Field(min_length=6, max_length=6)
+    criteria: list[CriterionAssessmentSchema] = Field(min_length=2, max_length=12)
     change_reasons: dict[str, ChangeReasonItemSchema] = Field(default_factory=dict)
     summary_reason: str = Field(min_length=10, max_length=2000)
     proposed_decision: Optional[Literal["advance", "request_information", "not_advance"]] = None
@@ -52,7 +51,7 @@ class HRRevisionUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     expected_revision_version: int = Field(default=1, ge=1)
-    criteria: list[CriterionAssessmentSchema] = Field(min_length=6, max_length=6)
+    criteria: list[CriterionAssessmentSchema] = Field(min_length=2, max_length=12)
     change_reasons: dict[str, ChangeReasonItemSchema] = Field(default_factory=dict)
     summary_reason: str = Field(min_length=10, max_length=2000)
     proposed_decision: Optional[Literal["advance", "request_information", "not_advance"]] = None
@@ -126,7 +125,7 @@ class AttestationAssessmentReviewRequest(BaseModel):
 
     decision_basis: Literal[DecisionBasis.ASSESSMENT_REVIEW] = DecisionBasis.ASSESSMENT_REVIEW
     effective_result: EffectiveResultRef
-    reviewed_criterion_ids: list[str] = Field(min_length=6, max_length=6)
+    reviewed_criterion_ids: list[str] = Field(min_length=1, max_length=12)
     acknowledged: Literal[True]
 
 
@@ -137,7 +136,7 @@ class AttestationManualDocumentRequest(BaseModel):
     document_id: uuid.UUID
     expected_document_sha256: str = Field(min_length=64, max_length=64)
     expected_rubric_version_id: uuid.UUID
-    reviewed_criterion_ids: list[str] = Field(min_length=6, max_length=6)
+    reviewed_criterion_ids: list[str] = Field(min_length=1, max_length=12)
     manual_evidence_refs: list[ManualEvidenceRef] = Field(min_length=1)
     acknowledged: Literal[True]
 

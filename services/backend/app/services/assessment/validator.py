@@ -25,6 +25,7 @@ class AssessmentValidationError(Exception):
 def validate_assessment_output(
     raw_content: str,
     span_registry: dict[str, SourceSpan],
+    expected_criterion_ids: Optional[set[str]] = None,
 ) -> AssessmentOutputSchema:
     """Validate model output string against schema and DB source span registry.
     Raises AssessmentValidationError on failure with specific error codes.
@@ -50,6 +51,16 @@ def validate_assessment_output(
             f"SCHEMA_VIOLATION: Output does not conform to assessment contract: {'; '.join(err_msgs[:3])}",
             errors=err_msgs,
         )
+
+    if expected_criterion_ids is not None:
+        returned_ids = {criterion.criterion_id for criterion in assessment.criteria}
+        if returned_ids != expected_criterion_ids:
+            missing = sorted(expected_criterion_ids - returned_ids)
+            unexpected = sorted(returned_ids - expected_criterion_ids)
+            raise AssessmentValidationError(
+                f"CRITERION_SET_MISMATCH: Missing={missing}; unexpected={unexpected}.",
+                errors=["CRITERION_SET_MISMATCH"],
+            )
 
     # 3. Provenance & Source Span Registry Cross-Verification
     provenance_errors = []

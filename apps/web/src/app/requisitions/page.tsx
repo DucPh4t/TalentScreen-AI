@@ -329,7 +329,7 @@ export default function RequisitionsPage() {
                   required
                 />
                 <span className="form-helper">
-                  Nội dung JD sẽ được trích xuất làm căn cứ đối chiếu cho 6 tiêu chí Rubric đánh giá năng lực lập trình viên.
+                  Nội dung JD sẽ làm căn cứ để HR thiết lập rubric năng lực phù hợp với vị trí tuyển dụng.
                 </span>
               </div>
 

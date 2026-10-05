@@ -444,3 +444,33 @@ async def test_end_to_end_worker_document_ingestion(test_session_factory, sample
         assert doc_record.ingestion_status == "parsed"
         assert doc_record.safety_status == DocumentSafetyStatus.PASSED
         assert doc_record.page_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("job_type,expected_status", [
+    (JobType.INGEST_DOCUMENT, JobStatus.RETRY_WAIT),
+    (JobType.ASSESS_APPLICATION, JobStatus.FAILED),
+])
+async def test_worker_recovers_failed_database_transaction(test_session_factory, monkeypatch, job_type, expected_status):
+    """A real failed flush must not crash the worker while it records the outcome."""
+    async with test_session_factory() as session:
+        job = Job(type=job_type, status=JobStatus.QUEUED, target_type="application",
+                  target_id=uuid.uuid4(), input_snapshot_hash=uuid.uuid4().hex,
+                  available_at=datetime.now(timezone.utc), priority=10)
+        session.add(job)
+        await session.commit()
+        job_id = job.id
+
+    async def fail_during_flush(db, claimed_id, *args):
+        # Missing NOT NULL fields produces IntegrityError and poisons the transaction.
+        db.add(Job(id=uuid.uuid4()))
+        await db.flush()
+
+    monkeypatch.setattr("app.services.worker.execute_job_handler", fail_during_flush)
+    async with test_session_factory() as session:
+        assert await run_worker_once(session, worker_id="failed_transaction_test") is True
+    async with test_session_factory() as session:
+        result = await session.get(Job, job_id)
+        assert result.status == expected_status
+        assert result.last_error_code == "IntegrityError"
+        assert result.claim_count == 1

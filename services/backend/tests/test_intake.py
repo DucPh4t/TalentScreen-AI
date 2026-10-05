@@ -310,3 +310,36 @@ async def test_privacy_raw_filename_masking(test_session_factory):
         det2 = await client.get(f"/api/v1/applications/{app_id}")
         assert det2.status_code == 200
         assert det2.json()["documents"][0]["original_filename"] == "Nguyen_Van_A_Confidential_CV.pdf"
+
+    # Renewing access before expiry must not crash or hide an existing valid scope.
+    async with test_session_factory() as session:
+        session.add(RawAccessGrant(
+            id=uuid.uuid4(), application_id=uuid.UUID(app_id),
+            grantee_user_id=reviewer.id, scopes=["identity"], granted_by=owner.id,
+            reason="Overlapping grant regression", expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        ))
+        await session.commit()
+    async with AsyncClient(
+        transport=transport, base_url="http://test",
+        cookies={SESSION_COOKIE_NAME: r_token}, headers={"X-CSRF-Token": r_csrf}
+    ) as client:
+        detail = await client.get(f"/api/v1/applications/{app_id}")
+        assert detail.status_code == 200
+        assert detail.json()["documents"][0]["original_filename"] == "Nguyen_Van_A_Confidential_CV.pdf"
+    # Revoked and expired raw grants do not confer access, even when another scope is active.
+    async with test_session_factory() as session:
+        grant = await session.get(RawAccessGrant, grant.id)
+        grant.revoked_at = datetime.now(timezone.utc)
+        session.add(RawAccessGrant(
+            id=uuid.uuid4(), application_id=uuid.UUID(app_id),
+            grantee_user_id=reviewer.id, scopes=["raw_cv"], granted_by=owner.id,
+            reason="Expired grant regression", expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        ))
+        await session.commit()
+    async with AsyncClient(
+        transport=transport, base_url="http://test",
+        cookies={SESSION_COOKIE_NAME: r_token}, headers={"X-CSRF-Token": r_csrf}
+    ) as client:
+        detail = await client.get(f"/api/v1/applications/{app_id}")
+        assert detail.status_code == 200
+        assert detail.json()["documents"][0]["original_filename"] is None

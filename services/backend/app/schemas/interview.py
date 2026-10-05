@@ -6,7 +6,6 @@ from typing import Any, Literal, Optional
 import uuid
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.enums import CriterionId
 from app.schemas.decision import EffectiveResultRef
 
 
@@ -33,7 +32,7 @@ class QuestionBankCreateRequest(BaseModel):
 class QuestionBankUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    questions: list[CoreQuestionSchema] = Field(min_length=6, max_length=6)
+    questions: list[CoreQuestionSchema] = Field(min_length=1, max_length=120)
     change_reason: str = Field(min_length=10, max_length=1000)
 
 

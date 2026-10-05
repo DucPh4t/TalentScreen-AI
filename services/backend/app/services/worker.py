@@ -288,6 +288,15 @@ async def run_worker_once(
         logger.exception(f"Job {job_id} handler failed: {e}")
         error_code = type(e).__name__
         success = False
+        # A failed flush leaves the session unusable until it is rolled back.
+        await db.rollback()
+        if job_type == JobType.ASSESS_APPLICATION:
+            from app.db.models.assessment import AssessmentRun
+            await db.execute(
+                update(AssessmentRun)
+                .where(AssessmentRun.job_id == job_id)
+                .values(status="failed", failure_code=error_code, completed_at=datetime.now(timezone.utc))
+            )
 
     # 3. Fenced commit
     try:
@@ -298,6 +307,10 @@ async def run_worker_once(
             epoch=epoch,
             success=success,
             error_code=error_code,
+            # Assessment already has bounded model repair; a new job must be
+            # explicitly requested after an unexpected failure to avoid replaying
+            # a committed invocation and creating another external charge.
+            allow_retry=job_type != JobType.ASSESS_APPLICATION,
         )
         await db.commit()
     except FencingViolationError:

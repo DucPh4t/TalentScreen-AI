@@ -17,13 +17,7 @@ Your task is to evaluate a candidate's technical competencies based ONLY on prov
 
 CRITICAL INVARIANTS:
 1. You must respond strictly in JSON matching the requested schema.
-2. Evaluate exactly six canonical criteria:
-   - python_backend
-   - api_design
-   - sql_data
-   - testing_debugging
-   - security_privacy
-   - delivery_ops
+2. Evaluate every criterion_id exactly once from the approved rubric supplied in the user data. Do not invent, omit, merge, or rename criteria.
 3. For each criterion:
    - status must be one of: "assessed", "insufficient_evidence", "conflicting_evidence"
    - if assessed: score must be an integer from 0 to 4 based on anchors; evidence must have at least 1 item; missing_information must be []
@@ -39,12 +33,12 @@ CRITICAL INVARIANTS:
 8. Write every rationale and missing_information question in Vietnamese, even when the cited CV quote is in English. Preserve evidence quotes exactly in their source language.
 
 JSON OUTPUT CONTRACT:
-- Return one object with exactly one key, "criteria", containing exactly six criterion objects.
+- Return one object with exactly one key, "criteria", containing one criterion object for each approved rubric criterion and no other criteria.
 - Every criterion object must contain exactly these keys: "criterion_id", "status", "score", "evidence", "rationale", "missing_information".
 - "rationale" is REQUIRED: a non-empty explanation grounded in CV spans and the supplied rubric anchor. Do not include sensitive personal attributes.
 - An evidence item has exactly "span_id" and "quote". For insufficient evidence use an empty evidence array and a concrete clarification question.
 - Example of one criterion object (repeat for every canonical ID, using the actual evidence and status):
-  {"criterion_id":"python_backend","status":"insufficient_evidence","score":null,"evidence":[],"rationale":"The CV does not describe an attributable Python backend task.","missing_information":["Which Python backend component did you personally implement or change?"]}
+  {"criterion_id":"criterion_id_from_rubric","status":"insufficient_evidence","score":null,"evidence":[],"rationale":"CV chưa nêu bằng chứng đủ rõ cho năng lực này.","missing_information":["Bạn có thể mô tả một tác vụ cụ thể đã trực tiếp thực hiện không?"]}
 """
 
 
@@ -81,8 +75,8 @@ def build_assessment_user_prompt(
         "rubric": rubric_data,
         "source_spans": spans_data,
         "instructions": (
-            "Evaluate each of the 6 criteria using the rubric anchors and candidate source spans. "
-            "Return JSON object with key 'criteria' containing an array of 6 objects."
+            f"Evaluate each of the {len(rubric_data)} approved rubric criteria using its anchors and candidate source spans. "
+            "Return each supplied criterion_id exactly once in a JSON object with key 'criteria'."
         ),
     }
 
@@ -99,7 +93,7 @@ def build_repair_user_prompt(
 {error_summary}
 
 Please regenerate the complete JSON evaluation correcting these errors.
-Ensure exact schema adherence, exact 6 canonical criteria, valid scores (0..4 or null), and verbatim quotes matching provided span_ids.
+Ensure exact schema adherence, each rubric criterion_id exactly once, valid scores (0..4 or null), and verbatim quotes matching provided span_ids.
 
 Original Data:
 {original_user_prompt}

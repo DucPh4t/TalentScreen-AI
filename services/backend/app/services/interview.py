@@ -33,7 +33,6 @@ from app.db.models import (
 from app.domain.authorization import AuthenticatedContext
 from app.domain.enums import (
     AccountRole,
-    CriterionId,
     JobStatus,
     JobType,
     MembershipRole,
@@ -159,14 +158,31 @@ async def create_question_bank(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ngân hàng câu hỏi nguồn không tồn tại.")
         questions_list = source_bank.questions_payload.get("questions", [])
 
-    # Validate all 6 core criteria
+    rubric_criterion_rows = (await db.execute(
+        select(RubricCriterion).where(RubricCriterion.rubric_version_id == rubric_id)
+    )).scalars().all()
+    expected_criterion_ids = {criterion.criterion_id for criterion in rubric_criterion_rows}
+    # Keep the seed bank for the Backend Python template. Other job families
+    # receive a neutral draft question per approved rubric criterion.
+    if payload.source == "seed" and {q.get("criterion_id") for q in questions_list} != expected_criterion_ids:
+        questions_list = [
+            {
+                "question_id": f"q_{criterion.criterion_id[:40]}_{hashlib.sha256(criterion.criterion_id.encode()).hexdigest()[:7]}",
+                "criterion_id": criterion.criterion_id,
+                "question_vi": f"Bạn có thể trình bày một ví dụ cụ thể thể hiện năng lực {criterion.label_vi}, phần việc do bạn trực tiếp thực hiện và cách kiểm chứng kết quả không?",
+                "purpose_vi": f"Làm rõ bằng chứng thực tế liên quan đến {criterion.label_vi} trong rubric đã duyệt.",
+                "answer_indicators": ["Nêu bối cảnh và nhiệm vụ cụ thể", "Làm rõ vai trò cá nhân", "Giải thích cách kiểm chứng kết quả"],
+            }
+            for criterion in rubric_criterion_rows
+        ]
+
+    # Require at least one question for every criterion in this rubric.
     c_ids = {q.get("criterion_id") for q in questions_list}
-    for cid in CriterionId:
-        if cid.value not in c_ids:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"INVALID_BANK: Ngân hàng câu hỏi bắt buộc phải có câu hỏi cho tiêu chí '{cid.value}'.",
-            )
+    q_ids = [q.get("question_id") for q in questions_list]
+    if len(q_ids) != len(set(q_ids)):
+        raise HTTPException(status_code=422, detail="QUESTION_ID_DUPLICATE: question_id phải là duy nhất trong question bank.")
+    if c_ids != expected_criterion_ids:
+        raise HTTPException(status_code=422, detail="INVALID_BANK: Câu hỏi phải bao phủ đúng tiêu chí của rubric đã duyệt.")
 
     content_hash = compute_bank_hash(questions_list)
 
@@ -268,8 +284,12 @@ async def update_question_bank(
 
     q_dicts = []
     c_ids = set()
+    question_ids = set()
     for q in payload.questions:
         c_ids.add(q.criterion_id)
+        if q.question_id in question_ids:
+            raise HTTPException(status_code=422, detail="QUESTION_ID_DUPLICATE: question_id phải là duy nhất trong question bank.")
+        question_ids.add(q.question_id)
         f_q = scan_forbidden_criteria(q.question_vi)
         if f_q:
             raise HTTPException(
@@ -284,12 +304,11 @@ async def update_question_bank(
             )
         q_dicts.append(q.model_dump())
 
-    for cid in CriterionId:
-        if cid.value not in c_ids:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"MISSING_CRITERION: Thiếu câu hỏi cho tiêu chí '{cid.value}'.",
-            )
+    expected_criterion_ids = set((await db.execute(
+        select(RubricCriterion.criterion_id).where(RubricCriterion.rubric_version_id == rubric.id)
+    )).scalars().all())
+    if c_ids != expected_criterion_ids:
+        raise HTTPException(status_code=422, detail="CRITERION_SET_MISMATCH: Bộ câu hỏi phải bao phủ đúng rubric.")
 
     content_hash = compute_bank_hash(q_dicts)
     bank.questions_payload = {"questions": q_dicts, "change_reason": payload.change_reason}
@@ -604,8 +623,9 @@ async def execute_interview_job(
     )
 
     validated_output = None
+    expected_criterion_ids = {criterion["criterion_id"] for criterion in rubric_data}
     try:
-        validated_output = validate_interview_output(llm_resp.content, valid_span_ids)
+        validated_output = validate_interview_output(llm_resp.content, valid_span_ids, expected_criterion_ids)
     except InterviewValidationError as e:
         logger.warning(f"Interview attempt 1 failed validation: {e}. Executing bounded repair attempt 2.")
         # Attempt 2 Bounded Repair
@@ -624,7 +644,7 @@ async def execute_interview_job(
                 temperature=0.0,
             ),
         )
-        validated_output = validate_interview_output(llm_resp2.content, valid_span_ids)
+        validated_output = validate_interview_output(llm_resp2.content, valid_span_ids, expected_criterion_ids)
 
     # SEC-10 Late arrival / Deletion check
     stmt_app_check = select(Application.status, Application.generation).where(Application.id == draft.application_id)

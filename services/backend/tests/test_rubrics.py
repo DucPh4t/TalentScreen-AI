@@ -261,12 +261,12 @@ async def test_rubric_validation_error_cases(test_session_factory):
         assert res_weight.status_code == 422
         assert "Tổng trọng số" in res_weight.json()["detail"]
 
-        # 2. Missing criterion (only 5 criteria)
+        # 2. Too few criteria (one criterion is below the dynamic 2..12 limit)
         missing_crit_rubric = dict(valid_rubric)
-        missing_crit_rubric["criteria"] = valid_rubric["criteria"][:5]
+        missing_crit_rubric["criteria"] = valid_rubric["criteria"][:1]
         res_missing = await client.put(f"/api/v1/rubrics/{rubric_id}", json={"rubric": missing_crit_rubric})
         assert res_missing.status_code == 422
-        assert "đúng 6 tiêu chí" in res_missing.json()["detail"]
+        assert "từ 2 đến 12" in res_missing.json()["detail"]
 
         # 3. Duplicate criterion
         dup_rubric = dict(valid_rubric)

@@ -1,8 +1,9 @@
-.PHONY: help doctor bootstrap db-up db-down db-status dev-backend dev-web test-backend test lint clean
+.PHONY: help doctor bootstrap db-up db-down db-status dev-backend dev-web dev-worker test-backend test lint clean
 
 PYTHON = .venv/bin/python
 PYTEST = .venv/bin/pytest
 UVICORN = .venv/bin/uvicorn
+BACKEND_PORT ?= 8000
 
 help:
 	@echo "TalentScreen AI — Development Commands:"
@@ -11,7 +12,8 @@ help:
 	@echo "  make db-up          Start local PostgreSQL + pgvector Docker container"
 	@echo "  make db-down        Stop local Docker database container"
 	@echo "  make db-status      Check status of database container"
-	@echo "  make dev-backend    Start FastAPI backend development server (127.0.0.1:8000)"
+	@echo "  make dev-backend    Start FastAPI backend development server (127.0.0.1:$(BACKEND_PORT))"
+	@echo "  make dev-worker     Start the CV/AI background worker from the project root"
 	@echo "  make dev-web        Start Next.js frontend development server (localhost:2004)"
 	@echo "  make test-backend   Run pytest test suite for backend"
 	@echo "  make test           Run all automated tests"
@@ -39,10 +41,13 @@ db-status:
 	docker compose ps
 
 dev-backend:
-	cd services/backend && ../../$(UVICORN) app.main:app --host 127.0.0.1 --port 8000 --reload
+	$(UVICORN) app.main:app --app-dir services/backend --reload-dir services/backend --host 127.0.0.1 --port $(BACKEND_PORT) --reload
 
 dev-web:
-	cd apps/web && npm run dev
+	cd apps/web && BACKEND_API_URL="http://127.0.0.1:$(BACKEND_PORT)/api/:path*" npm run dev
+
+dev-worker:
+	PYTHONPATH=services/backend $(PYTHON) -m app.cli run-worker
 
 test-backend:
 	bash scripts/test_backend_isolated.sh

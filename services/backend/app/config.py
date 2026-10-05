@@ -4,6 +4,7 @@ Strictly typed via Pydantic Settings. Adheres to 02-architecture and 07-operatio
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Literal, Optional
 from urllib.parse import urlsplit
@@ -73,6 +74,16 @@ class Settings(BaseSettings):
         description="DeepSeek API key (only required when LLM_PROVIDER=deepseek)",
     )
 
+    # Jev is an optional, separate decision model. It remains disabled until
+    # the institution approves this processor and verifies its rate card.
+    JEV_MODE: Literal["off", "shadow"] = Field(default="off")
+    JEV_API_KEY: Optional[str] = Field(default=None)
+    JEV_BASE_URL: str = Field(default="https://api.typesafe.ai/v1/systemone")
+    JEV_MODEL: str = Field(default="jev-1.13.0")
+    JEV_DATA_PROCESSING_APPROVED: bool = Field(default=False)
+    JEV_INPUT_PRICE_PER_MILLION_USD: Optional[float] = Field(default=None)
+    JEV_RATE_CARD_VERIFIED_AT: Optional[str] = Field(default=None)
+
     # Policy & Sanitization
     EXTERNAL_REAL_DATA_POLICY: str = Field(
         default="allowed_deepseek_confirmed_by_owner",
@@ -118,7 +129,10 @@ class Settings(BaseSettings):
     @field_validator(
         "PILOT_STAGE",
         "DEEPSEEK_API_KEY",
+        "JEV_API_KEY",
+        "JEV_INPUT_PRICE_PER_MILLION_USD",
         "RATE_CARD_VERIFIED_AT",
+        "JEV_RATE_CARD_VERIFIED_AT",
         "DATABASE_SYNC_URL",
         mode="before",
     )
@@ -127,6 +141,21 @@ class Settings(BaseSettings):
         if isinstance(v, str) and not v.strip():
             return None
         return v
+
+    @field_validator("JEV_BASE_URL")
+    @classmethod
+    def require_https_jev_endpoint(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "api.typesafe.ai"
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("JEV_BASE_URL must use the approved https://api.typesafe.ai host without credentials/query/fragment")
+        return value.rstrip("/")
 
     @property
     def storage_path(self) -> Path:
@@ -143,6 +172,18 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "DEEPSEEK_API_KEY is required when LLM_PROVIDER is 'deepseek'"
                 )
+
+        if self.JEV_MODE == "shadow":
+            if not self.JEV_API_KEY or not self.JEV_API_KEY.strip():
+                raise ValueError("JEV_API_KEY is required when JEV_MODE is 'shadow'")
+            if not self.JEV_DATA_PROCESSING_APPROVED:
+                raise ValueError("JEV_DATA_PROCESSING_APPROVED must be true before enabling JEV shadow processing")
+            if not re.fullmatch(r"jev-\d+\.\d+(?:\.\d+)?", self.JEV_MODEL):
+                raise ValueError("JEV_MODEL must be a pinned model version; rolling aliases are not permitted")
+            if self.JEV_INPUT_PRICE_PER_MILLION_USD is None or self.JEV_INPUT_PRICE_PER_MILLION_USD <= 0:
+                raise ValueError("A verified positive JEV_INPUT_PRICE_PER_MILLION_USD is required")
+            if not self.JEV_RATE_CARD_VERIFIED_AT:
+                raise ValueError("JEV_RATE_CARD_VERIFIED_AT is required before enabling JEV shadow processing")
 
         # Check APP_ENV and PILOT_STAGE
         if self.APP_ENV == "pilot":
@@ -171,8 +212,9 @@ class Settings(BaseSettings):
         redacted = "[REDACTED]"
 
         # Redact secrets
-        if data.get("DEEPSEEK_API_KEY"):
-            data["DEEPSEEK_API_KEY"] = redacted
+        for secret_field in ("DEEPSEEK_API_KEY", "JEV_API_KEY"):
+            if data.get(secret_field):
+                data[secret_field] = redacted
         if data.get("SECRET_KEY"):
             data["SECRET_KEY"] = redacted
 

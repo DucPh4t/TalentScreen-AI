@@ -4,14 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-VALID_CRITERION_IDS = {
-    "python_backend",
-    "api_design",
-    "sql_data",
-    "testing_debugging",
-    "security_privacy",
-    "delivery_ops",
-}
+CRITERION_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,49}$")
 
 FORBIDDEN_DISCRIMINATION_PATTERNS = [
     re.compile(r"\b(tuổi|năm sinh|ngày sinh|age|birth)\b", re.IGNORECASE),
@@ -48,8 +41,8 @@ def validate_anti_discrimination(text: str, field_name: str) -> None:
 
 
 def validate_canonical_rubric(rubric_data: dict[str, Any]) -> None:
-    """Validate a complete rubric structure against MVP business invariants:
-    1. Exactly 6 criteria with canonical IDs.
+    """Validate a reusable, role-specific rubric and its safety invariants:
+    1. 2..12 criteria with stable machine-readable IDs.
     2. Sum of weights must equal exactly 100.
     3. Each criterion must have weights between 1 and 99.
     4. Each criterion must define anchors for scores 0, 1, 2, 3, 4.
@@ -60,25 +53,27 @@ def validate_canonical_rubric(rubric_data: dict[str, Any]) -> None:
     if not isinstance(criteria, list):
         raise RubricValidationError("Rubric phải chứa danh sách 'criteria'.")
 
-    if len(criteria) != 6:
-        raise RubricValidationError(f"Rubric bắt buộc có đúng 6 tiêu chí năng lực (hiện có {len(criteria)}).")
+    if not 2 <= len(criteria) <= 12:
+        raise RubricValidationError(f"Rubric cần từ 2 đến 12 tiêu chí năng lực (hiện có {len(criteria)}).")
 
     seen_ids = set()
     total_weight = 0
 
     for crit in criteria:
+        if not isinstance(crit, dict):
+            raise RubricValidationError("Mỗi criterion phải là object có id, weight, label, description và scoring_anchors.")
         cid = crit.get("id") or crit.get("criterion_id")
         if not cid:
             raise RubricValidationError("Mỗi tiêu chí phải có trường 'id' hoặc 'criterion_id'.")
-        if cid not in VALID_CRITERION_IDS:
-            raise RubricValidationError(f"ID tiêu chí '{cid}' không nằm trong danh sách 6 tiêu chí hợp lệ: {VALID_CRITERION_IDS}")
+        if not isinstance(cid, str) or not CRITERION_ID_PATTERN.fullmatch(cid):
+            raise RubricValidationError(f"ID tiêu chí '{cid}' phải là slug ASCII chữ thường, số hoặc dấu gạch dưới, bắt đầu bằng chữ và tối đa 50 ký tự.")
         if cid in seen_ids:
             raise RubricValidationError(f"Trùng lặp tiêu chí '{cid}' trong rubric.")
         seen_ids.add(cid)
 
         # Weight validation
         weight = crit.get("weight")
-        if not isinstance(weight, int) or weight <= 0 or weight >= 100:
+        if not isinstance(weight, int) or isinstance(weight, bool) or weight <= 0 or weight >= 100:
             raise RubricValidationError(f"Trọng số của tiêu chí '{cid}' phải là số nguyên dương < 100 (nhận được: {weight}).")
         total_weight += weight
 
@@ -97,7 +92,7 @@ def validate_canonical_rubric(rubric_data: dict[str, Any]) -> None:
         if isinstance(anchors, list):
             for anchor in anchors:
                 score = anchor.get("score")
-                if score is None or not isinstance(score, int) or score < 0 or score > 4:
+                if score is None or not isinstance(score, int) or isinstance(score, bool) or score < 0 or score > 4:
                     raise RubricValidationError(f"Điểm anchor trong tiêu chí '{cid}' phải là số nguyên từ 0 đến 4.")
                 anchor_scores.add(score)
                 validate_anti_discrimination(anchor.get("description", ""), f"anchor {score} của '{cid}'")
@@ -121,7 +116,7 @@ def validate_canonical_rubric(rubric_data: dict[str, Any]) -> None:
             raise RubricValidationError(f"Tiêu chí '{cid}' thiếu định nghĩa cho các mức điểm: {missing}.")
 
     if total_weight != 100:
-        raise RubricValidationError(f"Tổng trọng số của 6 tiêu chí phải bằng đúng 100% (hiện tại: {total_weight}%).")
+        raise RubricValidationError(f"Tổng trọng số tiêu chí phải bằng đúng 100% (hiện tại: {total_weight}%).")
 
     # Policy validation
     policy = rubric_data.get("recommendation_policy") or rubric_data.get("threshold_config")
@@ -129,3 +124,11 @@ def validate_canonical_rubric(rubric_data: dict[str, Any]) -> None:
         threshold = policy.get("threshold", 70)
         if not isinstance(threshold, (int, float)) or threshold <= 0 or threshold > 100:
             raise RubricValidationError("Ngưỡng điểm (threshold) trong policy phải từ 1 đến 100.")
+        core_minimum_scores = policy.get("core_minimum_scores", {})
+        if not isinstance(core_minimum_scores, dict):
+            raise RubricValidationError("core_minimum_scores phải là object map criterion_id sang mức sàn 0..4.")
+        unknown_core_ids = set(core_minimum_scores) - seen_ids
+        if unknown_core_ids:
+            raise RubricValidationError(f"Core minimum tham chiếu tiêu chí không có trong rubric: {sorted(unknown_core_ids)}")
+        if any(not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 4 for value in core_minimum_scores.values()):
+            raise RubricValidationError("Mức sàn mỗi tiêu chí core phải là số nguyên từ 0 đến 4.")

@@ -59,6 +59,7 @@ class AssessmentRun(Base, PrimaryKeyMixin):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     failure_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     result_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    secondary_model_output: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     application = relationship("Application", back_populates="assessment_runs")

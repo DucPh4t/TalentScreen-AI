@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-pdf-worker.mjs",
     "dev": "next dev -p 2004",
+    "prebuild": "node scripts/copy-pdf-worker.mjs",
     "build": "next build",
     "start": "next start -p 2004",
     "lint": "next lint"
   },
   "dependencies": {
     "next": "15.5.27",
+    "pdfjs-dist": "6.3.289",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

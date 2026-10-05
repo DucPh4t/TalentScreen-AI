@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 import hashlib
 import json
 import logging
@@ -32,7 +33,6 @@ from app.db.models import (
 from app.domain.authorization import AuthenticatedContext
 from app.domain.enums import (
     AccountRole,
-    CriterionId,
     CriterionOutcome,
     DecisionBasis,
     DecisionOutcome,
@@ -179,20 +179,21 @@ async def create_hr_revision(
     criteria_defs = (await db.execute(stmt_crit)).scalars().all()
     weights_by_id = {c.criterion_id: c.weight for c in criteria_defs}
 
-    # Verify all 6 criteria are present
+    # The HR revision must match this exact approved rubric version.
     crit_dict = {c.criterion_id: c for c in payload.criteria}
-    for cid in CriterionId:
-        if cid.value not in crit_dict:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"MISSING_CRITERION: Thiếu tiêu chí bắt buộc '{cid.value}'.",
-            )
+    expected_ids = set(weights_by_id)
+    if len(payload.criteria) != len(crit_dict) or set(crit_dict) != expected_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"CRITERION_SET_MISMATCH: Bản HR phải chứa đúng các tiêu chí của rubric hiện hành.",
+        )
+    for cid, criterion in crit_dict.items():
         # Scan rationale for forbidden attributes
-        f_rat = scan_forbidden_criteria(crit_dict[cid.value].rationale)
+        f_rat = scan_forbidden_criteria(criterion.rationale)
         if f_rat:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"FORBIDDEN_DEMOGRAPHIC_ATTRIBUTE: Giải trình tiêu chí '{cid.value}' nhắc đến thuộc tính cấm: '{f_rat}'.",
+                detail=f"FORBIDDEN_DEMOGRAPHIC_ATTRIBUTE: Giải trình tiêu chí '{cid}' nhắc đến thuộc tính cấm: '{f_rat}'.",
             )
 
     # Check change reasons
@@ -371,6 +372,8 @@ async def update_hr_revision(
     stmt_crit = select(RubricCriterion).where(RubricCriterion.rubric_version_id == rev.rubric_version_id)
     criteria_defs = (await db.execute(stmt_crit)).scalars().all()
     weights_by_id = {c.criterion_id: c.weight for c in criteria_defs}
+    if len({c.criterion_id for c in payload.criteria}) != len(payload.criteria) or {c.criterion_id for c in payload.criteria} != set(weights_by_id):
+        raise HTTPException(status_code=422, detail="CRITERION_SET_MISMATCH: Bản HR phải khớp với rubric đã duyệt.")
 
     stmt_rubric = select(RubricVersion).where(RubricVersion.id == rev.rubric_version_id)
     rubric_obj = (await db.execute(stmt_rubric)).scalar_one_or_none()
@@ -440,6 +443,11 @@ async def finalize_hr_revision(
 
     from app.schemas.assessment import AssessmentOutputSchema
     validated = AssessmentOutputSchema.model_validate(rev.criteria_payload)
+    current_rubric_ids = set((await db.execute(
+        select(RubricCriterion.criterion_id).where(RubricCriterion.rubric_version_id == rev.rubric_version_id)
+    )).scalars().all())
+    if {criterion.criterion_id for criterion in validated.criteria} != current_rubric_ids:
+        raise HTTPException(422, "CRITERION_SET_MISMATCH: Bản HR không còn khớp đầy đủ rubric đã duyệt.")
     await _validate_revision_sources(db, app_obj, rev.document_id, rev.sanitized_version_id, rev.application_generation, validated.criteria)
     if app_obj.requisition.current_rubric_version_id and app_obj.requisition.current_rubric_version_id != rev.rubric_version_id:
         raise HTTPException(409, "RUBRIC_MISMATCH: Tiêu chí hiện hành đã thay đổi.")
@@ -559,6 +567,15 @@ async def create_review_attestation(
                 )
             rubric_id = rev.rubric_version_id
 
+        rubric_criteria_ids = set((await db.execute(
+            select(RubricCriterion.criterion_id).where(RubricCriterion.rubric_version_id == rubric_id)
+        )).scalars().all())
+        if (
+            len(payload.reviewed_criterion_ids) != len(set(payload.reviewed_criterion_ids))
+            or set(payload.reviewed_criterion_ids) != rubric_criteria_ids
+        ):
+            raise HTTPException(status_code=422, detail="CRITERION_REVIEW_MISMATCH: HR phải xác nhận đã rà soát toàn bộ tiêu chí của rubric.")
+
     elif isinstance(payload, AttestationManualDocumentRequest):
         # Requires active raw_cv grant
         stmt_grant = select(RawAccessGrant).where(
@@ -587,6 +604,14 @@ async def create_review_attestation(
             )
 
         rubric_id = payload.expected_rubric_version_id
+        manual_rubric_ids = set((await db.execute(
+            select(RubricCriterion.criterion_id).where(RubricCriterion.rubric_version_id == rubric_id)
+        )).scalars().all())
+        if (
+            len(payload.reviewed_criterion_ids) != len(set(payload.reviewed_criterion_ids))
+            or set(payload.reviewed_criterion_ids) != manual_rubric_ids
+        ):
+            raise HTTPException(status_code=422, detail="CRITERION_REVIEW_MISMATCH: HR phải xác nhận đã rà soát toàn bộ tiêu chí của rubric.")
         manual_refs = {"evidence_refs": [ref.model_dump(mode="json") for ref in payload.manual_evidence_refs]}
 
     elif isinstance(payload, AttestationTechnicalRequest):
@@ -597,6 +622,25 @@ async def create_review_attestation(
             )
         tech_code = payload.technical_failure_code
         tech_failure_ref = payload.failure_ref.model_dump(mode="json")
+
+    if rubric_id is not None:
+        attested_rubric = await db.get(RubricVersion, rubric_id)
+        if (
+            not attested_rubric
+            or attested_rubric.requisition_id != app_obj.requisition_id
+            or attested_rubric.status != RubricStatus.APPROVED
+            or app_obj.requisition.current_rubric_version_id != rubric_id
+        ):
+            raise HTTPException(409, "RUBRIC_MISMATCH: Chỉ được xác nhận theo rubric hiện hành đã duyệt của requisition.")
+        expected_ids = set((await db.execute(
+            select(RubricCriterion.criterion_id).where(RubricCriterion.rubric_version_id == rubric_id)
+        )).scalars().all())
+        reviewed_ids = set(payload.reviewed_criterion_ids)
+        if (
+            len(payload.reviewed_criterion_ids) != len(reviewed_ids)
+            or reviewed_ids != expected_ids
+        ):
+            raise HTTPException(422, "CRITERION_REVIEW_MISMATCH: HR phải rà soát từng criterion của rubric hiện hành.")
 
     # Build canonical snapshot hash
     snapshot_raw = {

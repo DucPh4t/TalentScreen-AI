@@ -27,7 +27,7 @@ class Question(BaseModel):
 class Selection(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mode: Literal["explain", "missing", "questions", "out_of_scope"]
-    criterion_ids: list[str] = Field(max_length=6)
+    criterion_ids: list[str] = Field(max_length=12)
 
 async def context_for(db: AsyncSession, id: uuid.UUID, ctx: AuthenticatedContext):
     application = await db.get(Application, id, populate_existing=True)

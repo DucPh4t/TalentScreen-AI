@@ -52,6 +52,8 @@ node_modules/
 .next-dev/
 out/
 .turbo/
+/apps/web/public/pdf.worker.min.mjs
+/apps/web/public/licenses/PDFJS-LICENSE.txt
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -79,4 +81,3 @@ Thumbs.db
 
 # Large zip archives (keep handoff zip ignored or tracked as needed)
 *.tar.gz
-

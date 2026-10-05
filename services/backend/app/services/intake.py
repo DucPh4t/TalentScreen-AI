@@ -221,8 +221,9 @@ async def get_application_detail(
         RawAccessGrant.expires_at > now,
         RawAccessGrant.revoked_at.is_(None),
     )
-    grant = (await db.execute(stmt_grant)).scalar_one_or_none()
-    has_raw_grant = grant is not None and "raw_cv" in grant.scopes
+    # Grants can overlap when access is renewed before the previous grant expires.
+    grants = (await db.execute(stmt_grant)).scalars().all()
+    has_raw_grant = any("raw_cv" in grant.scopes for grant in grants)
 
     doc_summaries = []
     for doc in sorted(app_obj.documents, key=lambda d: d.version_no, reverse=True):

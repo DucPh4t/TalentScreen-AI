@@ -97,7 +97,19 @@ class MockLLMProvider(BaseLLMProvider):
         elif request.task_kind == "interview":
             content = json.dumps({"followups": []})
         elif request.task_kind == "assessment":
-            from app.schemas.assessment import CANONICAL_CRITERIA_SET
+            try:
+                prompt_payload = json.loads(request.user_prompt)
+            except (TypeError, ValueError):
+                prompt_payload = {}
+            rubric = prompt_payload.get("rubric", []) if isinstance(prompt_payload, dict) else []
+            criterion_ids = [item["criterion_id"] for item in rubric if item.get("criterion_id")]
+            # Generic mock calls used for adapter/ledger tests may not carry the
+            # production assessment prompt envelope. Keep those calls schema-valid
+            # while production requests continue to use the approved rubric IDs.
+            if not criterion_ids:
+                from app.domain.enums import CriterionId
+
+                criterion_ids = [criterion.value for criterion in CriterionId]
 
             content = json.dumps({
                 "criteria": [
@@ -109,7 +121,7 @@ class MockLLMProvider(BaseLLMProvider):
                         "rationale": "Mock provider không đánh giá năng lực từ CV.",
                         "missing_information": ["Cần chạy đánh giá thật và người phụ trách kiểm tra bằng chứng."],
                     }
-                    for criterion_id in sorted(CANONICAL_CRITERIA_SET)
+                    for criterion_id in criterion_ids
                 ]
             })
         else:

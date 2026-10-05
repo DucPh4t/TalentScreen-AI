@@ -52,7 +52,7 @@ async def get_rubric(
     db: AsyncSession = Depends(get_db),
     ctx: AuthenticatedContext = Depends(get_current_context),
 ):
-    """Get canonical rubric version with all 6 criteria, weights, anchors, and policy."""
+    """Get a rubric version with its criteria, weights, anchors, and policy."""
     return await get_rubric_by_id(db, id, ctx)
 
 

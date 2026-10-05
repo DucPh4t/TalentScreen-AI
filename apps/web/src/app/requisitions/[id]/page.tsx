@@ -59,6 +59,9 @@ export default function RequisitionDetailPage({ params }: PageProps) {
   // Rubric action state
   const [rubricActionLoading, setRubricActionLoading] = useState(false);
   const [acknowledgedRubric, setAcknowledgedRubric] = useState(false);
+  const [rubricEditorOpen, setRubricEditorOpen] = useState(false);
+  const [rubricEditorCriteria, setRubricEditorCriteria] = useState<any[]>([]);
+  const [rubricEditorThreshold, setRubricEditorThreshold] = useState(70);
   const [jdDraftText, setJdDraftText] = useState("");
   const [savingJD, setSavingJD] = useState(false);
   const canManage = requisition?.my_role === "owner" || requisition?.my_role === "admin";
@@ -189,10 +192,109 @@ export default function RequisitionDetailPage({ params }: PageProps) {
     try {
       const newRubric = await api.createRubric(id, { source: "seed", jd_version_id: requisition.current_jd_version_id });
       setRubric(newRubric);
-      success("Đã khởi tạo bộ 6 tiêu chí Rubric mẫu!");
+      success("Đã tạo bản nháp rubric Backend Python. Hãy kiểm tra trích dẫn với JD trước khi duyệt.");
       await loadData();
     } catch (err: any) {
       toastError(err.message || "Không thể tạo Rubric mẫu");
+    } finally {
+      setRubricActionLoading(false);
+    }
+  }
+
+  function emptyCustomCriterion(index: number): any {
+    return {
+      id: `competency_${index + 1}`,
+      label: "",
+      description: "",
+      weight: Math.floor(100 / Math.max(2, rubricEditorCriteria.length || 2)),
+      core: false,
+      source_requirements: [{ requirement_id: `JD-REQ-${index + 1}`, quote: "" }],
+      scoring_anchors: [0, 1, 2, 3, 4].map((score) => ({ score, description: "" })),
+    };
+  }
+
+  function openCustomRubricEditor() {
+    if (rubric?.criteria?.length) {
+      setRubricEditorCriteria(rubric.criteria.map((criterion: any) => ({
+        id: criterion.id,
+        label: criterion.label,
+        description: criterion.description,
+        weight: criterion.weight,
+        core: criterion.core,
+        source_requirements: criterion.source_requirements?.length ? criterion.source_requirements.map((ref: any) => ({ ...ref })) : [{ requirement_id: `JD-REQ-${criterion.id}`, quote: "" }],
+        scoring_anchors: [0, 1, 2, 3, 4].map((score) => ({
+          score,
+          description: criterion.scoring_anchors?.find((anchor: any) => anchor.score === score)?.description || "",
+        })),
+      })));
+      setRubricEditorThreshold(Number(rubric.threshold_config?.threshold ?? 70));
+    } else {
+      setRubricEditorCriteria([emptyCustomCriterion(0), emptyCustomCriterion(1)]);
+      setRubricEditorThreshold(70);
+    }
+    setRubricEditorOpen(true);
+  }
+
+  async function handleSaveCustomRubric() {
+    if (!requisition?.current_jd_version_id) {
+      warning("Cần tạo và lưu phiên bản JD trước khi lập rubric.");
+      return;
+    }
+    if (rubricEditorCriteria.length < 2 || rubricEditorCriteria.length > 12) {
+      warning("Rubric cần từ 2 đến 12 tiêu chí.");
+      return;
+    }
+    const weightTotal = rubricEditorCriteria.reduce((sum, criterion) => sum + Number(criterion.weight || 0), 0);
+    if (weightTotal !== 100) {
+      warning(`Tổng trọng số đang là ${weightTotal}%; cần đúng 100%.`);
+      return;
+    }
+    const criterionIds = rubricEditorCriteria.map((criterion) => criterion.id);
+    if (new Set(criterionIds).size !== criterionIds.length) {
+      warning("ID tiêu chí bị trùng. Mỗi năng lực cần một ID slug riêng.");
+      return;
+    }
+    if (!jdVersion || rubricEditorCriteria.some((criterion) =>
+      !/^[a-z][a-z0-9_]{1,49}$/.test(criterion.id)
+      || !criterion.label.trim()
+      || !criterion.description.trim()
+      || criterion.source_requirements.length === 0
+      || criterion.source_requirements.some((ref: any) => !ref.requirement_id.trim() || !ref.quote.trim() || !jdVersion.source_text.includes(ref.quote))
+      || criterion.scoring_anchors.length !== 5
+      || criterion.scoring_anchors.some((anchor: any) => !anchor.description.trim())
+    )) {
+      warning("Mỗi tiêu chí cần ID hợp lệ, mô tả, đủ 5 anchor và trích dẫn JD khớp nguyên văn.");
+      return;
+    }
+    setRubricActionLoading(true);
+    try {
+      const customRubric = {
+        recommendation_policy: {
+          threshold: Number(rubricEditorThreshold),
+          core_minimum_scores: Object.fromEntries(rubricEditorCriteria.filter((criterion) => criterion.core).map((criterion) => [criterion.id, 2])),
+          require_full_coverage: true,
+        },
+        criteria: rubricEditorCriteria.map((criterion) => ({
+          id: criterion.id,
+          label: criterion.label.trim(),
+          description: criterion.description.trim(),
+          weight: Number(criterion.weight),
+          core: Boolean(criterion.core),
+          source_requirements: criterion.source_requirements.map((ref: any) => ({ requirement_id: ref.requirement_id.trim(), quote: ref.quote.trim() })),
+          scoring_anchors: criterion.scoring_anchors.map((anchor: any) => ({ score: anchor.score, description: anchor.description.trim() })),
+        })),
+      };
+      if (rubric?.status === "draft") {
+        await api.updateRubric(rubric.id, customRubric);
+      } else {
+        await api.createRubric(id, { source: "manual", jd_version_id: requisition.current_jd_version_id, rubric: customRubric });
+      }
+      setRubricEditorOpen(false);
+      setAcknowledgedRubric(false);
+      success("Đã lưu rubric dạng bản nháp. Chỉ được dùng sau khi Owner duyệt.");
+      await loadData();
+    } catch (err: any) {
+      toastError(err.message || "Không thể lưu rubric nháp.");
     } finally {
       setRubricActionLoading(false);
     }
@@ -538,7 +640,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* Tab 2: Job Description & 6-Criteria Rubric */}
+      {/* Tab 2: Job Description & role-specific rubric */}
       {activeTab === "jd_rubric" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
           {/* Job Description Card */}
@@ -588,23 +690,25 @@ export default function RequisitionDetailPage({ params }: PageProps) {
           <div className="card">
             <div className="card-header" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
               <div>
-                <h2 className="card-title">Bộ Tiêu Chí Đánh Giá Chuẩn Hóa (Rubric)</h2>
+                <h2 className="card-title">Rubric năng lực theo JD</h2>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
-                  Sáu tiêu chí kỹ thuật và trọng số cần được HR, chuyên môn IT kiểm tra trước khi duyệt.
+                  Tạo 2–12 tiêu chí, gắn trích dẫn JD nguyên văn và anchor 0–4. Owner duyệt trước khi đánh giá CV.
                 </p>
               </div>
 
-              <div>
-                {!rubric ? (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleCreateSeedRubric}
-                    disabled={rubricActionLoading || !jdVersion || Boolean(rubricLoadError)}
-                  >
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                {canManage && jdVersion && requisition.status !== "closed" && (
+                  <button className="btn btn-secondary btn-sm" onClick={openCustomRubricEditor} disabled={rubricActionLoading || Boolean(rubricLoadError)}>
                     <IconPlus size={14} />
-                    <span>Khởi Tạo 6 Tiêu Chí Mẫu</span>
+                    <span>{rubric?.status === "draft" ? "Sửa rubric nháp" : rubric ? "Tạo phiên bản rubric mới" : "Tạo rubric theo JD"}</span>
                   </button>
-                ) : rubric.status === "draft" ? (
+                )}
+                {!rubric && canManage && (
+                  <button className="btn btn-outline btn-sm" onClick={handleCreateSeedRubric} disabled={rubricActionLoading || !jdVersion || Boolean(rubricLoadError)}>
+                    <span>Dùng mẫu Backend Python</span>
+                  </button>
+                )}
+                {rubric?.status === "draft" && (
                   <button
                     className="btn btn-primary btn-sm"
                     onClick={handleApproveRubric}
@@ -613,7 +717,8 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                     <IconCheckCircle size={14} />
                     <span>Phê Duyệt Rubric (Owner)</span>
                   </button>
-                ) : (
+                )}
+                {rubric?.status === "approved" && (
                   <span className="badge badge-open">
                     <IconCheckCircle size={12} color="#34d399" />
                     <span>Đã Duyệt Chính Thức</span>
@@ -623,12 +728,61 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             </div>
 
             {rubricLoadError && <div className="notice notice-error" role="alert">{rubricLoadError}<button type="button" className="btn btn-sm btn-outline" onClick={() => void loadData()}>Thử lại</button></div>}
+            {rubricEditorOpen && (
+              <div className="card" style={{ marginBottom: "1.25rem", border: "1px solid var(--accent-cyan)" }}>
+                <div className="card-header" style={{ alignItems: "flex-start" }}>
+                  <div>
+                    <h3 className="card-title">Thiết lập tiêu chí theo vị trí</h3>
+                    <p className="muted">Mỗi trích dẫn phải khớp nguyên văn với JD phía trên. Bản nháp chưa được dùng để chấm hồ sơ.</p>
+                  </div>
+                  <button className="btn btn-outline btn-sm" type="button" onClick={() => setRubricEditorOpen(false)}>Đóng</button>
+                </div>
+                <label className="form-label" htmlFor="rubric-threshold">Ngưỡng gợi ý /100 (chỉ là cấu hình, cần HR hiệu chuẩn)</label>
+                <input id="rubric-threshold" className="form-input" type="number" min={1} max={100} value={rubricEditorThreshold} onChange={(event) => setRubricEditorThreshold(Number(event.target.value))} style={{ maxWidth: "180px", marginBottom: "1rem" }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  {rubricEditorCriteria.map((criterion, criterionIndex) => (
+                    <section key={`${criterion.id}-${criterionIndex}`} className="card" style={{ padding: "1rem", background: "var(--bg-surface-elevated)" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+                        <strong>Tiêu chí {criterionIndex + 1}</strong>
+                        {rubricEditorCriteria.length > 2 && <button className="btn btn-outline btn-sm" type="button" aria-label={`Xóa tiêu chí ${criterionIndex + 1}`} onClick={() => setRubricEditorCriteria((items) => items.filter((_, index) => index !== criterionIndex))}><IconX size={14} /></button>}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "0.75rem", marginTop: "0.75rem" }}>
+                        <label className="form-label">ID slug<input className="form-input" value={criterion.id} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, id: event.target.value } : item))} placeholder="frontend_react" /></label>
+                        <label className="form-label">Trọng số %<input className="form-input" type="number" min={1} max={99} value={criterion.weight} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, weight: Number(event.target.value) } : item))} /></label>
+                        <label className="form-label">Tên năng lực<input className="form-input" value={criterion.label} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, label: event.target.value } : item))} /></label>
+                        <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><input type="checkbox" checked={criterion.core} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, core: event.target.checked } : item))} /> Cốt lõi (mức sàn 2/4)</label>
+                      </div>
+                      <label className="form-label" style={{ display: "block", marginTop: "0.75rem" }}>Mô tả tiêu chí<textarea className="form-textarea" rows={2} value={criterion.description} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, description: event.target.value } : item))} /></label>
+                      <div style={{ display: "grid", gridTemplateColumns: "minmax(130px, 1fr) minmax(240px, 3fr)", gap: "0.75rem", marginTop: "0.75rem" }}>
+                        <label className="form-label">Mã yêu cầu JD<input className="form-input" value={criterion.source_requirements[0]?.requirement_id || ""} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, source_requirements: [{ requirement_id: event.target.value, quote: item.source_requirements[0]?.quote || "" }] } : item))} /></label>
+                        <label className="form-label">Trích dẫn nguyên văn từ JD<textarea className="form-textarea" rows={2} value={criterion.source_requirements[0]?.quote || ""} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, source_requirements: [{ requirement_id: item.source_requirements[0]?.requirement_id || "", quote: event.target.value }] } : item))} /></label>
+                      </div>
+                      <details style={{ marginTop: "0.75rem" }}>
+                        <summary style={{ cursor: "pointer", fontWeight: 600 }}>Định nghĩa năm mức điểm (bắt buộc)</summary>
+                        <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.65rem" }}>
+                          {criterion.scoring_anchors.map((anchor: any, anchorIndex: number) => (
+                            <label className="form-label" key={anchor.score}>Mức {anchor.score}/4<textarea className="form-textarea" rows={2} value={anchor.description} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, scoring_anchors: item.scoring_anchors.map((value: any, i: number) => i === anchorIndex ? { ...value, description: event.target.value } : value) } : item))} /></label>
+                          ))}
+                        </div>
+                      </details>
+                    </section>
+                  ))}
+                </div>
+                <div className="notice" style={{ marginTop: "0.75rem" }}>
+                  Tổng trọng số: {rubricEditorCriteria.reduce((sum, criterion) => sum + Number(criterion.weight || 0), 0)}%. Cần đúng 100%. Không đưa tuổi, giới tính, tên trường, quê quán hoặc tiêu chí proxy vào rubric.
+                </div>
+                <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
+                  <button className="btn btn-secondary" type="button" onClick={() => setRubricEditorCriteria((items) => items.length >= 12 ? items : [...items, { ...emptyCustomCriterion(items.length), weight: 0 }])} disabled={rubricEditorCriteria.length >= 12}>Thêm tiêu chí</button>
+                  <button className="btn btn-primary" type="button" onClick={handleSaveCustomRubric} disabled={rubricActionLoading}>{rubricActionLoading ? "Đang lưu…" : rubric?.status === "draft" ? "Lưu thay đổi bản nháp" : "Tạo bản nháp rubric"}</button>
+                </div>
+              </div>
+            )}
             {rubric?.status === "draft" && (
               <div className="notice notice-warning" style={{ marginBottom: "1rem" }}>
                 Bản nháp chưa được dùng để đánh giá. Kiểm tra từng tiêu chí, thang điểm và ngưỡng bên dưới trước khi phê duyệt.
               </div>
             )}
-            {rubric?.status === "draft" && !rubricJDAligned && <div className="notice notice-error" role="alert">Trích dẫn nguồn trong rubric seed chưa khớp nguyên văn với JD hiện hành. Không thể phê duyệt rubric này; cần JD phù hợp hoặc chỉnh rubric theo JD thật.</div>}
+            {rubric?.status === "draft" && !rubricJDAligned && <div className="notice notice-error" role="alert">Một hoặc nhiều trích dẫn nguồn chưa khớp nguyên văn với JD hiện hành. Không thể phê duyệt cho đến khi nguồn được chỉnh đúng.</div>}
 
             {rubric?.threshold_config && (
               <div className="rubric-policy">
@@ -674,7 +828,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             ) : (
               <div style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
                 <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", marginBottom: "1rem" }}>
-                  Chưa có tiêu chí Rubric nào được gán. Hãy khởi tạo bộ 6 tiêu chí chuẩn hóa mẫu.
+                  Chưa có tiêu chí Rubric nào được gán. Hãy tạo rubric theo JD hoặc dùng mẫu Backend Python.
                 </p>
                 <button
                   className="btn btn-primary btn-sm"
@@ -682,7 +836,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                   disabled={rubricActionLoading || !jdVersion || Boolean(rubricLoadError)}
                 >
                   <IconPlus size={14} />
-                  <span>Khởi Tạo 6 Tiêu Chí Mẫu Ngay</span>
+                  <span>Dùng mẫu Backend Python</span>
                 </button>
               </div>
             )}

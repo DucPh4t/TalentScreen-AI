@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/components/Toast";
 import HRRevisionEditor from "@/components/HRRevisionEditor";
 import CandidateCopilot from "@/components/CandidateCopilot";
+import RawPdfViewer from "@/components/RawPdfViewer";
 import { stageLabels } from "@/lib/workflow";
 import { SkeletonDossier } from "@/components/Skeleton";
 
@@ -39,6 +40,10 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [grantingRawAccess, setGrantingRawAccess] = useState(false);
   const [rawAccessError, setRawAccessError] = useState<string | null>(null);
+  const [rawPreviewBlob, setRawPreviewBlob] = useState<Blob | null>(null);
+  const [rawPreviewLoading, setRawPreviewLoading] = useState(false);
+  const [rawPreviewExpiresAt, setRawPreviewExpiresAt] = useState<number | null>(null);
+  const rawPreviewTimerRef = useRef<number | null>(null);
   const [assessmentRun, setAssessmentRun] = useState<AssessmentRunData | null>(null);
   const [hrRevisions, setHrRevisions] = useState<any[]>([]);
   const [decisions, setDecisions] = useState<any[]>([]);
@@ -88,6 +93,22 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   const refreshing = useRef(false);
   const canManage = requisition?.my_role === "owner";
   const effectiveRevision = hrRevisions.find(r => r.status === "finalized" && !r.is_stale && r.application_generation === application?.generation && r.document_id === application?.current_document_id && r.sanitized_version_id === application?.current_sanitized_version_id && r.rubric_version_id === requisition?.current_rubric_version_id);
+
+  function closeRawPreview(expired = false) {
+    setRawPreviewBlob(null);
+    setRawPreviewExpiresAt(null);
+    if (rawPreviewTimerRef.current) window.clearTimeout(rawPreviewTimerRef.current);
+    rawPreviewTimerRef.current = null;
+    if (expired) setRawAccessError("Quyền xem CV gốc đã hết hạn. Hãy cấp lại quyền để tiếp tục đối chiếu.");
+  }
+
+  useEffect(() => () => {
+    if (rawPreviewTimerRef.current) window.clearTimeout(rawPreviewTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "sanitization" && rawPreviewBlob) closeRawPreview();
+  }, [activeTab]);
 
   async function loadData(silent = false) {
     if (refreshing.current) return;
@@ -174,20 +195,31 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   async function handleGrantRawAccess() {
     if (!currentUser || !application?.current_document_id) return;
     setGrantingRawAccess(true);
+    setRawPreviewLoading(true);
     setRawAccessError(null);
     try {
-      await api.createRawGrant(
+      const currentDocument = application.documents?.find((document: any) => document.id === application.current_document_id);
+      if (currentDocument?.mime_verified !== "application/pdf") {
+        throw new Error("Xem trực tiếp hiện hỗ trợ PDF. Tệp này chưa có bản PDF để xem trong ứng dụng.");
+      }
+      closeRawPreview();
+      const grant = await api.createRawGrant(
         id,
         currentUser.id,
         "Kiểm tra bản CV đã che thông tin định danh trước khi đánh giá",
         30
       );
-      success("Đã cấp quyền truy cập CV gốc trong 30 phút.");
-      await loadData();
+      const blob = await api.getRawDocumentPreview(application.current_document_id);
+      setRawPreviewBlob(blob);
+      const expiresAt = new Date(grant.expires_at).getTime();
+      setRawPreviewExpiresAt(expiresAt);
+      rawPreviewTimerRef.current = window.setTimeout(() => closeRawPreview(true), Math.max(0, expiresAt - Date.now()));
+      success("CV gốc đã mở. Quyền và bản xem sẽ tự hết hạn sau 30 phút.");
     } catch (err: any) {
       setRawAccessError(err.message || "Không thể cấp quyền xem CV gốc.");
       toastError(err.message || "Không thể cấp quyền xem CV gốc.");
     } finally {
+      setRawPreviewLoading(false);
       setGrantingRawAccess(false);
     }
   }
@@ -424,7 +456,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                 {progress?.stage === "analyzing" ? "AI đang phân tích hồ sơ" : progress?.stage === "error" ? "Phân tích gặp lỗi" : "Hồ sơ chưa có kết quả đánh giá AI"}
               </h2>
               <p style={{ color: "var(--text-secondary)", maxWidth: "620px", margin: "0 auto 1.5rem auto", fontSize: "0.875rem", lineHeight: 1.6 }}>
-                Hệ thống sẽ đối chiếu nội dung CV đã khử định danh với 6 tiêu chí Rubric chuẩn mực. Mỗi nhận định đều buộc phải có trích dẫn chuỗi ký tự nguyên văn để con người kiểm chứng.
+                Hệ thống sẽ đối chiếu nội dung CV đã khử định danh với các tiêu chí trong rubric đã được HR duyệt. Mỗi nhận định đều có trích dẫn nguyên văn để con người kiểm chứng.
               </p>
               <button
                 className="btn btn-primary"
@@ -489,6 +521,47 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                   </div>
                 </div>
               </div>
+
+              {assessmentRun.secondary_model_output && (
+                <section className="card" aria-label="Kết quả đối chiếu Jev" style={{ marginBottom: "1.5rem", borderColor: "var(--border-subtle)" }}>
+                  <div className="card-header" style={{ marginBottom: "0.75rem" }}>
+                    <h2 className="card-title">Ý kiến mô hình thứ hai · Jev shadow</h2>
+                    <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.25rem" }}>
+                      Chỉ đối chiếu độc lập trên bằng chứng đã trích dẫn. Điểm Jev không thay đổi điểm, gợi ý hay quyết định của HR.
+                    </p>
+                  </div>
+                  {assessmentRun.secondary_model_output.status === "succeeded" ? (
+                    <>
+                      <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginBottom: "0.75rem" }}>
+                        Model: {assessmentRun.secondary_model_output.reported_model || assessmentRun.secondary_model_output.requested_model}
+                      </p>
+                      <div className="table-wrapper" style={{ border: "none" }}>
+                        <table className="data-table">
+                          <thead><tr><th>Tiêu chí</th><th>DeepSeek</th><th>Jev</th><th>Độ tin cậy Jev</th><th>Chênh lệch</th></tr></thead>
+                          <tbody>
+                            {Object.entries(assessmentRun.secondary_model_output.evaluations || {}).map(([criterionId, result]) => (
+                              <tr key={criterionId}>
+                                <td><strong>{rubric?.criteria?.find((criterion: any) => criterion.id === criterionId)?.label || criterionId}</strong></td>
+                                <td>{result.deepseek_score}/4</td>
+                                <td>{result.score.toFixed(2)}/4</td>
+                                <td>{(result.confidence * 100).toFixed(0)}%</td>
+                                <td>{result.delta_from_deepseek > 0 ? "+" : ""}{result.delta_from_deepseek.toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: "0.75rem" }}>
+                        Độ tin cậy mô tả mức tập trung của phân bố dự đoán, không phải xác suất Jev đúng. HR cần mở trích dẫn CV để tự xác minh.
+                      </p>
+                    </>
+                  ) : assessmentRun.secondary_model_output.status === "skipped_insufficient_evidence" ? (
+                    <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>Không gửi sang Jev vì chưa có tiêu chí nào đủ bằng chứng CV đã xác minh.</p>
+                  ) : (
+                    <p style={{ color: "var(--amber-text)", fontSize: "0.85rem" }}>Không lấy được ý kiến Jev trong lần chạy này. Kết quả đánh giá chính vẫn giữ nguyên; mã lỗi: {assessmentRun.secondary_model_output.error_code || "JEV_SHADOW_FAILED"}.</p>
+                  )}
+                </section>
+              )}
 
               {/* Criteria Evidence Cards */}
               <div className="card">
@@ -657,6 +730,35 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
             {sanitizedVersion ? (
               <div>
+                {application.current_document_id && (
+                  <section aria-label="Đối chiếu CV gốc" style={{ margin: "0 1.5rem 1.25rem", padding: "1rem", border: "1px solid var(--amber-border)", borderRadius: "var(--radius-md)", background: "var(--amber-bg)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+                      <div>
+                        <strong style={{ color: "var(--text-primary)" }}>Đối chiếu với CV gốc</strong>
+                        <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.25rem" }}>
+                          CV gốc có thể chứa thông tin định danh. Chỉ người phụ trách mới được mở; quyền xem có thời hạn 30 phút và lần truy cập được ghi nhật ký. AI chỉ dùng bản đã che.
+                        </p>
+                      </div>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={handleGrantRawAccess} disabled={!canManage || grantingRawAccess}>
+                        <IconLock size={14} />
+                        <span>{grantingRawAccess ? "Đang mở…" : rawPreviewBlob ? "Mở lại CV gốc · gia hạn 30 phút" : "Xem CV gốc · cấp quyền 30 phút"}</span>
+                      </button>
+                    </div>
+                    {!canManage && <p style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "0.65rem" }}>Yêu cầu người phụ trách đợt tuyển dụng cấp quyền xem CV gốc.</p>}
+                    {rawPreviewExpiresAt && <p role="status" style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "0.65rem" }}>Quyền xem còn hiệu lực đến {new Date(rawPreviewExpiresAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}.</p>}
+                    {rawAccessError && <p role="alert" style={{ color: "var(--rose-text)", marginTop: "0.65rem" }}>{rawAccessError}</p>}
+                    {rawPreviewLoading && <p role="status">Đang tải bản xem PDF an toàn…</p>}
+                    {rawPreviewBlob && (
+                      <div style={{ marginTop: "0.85rem", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", overflow: "hidden", background: "white" }}>
+                        <RawPdfViewer file={rawPreviewBlob} />
+                        <div style={{ padding: "0.65rem 0.85rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
+                          <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>Bản gốc chỉ để đối chiếu. Đóng khi hoàn tất rà soát.</span>
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => closeRawPreview()}>Đóng bản xem</button>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
                 {sanitizedVersion.status === "draft" && (
                   <div style={{ marginBottom: "1rem" }}>
                     <button
@@ -741,7 +843,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       {/* Tab 3: HR Revision & Attested Hiring Decision */}
       {activeTab === "revision" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-          {!decisions.length && <p className="notice">Đã xác nhận đối chiếu {reviewedIds.length}/{rubric?.criteria?.length || 6} tiêu chí. <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab("assessment")}>Kiểm tra bằng chứng và điều chỉnh</button>{effectiveRevision && <span> Căn cứ quyết định: bản HR #{effectiveRevision.revision_no} đã hoàn tất.</span>}</p>}
+          {!decisions.length && <p className="notice">Đã xác nhận đối chiếu {reviewedIds.length}/{rubric?.criteria?.length || 0} tiêu chí. <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab("assessment")}>Kiểm tra bằng chứng và điều chỉnh</button>{effectiveRevision && <span> Căn cứ quyết định: bản HR #{effectiveRevision.revision_no} đã hoàn tất.</span>}</p>}
           <div className="card">
             <div className="card-header">
               <div>
