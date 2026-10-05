@@ -30,7 +30,8 @@ def test_seed_rubric_anchors_and_jd_quotes_reach_assessment_prompt() -> None:
         )
         for c in seed["criteria"]
     ]
-    prompt = json.loads(build_assessment_user_prompt(criteria, []))
+    span = SimpleNamespace(span_id="spn_" + "a" * 24, text="Synthetic exact source span.")
+    prompt = json.loads(build_assessment_user_prompt(criteria, [span]))
 
     assert len(prompt["rubric"]) == 6
     for supplied, packed in zip(seed["criteria"], prompt["rubric"]):
@@ -38,15 +39,17 @@ def test_seed_rubric_anchors_and_jd_quotes_reach_assessment_prompt() -> None:
         assert packed["source_requirements"] == supplied["source_requirements"]
         assert packed["anchors"] == supplied["scoring_anchors"]
         assert {anchor["score"] for anchor in packed["anchors"]} == set(range(5))
+    assert prompt["source_spans"] == [{"span_id": span.span_id, "quote": span.text}]
 
 
 def test_assessment_prompt_requires_rationale_and_untrusted_source_handling() -> None:
     prompt = build_assessment_system_prompt()
-    assert ASSESSMENT_PROMPT_VERSION == "assessment-v1.2.0"
+    assert ASSESSMENT_PROMPT_VERSION == "assessment-v1.3.0"
     assert '"rationale"' in prompt
     assert "untrusted candidate data" in prompt
     assert "Missing information is not score 0" in prompt
     assert "Write every rationale and missing_information question in Vietnamese" in prompt
+    assert "Never return an evidence 'text' field" in prompt
 
 
 @pytest.mark.asyncio
