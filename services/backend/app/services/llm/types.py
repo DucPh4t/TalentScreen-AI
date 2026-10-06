@@ -7,7 +7,7 @@ from typing import Any, Literal, Optional
 
 @dataclass
 class CompletionRequest:
-    task_kind: Literal["rubric", "assessment", "interview", "repair", "copilot"]
+    task_kind: Literal["rubric", "assessment", "interview", "repair"]
     system_prompt: str
     user_prompt: str
     model: str = "deepseek-flash"

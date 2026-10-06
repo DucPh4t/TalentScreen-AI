@@ -451,7 +451,6 @@ export const api = {
   async getSourceSpan(spanId: string): Promise<any> { return apiRequest(`/source-spans/${spanId}`); },
   async updateHRRevision(revisionId: string, payload: any): Promise<any> { return apiRequest(`/hr-revisions/${revisionId}`, { method: "PUT", body: JSON.stringify(payload) }); },
   async getApplicationProgress(applicationId: string): Promise<any> { return apiRequest(`/applications/${applicationId}/progress`); },
-  async askCopilot(applicationId: string, message: string): Promise<any> { return apiRequest(`/applications/${applicationId}/copilot`, { method: "POST", body: JSON.stringify({ message }) }); },
 
   // HR Revisions & Final Decision
   async listHRRevisions(applicationId: string): Promise<any[]> {

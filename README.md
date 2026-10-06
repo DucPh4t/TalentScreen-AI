@@ -41,7 +41,6 @@ flowchart LR
 - **Evidence-based assessment:** evaluate each approved rubric criterion, cite exact source spans from the reviewed CV, and flag missing or conflicting evidence. Missing evidence remains unscored rather than being treated as zero. Backend code validates the response and calculates weighted scores and advisory recommendations.
 - **Human review and decisions:** HR can review the evidence, record a justified score revision, compare candidates in a requisition matrix, and record the final outcome. The AI output is advisory; the app does not automatically advance or reject an applicant.
 - **Interview support:** create role question banks, generate candidate-specific follow-up questions from evidence gaps, and record interviewer scorecards separately from the AI CV assessment.
-- **Candidate Copilot:** ask questions about a candidate’s saved assessment and approved redacted CV. It is scoped to that application and does not make decisions or send messages.
 - **Training and operations:** use synthetic sandbox scenarios and onboarding guidance; inspect retention and deletion-request workflows, job status, provider usage, and operational readiness.
 
 ## AI providers and retrieval

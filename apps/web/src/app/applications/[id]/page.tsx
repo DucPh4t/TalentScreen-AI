@@ -20,7 +20,6 @@ import {
 } from "@/components/Icons";
 import { useToast } from "@/components/Toast";
 import HRRevisionEditor from "@/components/HRRevisionEditor";
-import CandidateCopilot from "@/components/CandidateCopilot";
 import RawPdfViewer from "@/components/RawPdfViewer";
 import { stageLabels } from "@/lib/workflow";
 import { SkeletonDossier } from "@/components/Skeleton";
@@ -795,7 +794,6 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
             </div>
           )}
           {assessmentRun && canManage && rubric && <HRRevisionEditor application={application} rubric={rubric} run={assessmentRun} revisions={hrRevisions} selectedCriterion={editingCriterion} onSaved={() => loadData(true)} />}
-          {assessmentRun && canManage && <CandidateCopilot applicationId={id} snapshotKey={`${application.generation}:${assessmentRun.id}:${requisition.current_rubric_version_id}`} onEvidence={setSelectedEvidence} />}
         </div>
       )}
 

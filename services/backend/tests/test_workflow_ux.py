@@ -1,5 +1,5 @@
-"""Regression of grounded Copilot, upload response-loss retries and private blind drafts."""
-import io, json, uuid
+"""Regression of upload response-loss retries and private blind drafts."""
+import io, uuid
 from datetime import datetime, timezone
 import docx, pytest
 from httpx import ASGITransport, AsyncClient
@@ -8,7 +8,6 @@ from app.main import app
 from app.db.models import Application, AssessmentRun, CriterionAssessment, CriterionEvidence, JDVersion, Job, IndependentReviewDraft, Requisition, SanitizedVersion
 from app.domain.enums import CriterionId, CriterionOutcome, SanitizedVersionStatus, JobType, JobStatus
 from app.domain.authorization import SESSION_COOKIE_NAME
-from app.services.llm.provider import MockLLMProvider
 from tests.test_decisions import setup_test_context
 
 def cv_bytes():
@@ -38,6 +37,13 @@ def client(ctx, role="o"):
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test", cookies={SESSION_COOKIE_NAME: ctx[f"{role}_token"]}, headers={"X-CSRF-Token": ctx[f"{role}_csrf"]})
 
 @pytest.mark.asyncio
+async def test_copilot_route_is_removed(test_session_factory):
+    ctx = await context(test_session_factory)
+    async with client(ctx) as api:
+        result = await api.post(f"/api/v1/applications/{ctx['app_id']}/copilot", json={"message": "Giải thích tiêu chí Python"})
+    assert result.status_code == 404
+
+@pytest.mark.asyncio
 async def test_application_response_loss_idempotency(test_session_factory):
     ctx = await context(test_session_factory)
     async with client(ctx) as api:
@@ -62,50 +68,6 @@ async def test_current_workflow_progress(test_session_factory):
         stale = await api.get(path)
         assert stale.json()["stage"] == "ready_for_ai"
         assert stale.json()["assessment_status"] == "missing_or_stale"
-
-@pytest.mark.asyncio
-async def test_copilot_grounded_and_rate_limited(test_session_factory, monkeypatch):
-    ctx = await context(test_session_factory, assessment=True)
-    provider = MockLLMProvider(custom_content=json.dumps({"mode": "explain", "criterion_ids": ["python_backend"]}))
-    original_complete = provider.complete
-    async def bounded_selector(request):
-        assert request.thinking_mode == "disabled" and request.max_output_tokens == 256
-        return await original_complete(request)
-    monkeypatch.setattr(provider, "complete", bounded_selector)
-    monkeypatch.setattr("app.services.llm.orchestrator.get_llm_provider", lambda: provider)
-    async with client(ctx) as api:
-        route = f"/api/v1/applications/{ctx['app_id']}/copilot"
-        for _ in range(3):
-            result = await api.post(route, json={"message": "Vì sao Python có điểm này?"})
-            assert result.status_code == 200, result.text
-            body = result.json(); assert body["facts"][0]["evidence"][0]["quote"] == ctx["span_text"]
-            assert body["facts"][0]["score"] == 2
-        limited = await api.post(route, json={"message": "Hỏi tiếp về Python"}); assert limited.status_code == 429
-    assert provider.invocation_count == 3
-    async with client(ctx, "r") as reviewer:
-        denied = await reviewer.post(route, json={"message": "Cho xem điểm AI"})
-        assert denied.status_code == 403
-    async with test_session_factory() as session:
-        jobs = (await session.execute(select(Job).where(Job.target_id == ctx["app_id"], Job.type == "copilot_select"))).scalars().all()
-        assert len(jobs) == 3
-        assert all("message" not in job.payload_ref for job in jobs)
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("bad", ["unapproved", "stale", "jd_unapproved", "ungrounded_selection", "provider_failure"])
-async def test_copilot_rejects_unsafe_or_unavailable_sources(test_session_factory, monkeypatch, bad):
-    ctx = await context(test_session_factory, assessment=True)
-    provider = MockLLMProvider(fault_mode="timeout" if bad == "provider_failure" else "success", custom_content=json.dumps({"mode": "explain", "criterion_ids": ["invented"] if bad == "ungrounded_selection" else ["python_backend"]}))
-    monkeypatch.setattr("app.services.llm.orchestrator.get_llm_provider", lambda: provider)
-    async with test_session_factory() as session:
-        if bad == "unapproved": (await session.get(SanitizedVersion, ctx["sanitized_id"])).status = SanitizedVersionStatus.DRAFT
-        if bad == "stale": (await session.get(Application, ctx["app_id"])).generation += 1
-        if bad == "jd_unapproved":
-            req = await session.get(Requisition, ctx["req_id"]); (await session.get(JDVersion, req.current_jd_version_id)).egress_reviewed_at = None
-        await session.commit()
-    async with client(ctx) as api:
-        result = await api.post(f"/api/v1/applications/{ctx['app_id']}/copilot", json={"message": "Giải thích tiêu chí Python"})
-        assert result.status_code == (503 if bad in ("ungrounded_selection", "provider_failure") else 409)
-    if bad in ("unapproved", "stale", "jd_unapproved"): assert provider.invocation_count == 0
 
 @pytest.mark.asyncio
 async def test_private_draft_restore_conflict_and_locked_label(test_session_factory):
@@ -140,15 +102,11 @@ async def test_hr_revision_rejects_fabricated_quote(test_session_factory):
         assert "INVALID_EVIDENCE" in result.text
 
 @pytest.mark.asyncio
-async def test_pending_assessment_hides_previous_results_and_blocks_copilot(test_session_factory, monkeypatch):
+async def test_pending_assessment_hides_previous_results(test_session_factory):
     ctx = await context(test_session_factory, assessment=True)
-    provider = MockLLMProvider()
-    monkeypatch.setattr("app.services.llm.orchestrator.get_llm_provider", lambda: provider)
     async with test_session_factory() as session:
         session.add(Job(type=JobType.ASSESS_APPLICATION, status=JobStatus.QUEUED, target_type="application", target_id=ctx["app_id"], input_snapshot_hash="b" * 64, payload_ref={}))
         await session.commit()
     async with client(ctx) as api:
         progress = (await api.get(f"/api/v1/applications/{ctx['app_id']}/progress")).json()
         assert progress["stage"] == "analyzing" and progress["assessment_status"] == "running"
-        blocked = await api.post(f"/api/v1/applications/{ctx['app_id']}/copilot", json={"message": "Giải thích Python"})
-        assert blocked.status_code == 409 and provider.invocation_count == 0

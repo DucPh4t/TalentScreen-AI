@@ -2,6 +2,8 @@
 
 Ngày: 2026-10-01. Thư mục làm việc duy nhất: `/Users/nguyenducphat/TalentScreen AI/`.
 
+> **Tư liệu lịch sử:** Tại thời điểm lập báo cáo, Copilot còn tồn tại và các dòng bên dưới ghi lại lần nghiệm thử đó. Chat Copilot đã được gỡ khỏi sản phẩm ở thay đổi sau; bảng phạm vi và kết quả Copilot trong tài liệu này không mô tả ứng dụng hiện tại.
+
 ## Kết luận
 
 Các cải tiến UX và Copilot có giới hạn đã được implement và chạy qua kiểm thử backend, build Docker, HTTP và trình duyệt. Local frontend vẫn ở port 2004. Đây là nghiệm thử kỹ thuật MVP; không phải ký G1–G7 hoặc chứng minh độ chính xác, fairness hay mức tương đồng AI–HR trên tuyển dụng thật.

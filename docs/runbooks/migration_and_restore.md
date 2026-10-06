@@ -69,4 +69,4 @@ docker compose --env-file /path/to/deployment.env -f docker-compose.prod.yml bui
 docker compose --env-file /path/to/deployment.env -f docker-compose.prod.yml up -d --no-build
 ```
 
-Migration b419ad53ef82 thêm bản nháp riêng của reviewer; f91bc402de33 thêm enum COPILOT_SELECT. Downgrade không loại enum khỏi PostgreSQL; không chạy image cũ khi còn tác vụ Copilot đang xử lý. Migration vẫn cần backup và maintenance phù hợp trước triển khai pilot.
+Migration b419ad53ef82 thêm bản nháp riêng của reviewer; f91bc402de33 từng thêm enum `COPILOT_SELECT` cho tính năng chat đã gỡ khỏi ứng dụng. PostgreSQL không loại enum này trong downgrade để giữ tương thích các cơ sở dữ liệu đã migrate; worker chỉ dừng an toàn job Copilot cũ và không gọi LLM. Migration vẫn cần backup và maintenance phù hợp trước triển khai.

@@ -19,7 +19,6 @@ from app.api.v1.rubrics import router as rubrics_router
 from app.api.v1.sanitization import router as sanitization_router
 from app.api.v1.workflow import router as workflow_router
 from app.api.v1.independent_review import router as independent_review_router
-from app.api.v1.copilot import router as copilot_router
 
 router = APIRouter(prefix="/v1")
 router.include_router(auth_router)
@@ -30,7 +29,6 @@ router.include_router(jobs_router)
 router.include_router(sanitization_router)
 router.include_router(workflow_router)
 router.include_router(independent_review_router)
-router.include_router(copilot_router)
 router.include_router(llm_router)
 router.include_router(assessment_router)
 router.include_router(decision_router)

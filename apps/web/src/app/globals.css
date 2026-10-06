@@ -2242,11 +2242,9 @@ textarea::placeholder {
 .upload-files li div { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .upload-files small { display: block; }
 .criterion-edit { margin: 16px 0; padding: 16px 0; border-bottom: 1px solid #e2e8f0; }
-.criterion-edit label, .revision-editor > label, .copilot-panel label { display: block; margin: 12px 0; }
+.criterion-edit label, .revision-editor > label { display: block; margin: 12px 0; }
 .span-picker { max-height: 300px; overflow: auto; }
 .span-picker label { display: flex; gap: 10px; align-items: flex-start; }
-.copilot-answer article { margin: 16px 0; border-top: 1px solid #e2e8f0; padding-top: 12px; }
-.copilot-answer button.evidence-quote-box { display: block; color: #374151; text-align: left; width: 100%; margin-top: 8px; }
 .blind-review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .blind-cv-pane { position: sticky; top: 100px; }
 .blind-cv-text { white-space: pre-wrap; max-height: calc(100vh - 260px); overflow: auto; padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; }
