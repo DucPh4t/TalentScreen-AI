@@ -498,7 +498,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
               </div>
               <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.35rem" }}>Chưa có hồ sơ nào được tiếp nhận</h3>
               <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", maxWidth: "520px", margin: "0 auto 1.5rem auto", lineHeight: 1.6 }}>
-                Đợt tuyển dụng chưa có hồ sơ ứng viên. Bạn có thể kéo thả hàng loạt 10–50 tệp CV (PDF hoặc DOCX) để hệ thống tự động bóc tách và che thông tin định danh PII.
+                Đợt tuyển dụng chưa có hồ sơ ứng viên. Tải tối đa 20 CV PDF hoặc DOCX mỗi lượt (10 MB/tệp). Hệ thống tạo bản nháp đã khử định danh để HR kiểm tra trước khi chạy AI.
               </p>
               {canManage && requisition.status === "open" && (
                 <button
@@ -856,7 +856,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                 </div>
                 <div>
                   <h2 className="modal-title">Tiếp Nhận Hồ Sơ CV Hàng Loạt</h2>
-                  <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Kéo thả đồng thời 10–50 tệp PDF/DOCX; hệ thống tự động bóc tách &amp; che PII.</p>
+                  <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Tối đa 20 tệp PDF/DOCX mỗi lượt, 10 MB/tệp. HR kiểm tra bản nháp đã khử định danh trước khi chạy AI.</p>
                 </div>
               </div>
               <button

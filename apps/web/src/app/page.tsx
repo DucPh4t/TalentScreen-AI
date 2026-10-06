@@ -80,7 +80,7 @@ export default function HomePage() {
 
         {/* ================= TOP MINIMAL GALLERY HEADER ================= */}
         <header className="talent-portal-header">
-          <a className="group" href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
+          <a className="talent-portal-brand" href="/">
             <div style={{
               width: '36px',
               height: '36px',
@@ -95,7 +95,7 @@ export default function HomePage() {
             }}>
               <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>neurology</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+            <div className="talent-portal-brand-copy">
               <span style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.025em', color: '#18181b' }}>
                 TalentScreen AI
               </span>
@@ -116,7 +116,7 @@ export default function HomePage() {
           </a>
 
           {/* Minimal right badge & language selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '12px' }}>
+          <div className="talent-portal-meta">
             <div className="talent-glass-pill" style={{
               padding: '6px 14px',
               borderRadius: '9999px',
@@ -150,7 +150,7 @@ export default function HomePage() {
         {/* ================= UNIFIED MAIN WORKSPACE (NO SPLIT) ================= */}
         <main className="talent-portal-main">
           {/* LEFT COLUMN: Elegant Typography & 3 Golden Metrics */}
-          <div style={{ width: '100%', maxWidth: '36rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '1.75rem' }}>
+          <div className="talent-portal-copy">
             {/* Architectural Tag */}
             <div className="talent-glass-pill" style={{
               padding: '4px 14px',
@@ -166,53 +166,59 @@ export default function HomePage() {
             </div>
 
             {/* Refined Editorial Headline */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div className="talent-portal-intro">
               <h1 className="talent-portal-headline">
                 TalentScreen<br />
                 <span className="italic">Đối chiếu hồ sơ</span> bằng chứng.
               </h1>
               <p style={{ fontSize: '15px', color: 'rgba(24, 24, 27, 0.8)', maxWidth: '28rem', lineHeight: 1.62 }}>
-                Hỗ trợ HR đối chiếu CV với yêu cầu vị trí tuyển dụng bằng rubric và bằng chứng trích từ hồ sơ. HR xem xét và quyết định cuối cùng.
+                Đối chiếu CV với JD theo rubric đã duyệt. Mỗi gợi ý có bằng chứng để HR kiểm tra và quyết định.
               </p>
             </div>
 
             {/* 3 Golden Metrics (Liquid Glass Prism Cards) */}
-            <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', paddingTop: '0.25rem' }}>
+            <div className="talent-portal-metrics">
               {/* Metric 1 */}
-              <div className="talent-glass-card" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
+              <div className="talent-glass-card talent-portal-metric" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', overflow: 'hidden' }}>
                 <div className="talent-glass-caustic" />
-                <div style={{ position: 'relative', zIndex: 10 }}>
+                <div className="talent-portal-metric-content" style={{ position: 'relative', zIndex: 10 }}>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#18181b', letterSpacing: '-0.025em', lineHeight: 1 }}>06</div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b', marginTop: '0.35rem' }}>Tiêu chí</div>
-                  <div style={{ fontSize: '10px', color: '#52525b', fontFamily: 'var(--font-mono, monospace)', textTransform: 'uppercase', marginTop: '0.15rem', letterSpacing: '0.05em' }}>Rubric Backend Python</div>
+                  <div className="talent-portal-metric-copy">
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b' }}>Tiêu chí</div>
+                    <div style={{ fontSize: '10px', color: '#52525b', fontFamily: 'var(--font-mono, monospace)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rubric Backend Python</div>
+                  </div>
                 </div>
               </div>
 
               {/* Metric 2 */}
-              <div className="talent-glass-card" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
+              <div className="talent-glass-card talent-portal-metric" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', overflow: 'hidden' }}>
                 <div className="talent-glass-caustic" />
-                <div style={{ position: 'relative', zIndex: 10 }}>
+                <div className="talent-portal-metric-content" style={{ position: 'relative', zIndex: 10 }}>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0d9488', letterSpacing: '-0.025em', lineHeight: 1 }}>HITL</div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b', marginTop: '0.35rem' }}>HR duyệt</div>
-                  <div style={{ fontSize: '10px', color: '#52525b', fontFamily: 'var(--font-mono, monospace)', textTransform: 'uppercase', marginTop: '0.15rem', letterSpacing: '0.05em' }}>Quyết định cuối cùng</div>
+                  <div className="talent-portal-metric-copy">
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b' }}>HR duyệt</div>
+                    <div style={{ fontSize: '10px', color: '#52525b', fontFamily: 'var(--font-mono, monospace)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Quyết định cuối cùng</div>
+                  </div>
                 </div>
               </div>
 
               {/* Metric 3 */}
-              <div className="talent-glass-card" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
+              <div className="talent-glass-card talent-portal-metric" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', overflow: 'hidden' }}>
                 <div className="talent-glass-caustic" />
-                <div style={{ position: 'relative', zIndex: 10 }}>
+                <div className="talent-portal-metric-content" style={{ position: 'relative', zIndex: 10 }}>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#18181b', letterSpacing: '-0.025em', lineHeight: 1 }}>CV</div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b', marginTop: '0.35rem' }}>Bằng chứng</div>
-                  <div style={{ fontSize: '10px', color: '#52525b', fontFamily: 'var(--font-mono, monospace)', textTransform: 'uppercase', marginTop: '0.15rem', letterSpacing: '0.05em' }}>Trích dẫn kiểm tra được</div>
+                  <div className="talent-portal-metric-copy">
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b' }}>Bằng chứng</div>
+                    <div style={{ fontSize: '10px', color: '#52525b', fontFamily: 'var(--font-mono, monospace)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trích dẫn kiểm tra được</div>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Micro Trust Citation */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'rgba(24, 24, 27, 0.8)', fontSize: '12px' }}>
+            <div className="talent-portal-trust-note">
               <span className="material-symbols-outlined" style={{ fontSize: '17px', color: '#0d9488' }}>verified</span>
-              <span>Điểm phản ánh bằng chứng quan sát được trong CV, không phải thước đo tuyệt đối năng lực.</span>
+              <span>Điểm phản ánh bằng chứng trong CV, không đo năng lực tuyệt đối.</span>
             </div>
           </div>
 

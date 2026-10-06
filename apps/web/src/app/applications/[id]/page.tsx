@@ -530,7 +530,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+        <div className="page-header-actions" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => void loadData()}>Làm mới trạng thái</button>
           <button
             className="btn btn-danger btn-sm"
@@ -544,7 +544,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
       {loadWarnings.length > 0 && <div role="alert" className="notice notice-error">{loadWarnings.map(message => <p key={message}>{message}</p>)}<button className="btn btn-secondary" onClick={() => void loadData()}>Thử tải lại</button></div>}
       <section className="workflow-next card" role="status" aria-live="polite">
-        <div><strong>{stageLabels[progress?.stage] || "Chưa xác định trạng thái"}</strong><p className="muted">{progress?.failure_code ? `Lỗi: ${progress.failure_code}. Kiểm tra nguồn trước khi thử lại.` : "Rà soát CV → phân tích → kiểm tra bằng chứng → quyết định → chuẩn bị phỏng vấn."}</p></div>
+        <div><strong>{stageLabels[progress?.stage] || "Chưa xác định trạng thái"}</strong><p className="muted">{progress?.failure_code ? `Lỗi: ${progress.failure_code}. Kiểm tra nguồn trước khi thử lại.` : "Chọn bước bên dưới để xem hồ sơ, kiểm tra bằng chứng hoặc ghi quyết định của HR."}</p></div>
         {!progress?.pending && <button className="btn btn-primary" disabled={!!loadWarnings.length || !progress || application.status !== "active"} onClick={() => {
           if (["awaiting_upload", "reading", "needs_review"].includes(progress.stage)) setActiveTab("sanitization");
           else if (progress.stage === "ready_for_ai") { setActiveTab("assessment"); if (canManage) void handleTriggerAssessment(); }
@@ -841,9 +841,9 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
             </div>
 
             {sanitizedVersion ? (
-              <div>
+              <div className={"cv-review-grid" + (rawPreviewBlob ? " cv-review-grid--compare" : "")}>
                 {application.current_document_id && (
-                  <section aria-label="Đối chiếu CV gốc" style={{ margin: "0 1.5rem 1.25rem", padding: "1rem", border: "1px solid var(--amber-border)", borderRadius: "var(--radius-md)", background: "var(--amber-bg)" }}>
+                  <section className="cv-review-source" aria-label="Đối chiếu CV gốc">
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
                       <div>
                         <strong style={{ color: "var(--text-primary)" }}>Đối chiếu với CV gốc</strong>
@@ -871,6 +871,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                     )}
                   </section>
                 )}
+                <div className="cv-review-redacted">
                 {sanitizedVersion.status === "draft" && (
                   <div style={{ marginBottom: "1rem" }}>
                     <button
@@ -928,22 +929,11 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                     </button>
                   </div>
                 ) : (
-                  <div style={{
-                background: "var(--bg-surface-elevated)",
-                border: "1px solid var(--border-subtle)",
-                padding: "1.5rem",
-                borderRadius: "var(--radius-md)",
-                fontSize: "0.875rem",
-                lineHeight: 1.75,
-                maxHeight: "550px",
-                overflowY: "auto",
-                whiteSpace: "pre-wrap",
-                fontFamily: "var(--font-mono)",
-                color: "var(--text-primary)"
-              }}>
-                {sanitizedVersion.canonical_text}
+                  <div className="cv-redacted-text">
+                    {sanitizedVersion.canonical_text}
                   </div>
                 )}
+                </div>
               </div>
             ) : application.current_sanitized_version_id ? (
               <div>

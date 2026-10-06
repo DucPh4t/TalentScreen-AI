@@ -2265,3 +2265,449 @@ textarea::placeholder {
 
 .assessment-summary > div > div { min-width: 0; max-width: 100%; }
 .assessment-summary .badge { white-space: normal; overflow-wrap: anywhere; }
+
+/* Login portal: keep the compact header and proof points readable on phones. */
+.talent-portal-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  text-decoration: none;
+}
+
+.talent-portal-brand-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.talent-portal-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.talent-portal-copy {
+  width: 100%;
+  max-width: 36rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.75rem;
+}
+
+.talent-portal-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.talent-portal-intro p {
+  width: 100%;
+  max-width: 28rem;
+  overflow-wrap: normal;
+}
+
+.talent-portal-trust-note {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: rgba(24, 24, 27, 0.8);
+  font-size: 12px;
+}
+
+.talent-portal-trust-note > span:last-child {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.talent-portal-metrics {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.talent-portal-metric {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.talent-portal-metric-content {
+  min-width: 0;
+}
+
+.talent-portal-metric-copy {
+  min-width: 0;
+}
+
+/* Candidate review keeps the redacted text and authorized original together. */
+.workspace-shell .cv-review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  min-width: 0;
+  padding: 0 1.25rem 1.25rem;
+}
+
+.workspace-shell .cv-review-grid--compare {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.workspace-shell .cv-review-source,
+.workspace-shell .cv-review-redacted {
+  min-width: 0;
+  align-self: start;
+  border-radius: var(--radius-md);
+}
+
+.workspace-shell .cv-review-source {
+  padding: 1rem;
+  border: 1px solid var(--amber-border);
+  background: var(--amber-bg);
+}
+
+.workspace-shell .cv-review-source > div:first-child {
+  flex-wrap: wrap;
+}
+
+.workspace-shell .cv-review-redacted {
+  padding: 1rem;
+  border: 1px solid var(--border-subtle);
+  background: #fff;
+}
+
+.workspace-shell .cv-redacted-text {
+  min-height: 12rem;
+  max-height: min(68vh, 760px);
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: #fbfcfd;
+  color: var(--text-primary);
+  font: 0.9rem/1.75 var(--font-sans);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+}
+
+.workspace-shell .raw-pdf-toolbar {
+  flex-wrap: wrap;
+}
+
+.workspace-shell .raw-pdf-toolbar > div {
+  flex-wrap: wrap;
+}
+
+.workspace-shell .table-wrapper {
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.workspace-shell .data-table {
+  min-width: 760px;
+}
+
+.workspace-shell .data-table td {
+  overflow-wrap: anywhere;
+}
+
+.workspace-shell .tabs-container {
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.workspace-shell .tab-btn {
+  flex: 0 0 auto;
+  min-height: 44px;
+  scroll-snap-align: start;
+}
+
+@media (max-width: 1120px) {
+  .talent-portal-main {
+    flex-direction: column;
+    align-items: center;
+    gap: 1.75rem;
+  }
+}
+
+@media (max-width: 780px) {
+  .talent-portal-header {
+    padding: 0.85rem 1rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .talent-portal-meta {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .talent-portal-main {
+    padding: 0.75rem 1rem 1.5rem;
+    gap: 1.25rem;
+  }
+
+  .talent-portal-copy {
+    gap: 1.25rem;
+  }
+
+  .workspace-shell .main-content {
+    padding: 1rem 0.875rem calc(2rem + env(safe-area-inset-bottom));
+  }
+
+  .workspace-shell .header-inner {
+    gap: 0.65rem;
+  }
+
+  .workspace-shell .brand-copy {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .workspace-shell .nav-link {
+    min-height: 44px;
+  }
+
+  .workspace-shell .page-header {
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .workspace-shell .page-header > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workspace-shell .page-title {
+    font-size: clamp(1.45rem, 5.5vw, 1.8rem);
+    overflow-wrap: anywhere;
+  }
+
+  .workspace-shell .workflow-next {
+    display: grid;
+    align-items: start;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .workspace-shell .workflow-next > button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .workspace-shell .card {
+    min-width: 0;
+  }
+
+  .workspace-shell .modal-overlay {
+    align-items: flex-end;
+    padding: 0.5rem;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .workspace-shell .modal-card {
+    width: 100%;
+    max-height: calc(100dvh - 1rem);
+    padding: 1.1rem;
+    border-radius: 1.25rem 1.25rem 0.85rem 0.85rem;
+  }
+
+  .workspace-shell .modal-header,
+  .workspace-shell .modal-footer {
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  .workspace-shell .modal-footer > .btn {
+    flex: 1 1 10rem;
+    min-height: 44px;
+  }
+
+  .workspace-shell .cv-review-grid {
+    padding: 0 0.85rem 0.85rem;
+  }
+
+  .workspace-shell .cv-review-grid--compare {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-shell .cv-review-source,
+  .workspace-shell .cv-review-redacted {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .workspace-shell .cv-redacted-text {
+    max-height: min(60vh, 620px);
+    font-size: 0.875rem;
+  }
+
+  .workspace-shell .page-header-actions {
+    width: 100%;
+  }
+
+  .workspace-shell .raw-pdf-toolbar > div {
+    width: 100%;
+  }
+
+  .workspace-shell .raw-pdf-toolbar > div > button {
+    flex: 1 1 8rem;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 640px) {
+  .talent-portal-header {
+    padding-inline: 0.875rem;
+  }
+
+  .talent-portal-brand {
+    gap: 0.55rem;
+  }
+
+  .talent-portal-brand-copy {
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .talent-portal-meta .talent-glass-pill {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .talent-portal-main {
+    padding-inline: 0.875rem;
+  }
+
+  .talent-portal-headline {
+    font-size: clamp(2.15rem, 9vw, 2.8rem);
+  }
+
+  .talent-portal-metrics {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .talent-portal-metric {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 76px;
+    padding: 0.7rem 0.9rem !important;
+  }
+
+  .talent-portal-metric-content {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    gap: 0.85rem;
+    width: 100%;
+  }
+
+  .talent-portal-metric-content > div:first-child {
+    justify-self: start;
+    font-size: 1.55rem !important;
+  }
+
+  .talent-portal-metric-copy > div:first-child {
+    margin-top: 0 !important;
+  }
+
+  .talent-portal-metric-copy > div:last-child {
+    margin-top: 0.15rem !important;
+    font-size: 0.7rem !important;
+    line-height: 1.35;
+  }
+
+  .talent-portal-main > div:last-child {
+    max-width: 100% !important;
+  }
+
+  .workspace-shell .main-content {
+    padding-inline: 0.7rem;
+  }
+
+  .workspace-shell .card {
+    padding: 1rem;
+    border-radius: var(--radius-md);
+  }
+
+  .workspace-shell .page-header-actions .btn {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+
+  .workspace-shell .workflow-actions {
+    align-items: stretch;
+  }
+
+  .workspace-shell .workflow-actions > label {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .workspace-shell .workflow-actions .form-input,
+  .workspace-shell .workflow-actions .form-select {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .workspace-shell .data-table {
+    min-width: 720px;
+  }
+
+  .workspace-shell .tabs-container {
+    margin-bottom: 1rem;
+  }
+
+  .workspace-shell .tab-btn {
+    padding-inline: 0.85rem;
+    font-size: 0.82rem;
+  }
+
+  .workspace-shell .btn {
+    min-height: 44px;
+  }
+
+  .workspace-shell .footer-inner,
+  .workspace-shell .footer-left,
+  .workspace-shell .footer-right {
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .workspace-shell .footer-inner {
+    flex-direction: column;
+  }
+}
+
+@media (min-width: 1121px) {
+  .workspace-shell .cv-review-grid--compare .cv-review-source,
+  .workspace-shell .cv-review-grid--compare .cv-review-redacted {
+    position: sticky;
+    top: 96px;
+    max-height: calc(100dvh - 112px);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+}

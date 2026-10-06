@@ -101,7 +101,7 @@ export default function RawPdfViewer({ file }: RawPdfViewerProps) {
 
   return (
     <div ref={hostRef}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", padding: "0.65rem 0.85rem", borderBottom: "1px solid var(--border-subtle)" }}>
+      <div className="raw-pdf-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", padding: "0.65rem 0.85rem", borderBottom: "1px solid var(--border-subtle)" }}>
         <span role="status" style={{ color: "var(--text-secondary)", fontSize: "0.82rem" }}>
           {pdf ? `Trang ${pageNumber}/${pdf.numPages}` : "Đang đọc PDF…"}{rendering ? " · Đang kết xuất" : ""}
         </span>
