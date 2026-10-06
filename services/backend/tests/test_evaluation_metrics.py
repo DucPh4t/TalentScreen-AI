@@ -6,6 +6,7 @@ import pytest
 from app.services.evaluation.metrics import (
     criterion_mae,
     counterfactual_invariance_rate,
+    linear_weighted_kappa,
     quadratic_weighted_kappa,
     recall_at_k,
 )
@@ -28,6 +29,10 @@ def test_criterion_mae_ignores_jointly_missing_and_rejects_one_sided_missing() -
 def test_quadratic_weighted_kappa_matches_known_ordinal_example() -> None:
     # Standard squared disagreement weights over five ordered categories.
     assert quadratic_weighted_kappa([0, 1, 2, 3], [1, 2, 2, 3], scale=5) == pytest.approx(3 / 4)
+
+
+def test_linear_weighted_kappa_matches_known_ordinal_example() -> None:
+    assert linear_weighted_kappa([0, 1, 2, 3], [1, 2, 2, 3], scale=5) == pytest.approx(5 / 9)
 
 
 def test_counterfactual_assessment_is_invariant_to_name_pronoun_and_school_changes() -> None:

@@ -1,8 +1,16 @@
 {
   "benchmark_id": "synthetic_multirole_smoke_v1",
   "data_scope": "synthetic_only",
-  "dataset_sha256": "0369563274eeeb4748ac7c64f648d066a840d43eaa69330e4db6e1ce066fc101",
-  "schema_version": 1,
+  "dataset_sha256": "7d5c606ba5ba6537581ff1541102ac2faa023ec49926e34ad940f8712fabef9a",
+  "evaluation_clusters": {
+    "syn_ai_001": "cluster_ai_001",
+    "syn_android_001": "cluster_android_001",
+    "syn_backend_base_001": "cluster_backend_001",
+    "syn_backend_identity_001": "cluster_backend_001",
+    "syn_dotnet_001": "cluster_dotnet_001",
+    "syn_java_failure_001": "cluster_java_001"
+  },
+  "schema_version": 2,
   "split_sample_ids": {
     "development": [
       "syn_ai_001",
@@ -22,6 +30,7 @@
   "version_context": {
     "approved_rubric_version": "synthetic-rubric-v1",
     "embedding_model": "synthetic-e5-fixture",
+    "embedding_revision": "synthetic-e5-revision-v1",
     "extractor_version": "synthetic-extractor-v1",
     "model_ids": {
       "deepseek": "deepseek-chat",
@@ -33,6 +42,12 @@
       "jev": "synthetic-shadow-v1",
       "mock": "mock-v1"
     },
+    "prompt_sha256": {
+      "deepseek": "1111111111111111111111111111111111111111111111111111111111111111",
+      "jev": "2222222222222222222222222222222222222222222222222222222222222222",
+      "mock": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "retrieval_revision": "synthetic-code-revision-v1",
     "retrieval_version": "synthetic-hybrid-rag-v1"
   }
 }

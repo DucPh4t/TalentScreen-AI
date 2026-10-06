@@ -72,6 +72,36 @@ def quadratic_weighted_kappa(
     return 1.0 - observed_disagreement / expected_disagreement
 
 
+def linear_weighted_kappa(
+    reference: list[int], predicted: list[int], scale: int = 5
+) -> float | None:
+    """Linear weighted Cohen's kappa for ordered categories ``0..scale-1``."""
+    if len(reference) != len(predicted):
+        raise ValueError("reference and predicted must have equal length")
+    if type(scale) is not int or scale < 2:
+        raise ValueError("scale must be an integer >= 2")
+    if not reference:
+        return None
+    if any(type(value) is not int or not 0 <= value < scale for value in reference + predicted):
+        raise ValueError(f"scores must be integer categories 0..{scale - 1}")
+
+    n = len(reference)
+    observed_disagreement = sum(
+        abs(expected - actual) / (scale - 1)
+        for expected, actual in zip(reference, predicted, strict=True)
+    ) / n
+    reference_counts = Counter(reference)
+    predicted_counts = Counter(predicted)
+    expected_disagreement = sum(
+        reference_counts[i] * predicted_counts[j] * abs(i - j) / (scale - 1)
+        for i in range(scale)
+        for j in range(scale)
+    ) / (n * n)
+    if expected_disagreement == 0:
+        return None
+    return 1.0 - observed_disagreement / expected_disagreement
+
+
 def counterfactual_invariance_rate(evaluations: list[dict[str, Any]]) -> float | None:
     """Fraction of complete identity-counterfactual pairs with identical scores."""
     allowed_changes = {"name", "pronoun", "hometown", "school"}
