@@ -149,19 +149,19 @@ Expected: PASS; output schema still contains the complete approved rubric ID set
 - Extend `CompletionResult` with `tool_calls: list[ToolCall]`; allow empty `content` only when valid tool calls are present.
 - Preserve secret masking, provider error mapping, usage accounting, and no-silent-fallback behavior.
 
-- [ ] **Step 1: Write failing provider contract tests** `test_deepseek_tool_call_contract`, `test_deepseek_tool_call_malformed_arguments_are_rejected`, and `test_deepseek_empty_content_is_allowed_only_with_tool_calls` using `httpx.MockTransport`.
-- [ ] **Step 2: Run the focused tests**
+- [x] **Step 1: Write failing provider contract tests** `test_deepseek_tool_call_contract`, `test_deepseek_tool_call_malformed_arguments_are_rejected`, and `test_deepseek_empty_content_is_allowed_only_with_tool_calls` using `httpx.MockTransport`.
+- [x] **Step 2: Run the focused tests**
 
 Run: `make test-backend`
 Expected: the isolated backend suite reports tool-call contract tests failing because the current adapter only accepts non-empty `message.content` and does not expose tool calls.
 
-- [ ] **Step 3: Implement typed tool-call parsing and message serialization** in `CompletionRequest`, `CompletionResult`, and `DeepSeekHTTPXProvider.complete`; reject malformed call IDs/names/JSON, keep raw request/response text out of logs, and calculate request hashes/token estimates from serialized messages and tool schemas in `execute_bounded_llm_call`.
-- [ ] **Step 4: Run provider and orchestration regressions**
+- [x] **Step 3: Implement typed tool-call parsing and message serialization** in `CompletionRequest`, `CompletionResult`, and `DeepSeekHTTPXProvider.complete`; reject malformed call IDs/names/JSON, keep raw request/response text out of logs, and calculate request hashes/token estimates from serialized messages and tool schemas in `execute_bounded_llm_call`.
+- [x] **Step 4: Run provider and orchestration regressions**
 
 Run: `make test-backend`
 Expected: PASS for normal JSON completions, refusal/timeout/error mapping, and valid/invalid tool responses.
 
-- [ ] **Step 5: Commit** as `feat: support validated deepseek tool calls`.
+- [x] **Step 5: Commit** as `feat: support validated deepseek tool calls`.
 
 ### Task 5: Bounded LangGraph assessment agent and trace persistence
 

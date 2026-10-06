@@ -4,8 +4,11 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import json
+from types import SimpleNamespace
 import uuid
 import pytest
+import httpx
 from sqlalchemy import select, update
 from httpx import ASGITransport, AsyncClient
 
@@ -45,6 +48,7 @@ from app.services.llm.exceptions import (
     BudgetExceededError,
     LLMAuthenticationError,
     LLMEmptyResponseError,
+    LLMMalformedJSONError,
     LLMModelUnavailableError,
     LLMQuotaExhaustedError,
     LLMRateLimitError,
@@ -60,12 +64,15 @@ from app.services.llm.ledger import (
 )
 from app.services.llm.orchestrator import (
     PreconditionViolationError,
+    _estimate_input_tokens,
+    _serialized_request_payload,
     execute_bounded_llm_call,
     verify_llm_preconditions,
 )
 from app.services.llm.probe import run_capability_probe
+from app.services.llm import provider as provider_module
 from app.services.llm.provider import DeepSeekHTTPXProvider, MockLLMProvider
-from app.services.llm.types import CompletionRequest
+from app.services.llm.types import CompletionRequest, CompletionResult, ToolCall
 
 
 async def setup_llm_test_context(session):
@@ -194,6 +201,232 @@ async def test_mock_provider_fault_injection():
     assert len(parsed.criteria) == 6
     assert all(criterion.score is None and not criterion.evidence for criterion in parsed.criteria)
 
+    tool = ToolCall(id="call_mock", name="read_evidence", arguments={"criterion_id": "python_backend"})
+    tool_res = await MockLLMProvider(custom_content="", custom_tool_calls=[tool]).complete(req)
+    assert tool_res.content == ""
+    assert tool_res.tool_calls == [tool]
+
+
+def _deepseek_tool_body(
+    *,
+    arguments='{"criterion_id":"python_backend"}',
+    call_id="call_abc123",
+    name="get_source_spans",
+    content=None,
+    finish_reason="tool_calls",
+):
+    return {
+        "id": "synthetic-tool-response",
+        "model": "deepseek-chat",
+        "usage": {"prompt_tokens": 31, "completion_tokens": 8},
+        "choices": [{
+            "finish_reason": finish_reason,
+            "message": {
+                "role": "assistant",
+                "content": content,
+                "tool_calls": [{
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": name, "arguments": arguments},
+                }],
+            },
+        }],
+    }
+
+
+DEEP_NESTED_TOOL_ARGUMENTS = '{"x":' + "[" * 100 + "0" + "]" * 100 + "}"
+
+
+@pytest.mark.asyncio
+async def test_deepseek_tool_call_contract():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json=_deepseek_tool_body())
+
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": "get_source_spans",
+            "description": "Read spans from the approved sanitized CV.",
+            "parameters": {
+                "type": "object",
+                "properties": {"criterion_id": {"type": "string"}},
+                "required": ["criterion_id"],
+                "additionalProperties": False,
+            },
+        },
+    }]
+    messages = [
+        {"role": "system", "content": "Use approved read-only tools."},
+        {"role": "user", "content": "Find Python evidence."},
+    ]
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = DeepSeekHTTPXProvider(
+            api_key="sk-synthetic-tool-key",
+            api_url="https://example.invalid/chat/completions",
+            client=client,
+        )
+        result = await provider.complete(CompletionRequest(
+            task_kind="assessment",
+            system_prompt="ignored when explicit messages are supplied",
+            user_prompt="ignored when explicit messages are supplied",
+            model="deepseek-chat",
+            response_format=None,
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+        ))
+
+    assert captured["messages"] == messages
+    assert captured["tools"] == tools
+    assert captured["tool_choice"] == "auto"
+    assert "response_format" not in captured
+    assert result.content is None
+    assert result.tool_calls == [ToolCall(id="call_abc123", name="get_source_spans", arguments={"criterion_id": "python_backend"})]
+    assert result.input_tokens == 31
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("arguments", "call_id", "name"),
+    [
+        ("{malformed", "call_abc123", "get_source_spans"),
+        ("[]", "call_abc123", "get_source_spans"),
+        (DEEP_NESTED_TOOL_ARGUMENTS, "call_abc123", "get_source_spans"),
+        ('{"criterion_id":"x"}', "bad id", "get_source_spans"),
+        ('{"criterion_id":"x"}', "call_abc123", "get source spans"),
+    ],
+)
+async def test_deepseek_tool_call_malformed_arguments_are_rejected(arguments, call_id, name):
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_deepseek_tool_body(arguments=arguments, call_id=call_id, name=name))
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = DeepSeekHTTPXProvider(
+            api_key="sk-synthetic-tool-key",
+            api_url="https://example.invalid/chat/completions",
+            client=client,
+        )
+        with pytest.raises(LLMMalformedJSONError):
+            await provider.complete(CompletionRequest(
+                task_kind="assessment",
+                system_prompt="",
+                user_prompt="",
+                model="deepseek-chat",
+                response_format=None,
+                messages=[{"role": "user", "content": "synthetic"}],
+                tools=[],
+            ))
+
+
+def test_tool_call_recursion_error_is_normalized(monkeypatch):
+    def raise_recursion(*_args, **_kwargs):
+        raise RecursionError("decoder recursion limit")
+
+    monkeypatch.setattr(provider_module, "json", SimpleNamespace(
+        loads=raise_recursion,
+        JSONDecodeError=json.JSONDecodeError,
+    ))
+    raw_calls = [{
+        "id": "call_abc123",
+        "type": "function",
+        "function": {"name": "get_source_spans", "arguments": '{"criterion_id":"x"}'},
+    }]
+
+    with pytest.raises(LLMMalformedJSONError, match="malformed tool call data"):
+        provider_module._parse_tool_calls(raw_calls)
+
+
+@pytest.mark.asyncio
+async def test_deepseek_empty_content_is_allowed_only_with_tool_calls():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, json=_deepseek_tool_body(content=""))
+    )) as client:
+        provider = DeepSeekHTTPXProvider(
+            api_key="sk-synthetic-tool-key",
+            api_url="https://example.invalid/chat/completions",
+            client=client,
+        )
+        result = await provider.complete(CompletionRequest(
+            task_kind="assessment", system_prompt="", user_prompt="", response_format=None,
+        ))
+        assert result.content == ""
+        assert len(result.tool_calls) == 1
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, json={
+            **_deepseek_tool_body(content=""),
+            "choices": [{"finish_reason": "stop", "message": {"content": "", "tool_calls": []}}],
+        })
+    )) as client:
+        provider = DeepSeekHTTPXProvider(
+            api_key="sk-synthetic-tool-key",
+            api_url="https://example.invalid/chat/completions",
+            client=client,
+        )
+        with pytest.raises(LLMEmptyResponseError):
+            await provider.complete(CompletionRequest(
+                task_kind="assessment", system_prompt="", user_prompt="", response_format=None,
+            ))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("usage", [None, [], {"prompt_tokens": "31"}, {"completion_tokens": -1}, {"prompt_tokens": True}])
+async def test_deepseek_malformed_usage_is_rejected(usage):
+    body = _deepseek_tool_body()
+    body["usage"] = usage
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, json=body)
+    )) as client:
+        provider = DeepSeekHTTPXProvider(
+            api_key="sk-synthetic-tool-key",
+            api_url="https://example.invalid/chat/completions",
+            client=client,
+        )
+        with pytest.raises(LLMMalformedJSONError):
+            await provider.complete(CompletionRequest(
+                task_kind="assessment", system_prompt="", user_prompt="", response_format=None,
+            ))
+
+
+def test_tool_schemas_and_messages_are_included_in_accounting_payload():
+    base = CompletionRequest(task_kind="assessment", system_prompt="sys", user_prompt="user")
+    with_tool = CompletionRequest(
+        task_kind="assessment",
+        system_prompt="sys",
+        user_prompt="user",
+        messages=[{"role": "assistant", "tool_calls": [{"id": "call_a"}]}],
+        tools=[{"type": "function", "function": {"name": "read_evidence", "parameters": {"type": "object"}}}],
+        tool_choice="auto",
+    )
+
+    base_payload = _serialized_request_payload(base)
+    tool_payload = _serialized_request_payload(with_tool)
+    assert json.loads(tool_payload)["tools"] == with_tool.tools
+    assert json.loads(tool_payload)["tool_choice"] == "auto"
+    assert json.loads(tool_payload)["messages"] == with_tool.messages
+    assert base_payload != tool_payload
+    assert len(tool_payload) > len(base_payload)
+    assert _estimate_input_tokens(with_tool) > _estimate_input_tokens(base)
+
+
+def test_empty_completion_result_requires_a_valid_tool_call():
+    with pytest.raises(ValueError, match="ToolCall id is malformed"):
+        ToolCall(id="invalid", name="read_evidence", arguments={})
+    with pytest.raises(ValueError, match="Completion tool_calls"):
+        CompletionResult(content="", requested_model="deepseek-chat", tool_calls=[{"id": "call_a"}])
+    with pytest.raises(ValueError, match="content or at least one valid tool call"):
+        CompletionResult(content=None, requested_model="deepseek-chat")
+
+    result = CompletionResult(
+        content="",
+        requested_model="deepseek-chat",
+        tool_calls=[ToolCall(id="call_a", name="read_evidence", arguments={})],
+    )
+    assert result.tool_calls[0].name == "read_evidence"
+
 
 @pytest.mark.asyncio
 async def test_truncated_provider_response_keeps_budget_reserved(test_session_factory):
@@ -224,6 +457,61 @@ async def test_truncated_provider_response_keeps_budget_reserved(test_session_fa
         from sqlalchemy import select
         invocation = (await session.execute(select(LLMInvocation).where(LLMInvocation.job_id == job_id))).scalar_one()
         reservation = (await session.execute(select(BudgetReservation).where(BudgetReservation.job_id == job_id))).scalar_one()
+        assert invocation.status == LLMInvocationStatus.OUTCOME_UNKNOWN
+        assert reservation.status == "outcome_unknown"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body",
+    [
+        _deepseek_tool_body(arguments=DEEP_NESTED_TOOL_ARGUMENTS),
+        {**_deepseek_tool_body(), "usage": None},
+    ],
+    ids=["malformed-tool-arguments", "malformed-usage-envelope"],
+)
+async def test_malformed_deepseek_response_keeps_budget_reserved(test_session_factory, body):
+    """Malformed HTTP 200 payloads may already have been billed by the provider."""
+    async with test_session_factory() as session:
+        _, _, _, _, _, job = await setup_llm_test_context(session)
+        job_id = job.id
+        await session.commit()
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, json=body)
+    )) as client:
+        provider = DeepSeekHTTPXProvider(
+            api_key="sk-synthetic-tool-key",
+            api_url="https://example.invalid/chat/completions",
+            client=client,
+        )
+        request = CompletionRequest(
+            task_kind="assessment",
+            system_prompt="",
+            user_prompt="Synthetic request.",
+            model="deepseek-flash",
+            response_format=None,
+            messages=[{"role": "user", "content": "Synthetic request."}],
+            tools=[{"type": "function", "function": {"name": "get_source_spans"}}],
+        )
+        async with test_session_factory() as session:
+            with pytest.raises(LLMMalformedJSONError):
+                await execute_bounded_llm_call(
+                    db=session,
+                    job_id=job_id,
+                    request=request,
+                    logical_step="provider_payload_malformed",
+                    attempt_no=1,
+                    provider_override=provider,
+                )
+
+    async with test_session_factory() as session:
+        invocation = (await session.execute(
+            select(LLMInvocation).where(LLMInvocation.job_id == job_id)
+        )).scalar_one()
+        reservation = (await session.execute(
+            select(BudgetReservation).where(BudgetReservation.job_id == job_id)
+        )).scalar_one()
         assert invocation.status == LLMInvocationStatus.OUTCOME_UNKNOWN
         assert reservation.status == "outcome_unknown"
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import hashlib
+import json
 import logging
 from typing import Optional
 import uuid
@@ -40,6 +41,29 @@ logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS_PER_STAGE = 2
 MAX_EXTERNAL_CALLS_PER_RUN = 4
+
+
+def _serialized_request_payload(request: CompletionRequest) -> str:
+    """Canonical request material for accurate token estimates and idempotency hashes."""
+    messages = request.messages if request.messages is not None else [
+        {"role": "system", "content": request.system_prompt},
+        {"role": "user", "content": request.user_prompt},
+    ]
+    payload = {
+        "model": request.model,
+        "messages": messages,
+        "tools": request.tools,
+        "tool_choice": request.tool_choice,
+        "response_format": request.response_format,
+        "max_tokens": request.max_output_tokens,
+        "temperature": request.temperature,
+        "thinking": {"type": request.thinking_mode} if request.thinking_mode is not None else None,
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _estimate_input_tokens(request: CompletionRequest) -> int:
+    return len(_serialized_request_payload(request)) // 3 + 200
 
 
 class PreconditionViolationError(Exception):
@@ -110,8 +134,10 @@ async def execute_bounded_llm_call(
     )
 
     # 2. Reserve budget
-    # Estimate prompt token count
-    estimated_input_tokens = len(request.system_prompt + request.user_prompt) // 3 + 200
+    # Estimate the complete serialized request, including conversation history
+    # and JSON tool schemas, rather than only the legacy system/user strings.
+    serialized_request = _serialized_request_payload(request)
+    estimated_input_tokens = _estimate_input_tokens(request)
     if request.provider == "jev":
         settings = get_settings()
         if settings.JEV_MODE != "shadow" or not settings.JEV_DATA_PROCESSING_APPROVED:
@@ -130,7 +156,7 @@ async def execute_bounded_llm_call(
     await db.commit()  # commit reservation before network I/O
 
     # 3. Create invocation record in RESERVED status
-    req_hash = hashlib.sha256(f"{request.system_prompt}:{request.user_prompt}".encode("utf-8")).hexdigest()
+    req_hash = hashlib.sha256(serialized_request.encode("utf-8")).hexdigest()
     llm = provider_override or get_llm_provider()
     provider_name = type(llm).__name__
 

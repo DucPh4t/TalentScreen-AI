@@ -23,9 +23,87 @@ from app.services.llm.exceptions import (
     LLMTimeoutError,
     LLMTruncatedError,
 )
-from app.services.llm.types import CompletionRequest, CompletionResult
+from app.services.llm.types import CompletionRequest, CompletionResult, ToolCall
 
 logger = logging.getLogger(__name__)
+MAX_TOOL_CALLS_PER_RESPONSE = 8
+MAX_TOOL_ARGUMENT_NESTING = 64
+
+
+def _reject_non_json_constant(_value: str) -> None:
+    raise ValueError("Invalid JSON constant.")
+
+
+def _has_excessive_json_nesting(value: str) -> bool:
+    """Bound nesting before JSON decoding so hostile arguments stay cheap and predictable."""
+    depth = 0
+    in_string = False
+    escaped = False
+    for char in value:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "[{":
+            depth += 1
+            if depth > MAX_TOOL_ARGUMENT_NESTING:
+                return True
+        elif char in "]}":
+            depth -= 1
+    return False
+
+
+def _parse_tool_calls(raw_tool_calls: Any) -> list[ToolCall]:
+    """Parse OpenAI-compatible function calls without retaining malformed payload text."""
+    if raw_tool_calls is None:
+        return []
+    if not isinstance(raw_tool_calls, list) or len(raw_tool_calls) > MAX_TOOL_CALLS_PER_RESPONSE:
+        raise LLMMalformedJSONError("DeepSeek returned malformed tool call data.")
+
+    calls: list[ToolCall] = []
+    seen_ids: set[str] = set()
+    for raw_call in raw_tool_calls:
+        if not isinstance(raw_call, dict):
+            raise LLMMalformedJSONError("DeepSeek returned malformed tool call data.")
+        call_id = raw_call.get("id")
+        function = raw_call.get("function")
+        if (
+            not isinstance(call_id, str)
+            or call_id in seen_ids
+            or raw_call.get("type") != "function"
+            or not isinstance(function, dict)
+        ):
+            raise LLMMalformedJSONError("DeepSeek returned malformed tool call data.")
+        name = function.get("name")
+        arguments_text = function.get("arguments")
+        if (
+            not isinstance(name, str)
+            or not isinstance(arguments_text, str)
+            or len(arguments_text) > 16_384
+            or _has_excessive_json_nesting(arguments_text)
+        ):
+            raise LLMMalformedJSONError("DeepSeek returned malformed tool call data.")
+
+        try:
+            arguments = json.loads(arguments_text, parse_constant=_reject_non_json_constant)
+        except (json.JSONDecodeError, RecursionError, ValueError) as exc:
+            raise LLMMalformedJSONError("DeepSeek returned malformed tool call data.") from exc
+        if not isinstance(arguments, dict):
+            raise LLMMalformedJSONError("DeepSeek returned malformed tool call data.")
+
+        try:
+            tool_call = ToolCall(id=call_id, name=name, arguments=arguments)
+        except ValueError as exc:
+            raise LLMMalformedJSONError("DeepSeek returned malformed tool call data.") from exc
+        seen_ids.add(call_id)
+        calls.append(tool_call)
+    return calls
 
 
 class BaseLLMProvider(abc.ABC):
@@ -44,10 +122,12 @@ class MockLLMProvider(BaseLLMProvider):
         self,
         fault_mode: str = "success",
         custom_content: Optional[str] = None,
+        custom_tool_calls: Optional[list[ToolCall]] = None,
         latency_ms: int = 10,
     ):
         self.fault_mode = fault_mode
         self.custom_content = custom_content
+        self.custom_tool_calls = custom_tool_calls or []
         self.latency_ms = latency_ms
         self.invocation_count = 0
 
@@ -134,6 +214,7 @@ class MockLLMProvider(BaseLLMProvider):
             output_tokens=100,
             provider_request_id=f"mock_req_{self.invocation_count}",
             latency_ms=self.latency_ms,
+            tool_calls=list(self.custom_tool_calls),
         )
 
 
@@ -176,7 +257,7 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
 
         payload: dict[str, Any] = {
             "model": request.model,
-            "messages": [
+            "messages": request.messages if request.messages is not None else [
                 {"role": "system", "content": request.system_prompt},
                 {"role": "user", "content": request.user_prompt},
             ],
@@ -187,6 +268,10 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
             payload["response_format"] = request.response_format
         if request.thinking_mode is not None:
             payload["thinking"] = {"type": request.thinking_mode}
+        if request.tools is not None:
+            payload["tools"] = request.tools
+        if request.tool_choice is not None:
+            payload["tool_choice"] = request.tool_choice
 
         start_time = time.monotonic()
         client = self._external_client or httpx.AsyncClient(timeout=request.timeout_seconds)
@@ -221,22 +306,45 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
             body = resp.json()
         except Exception:
             raise LLMMalformedJSONError("Failed to parse DeepSeek response body as JSON.")
+        if not isinstance(body, dict):
+            raise LLMMalformedJSONError("DeepSeek response body must be a JSON object.")
 
         # Parse usage
         usage = body.get("usage", {})
+        if not isinstance(usage, dict):
+            raise LLMMalformedJSONError("DeepSeek response usage is malformed.")
         input_tokens = usage.get("prompt_tokens")
         output_tokens = usage.get("completion_tokens")
+        if any(
+            token_count is not None
+            and (
+                not isinstance(token_count, int)
+                or isinstance(token_count, bool)
+                or token_count < 0
+            )
+            for token_count in (input_tokens, output_tokens)
+        ):
+            raise LLMMalformedJSONError("DeepSeek response usage is malformed.")
         provider_req_id = body.get("id")
         reported_model = body.get("model")
 
         choices = body.get("choices", [])
+        if not isinstance(choices, list):
+            raise LLMMalformedJSONError("DeepSeek response choices are malformed.")
         if not choices:
             raise LLMEmptyResponseError("DeepSeek returned no choices in response.")
 
         choice = choices[0]
+        if not isinstance(choice, dict):
+            raise LLMMalformedJSONError("DeepSeek response choice is malformed.")
         finish_reason = choice.get("finish_reason")
         message = choice.get("message", {})
+        if not isinstance(message, dict):
+            raise LLMMalformedJSONError("DeepSeek response message is malformed.")
         content = message.get("content")
+        if content is not None and not isinstance(content, str):
+            raise LLMMalformedJSONError("DeepSeek response content is malformed.")
+        tool_calls = _parse_tool_calls(message.get("tool_calls"))
 
         if finish_reason == "length":
             raise LLMTruncatedError("Response truncated: finish_reason is length")
@@ -245,7 +353,9 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
         elif finish_reason in {"insufficient_system_resource", "aborted"}:
             raise LLMServerError(f"DeepSeek did not complete generation (finish_reason: {finish_reason})")
 
-        if not content or not content.strip():
+        if finish_reason == "tool_calls" and not tool_calls:
+            raise LLMEmptyResponseError("DeepSeek indicated a tool call but returned none.")
+        if (not content or not content.strip()) and not tool_calls:
             raise LLMEmptyResponseError("DeepSeek choice message returned empty content.")
 
         return CompletionResult(
@@ -258,6 +368,7 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
             provider_request_id=provider_req_id,
             latency_ms=elapsed_ms,
             raw_response=body,
+            tool_calls=tool_calls,
         )
 
 
