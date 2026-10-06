@@ -30,8 +30,8 @@
 - Mixed Vietnamese/English text, section boundaries, and one span longer than the chunk maximum must remain retrievable with exact provenance; test in `test_chunking_preserves_sections_and_span_ids_for_mixed_language_cv` (Task 1).
 - Empty or weak retrieval and conflicting evidence must remain unscored and must not be fabricated by the agent; test in `test_hybrid_assessment_uses_null_when_retrieval_has_no_reliable_evidence` (Tasks 2–3).
 - Tool arguments naming an unknown criterion or attempting cross-application access must be rejected before querying data; test in `test_agent_tool_rejects_unknown_or_out_of_scope_criterion` (Task 5).
-- Prompt injection, malformed tool JSON, invalid citations, provider timeout, and exhausted call budget must fail closed without a silent mock result; tests in `test_deepseek_tool_call_contract`, `test_agent_ignores_cv_instructions`, and `test_assessment_call_budget_includes_jev_and_repair` (Tasks 4–6).
-- A deletion or version change while a job is running must discard late output and purge derived vectors/traces according to existing lifecycle behavior; test in `test_stale_assessment_discards_agent_output_and_deletion_cascades_trace` (Tasks 5–6).
+- Prompt injection, malformed tool JSON, invalid citations, provider timeout, and exhausted call budget must fail closed without a silent mock result; tests in `test_deepseek_tool_call_contract`, `test_agent_ignores_cv_instructions_and_blocks_unlisted_tools`, and `test_assessment_call_budget_includes_jev_and_repair` (Tasks 4–6).
+- A deletion or version change while a job is running must block follow-up egress, discard late output, and purge traces; cover with `test_agent_stops_before_second_model_call_if_snapshot_changes`, `test_late_agent_result_is_discarded_after_application_tombstone`, and `test_purge_worker_execution_and_clean_verification_report` (Task 5).
 
 ---
 
@@ -187,22 +187,22 @@ Expected: PASS for normal JSON completions, refusal/timeout/error mapping, and v
 - Persist only prompt/schema/retrieval versions, provider/model names, minimized tool names, criterion IDs, returned span IDs, counts, and outcomes in `AssessmentRun.execution_trace`; never persist raw CV text, query hints, prompts, or model arguments containing applicant text.
 - Do not configure a LangGraph checkpointer in this iteration. The existing PostgreSQL job queue is durable; graph state is transient and must not outlive the job.
 
-- [ ] **Step 1: Write failing graph/tool tests** `test_agent_uses_tool_only_when_evidence_is_missing`, `test_agent_stops_after_two_tool_executions`, `test_agent_tool_rejects_unknown_or_out_of_scope_criterion`, `test_get_source_spans_rejects_ids_outside_current_sanitized_version`, `test_agent_ignores_cv_instructions`, `test_agent_final_output_passes_exact_span_validator`, and `test_stale_assessment_discards_agent_output_and_deletion_cascades_trace` in `services/backend/tests/test_assessment_agent.py` and `services/backend/tests/test_deletion.py`.
-- [ ] **Step 2: Run the focused tests**
+- [x] **Step 1: Write failing graph/tool tests** for missing and partially covered criteria, 2-tool/3-round bounds, unknown criterion and span scope, CV prompt injection, exact citation validation, initial evidence sets larger than the tool batch cap, stale snapshots, and deletion purge in `services/backend/tests/test_assessment_agent.py` and `services/backend/tests/test_deletion.py`.
+- [x] **Step 2: Run the focused tests**
 
 Run: `make test-backend`
 Expected: the isolated backend suite reports graph/tool tests failing because the agent module and tool-call path do not exist.
 
-- [ ] **Step 3: Add the execution-trace migration and response field**; add `execution_trace JSONB NOT NULL DEFAULT '{}'` to `assessment_runs`, update the SQLAlchemy model and Pydantic response, and test upgrade/downgrade with the isolated migration suite.
-- [ ] **Step 4: Add LangGraph to `services/backend/pyproject.toml` and regenerate `services/backend/requirements.lock`** with `uv pip compile services/backend/pyproject.toml --all-extras --output-file services/backend/requirements.lock`.
-- [ ] **Step 5: Implement the StateGraph** with deterministic snapshot authorization, initial RAG pack, evidence coverage check, DeepSeek structured assessment, zero-to-two tool executions, final schema validation, deterministic scoring, and minimized trace. Count each model round trip through `execute_bounded_llm_call` with unique logical steps.
-- [ ] **Step 6: Integrate the graph into `execute_assessment_job`** and run it with the mock provider; Jev remains a separate shadow call after validated primary output and never participates in the graph or score.
-- [ ] **Step 7: Run agent, assessment, security, deletion, and migration regressions**
+- [x] **Step 3: Add the execution-trace migration and response field**; add `execution_trace JSONB NOT NULL DEFAULT '{}'` to `assessment_runs`, update the SQLAlchemy model and Pydantic response, and verify upgrade/downgrade/upgrade on isolated PostgreSQL.
+- [x] **Step 4: Add LangGraph to `services/backend/pyproject.toml` and regenerate `services/backend/requirements.lock`**, constraining existing package versions to the committed lock while adding LangGraph dependencies.
+- [x] **Step 5: Implement the StateGraph** with deterministic live-snapshot authorization, initial RAG pack, evidence coverage, structured assessment, zero-to-two tool executions, exact-span validation, deterministic scoring, and minimized trace. Count each model round trip through `execute_bounded_llm_call` with unique logical steps.
+- [x] **Step 6: Integrate the graph into `execute_assessment_job`** and test with the mock provider; Jev remains a separate shadow call after validated primary output and never participates in the graph or score.
+- [x] **Step 7: Run agent, assessment, security, deletion, and migration regressions**
 
 Run: `make test-backend`
 Expected: PASS; the agent cannot access or mutate data outside the run snapshot and the result is discarded when its source snapshot becomes stale or is deleted.
 
-- [ ] **Step 8: Commit** as `feat: add bounded evidence retrieval agent`.
+- [x] **Step 8: Commit** as `feat: add bounded evidence retrieval agent`.
 
 ### Task 6: Shared provider budget and per-requisition ceiling
 

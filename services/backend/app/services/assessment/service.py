@@ -47,15 +47,10 @@ from app.services.assessment.prompt import (
     AGENT_PROMPT_VERSION,
     ASSESSMENT_PROMPT_VERSION,
     HYBRID_ASSESSMENT_PROMPT_VERSION,
-    build_assessment_user_prompt,
-    build_repair_user_prompt,
     get_assessment_prompt,
 )
 from app.services.assessment.scoring import calculate_deterministic_scores
-from app.services.assessment.validator import (
-    AssessmentValidationError,
-    validate_assessment_output,
-)
+from app.services.agent.assessment_graph import AgentExecutionError, run_assessment_agent
 from app.services.audit import record_audit_event
 from app.services.llm.orchestrator import execute_bounded_llm_call
 from app.services.llm.provider import BaseLLMProvider
@@ -175,41 +170,6 @@ def _build_no_evidence_assessment(
             for criterion in rubric_criteria
         ]
     )
-
-
-def _replace_unretrieved_criteria_with_null(
-    raw_content: str,
-    rubric_criteria: list[RubricCriterion],
-    allowed_span_ids_by_criterion: dict[str, set[str]],
-) -> str:
-    """Enforce retrieval coverage before schema/provenance validation; never accept a guessed score."""
-    try:
-        parsed = json.loads(raw_content)
-    except (json.JSONDecodeError, TypeError):
-        return raw_content
-    if not isinstance(parsed, dict) or not isinstance(parsed.get("criteria"), list):
-        return raw_content
-
-    rubric_by_id = {criterion.criterion_id: criterion for criterion in rubric_criteria}
-    normalized_criteria = []
-    for item in parsed["criteria"]:
-        criterion_id = item.get("criterion_id") if isinstance(item, dict) else None
-        criterion = rubric_by_id.get(criterion_id)
-        if criterion is not None and not allowed_span_ids_by_criterion.get(criterion_id, set()):
-            normalized_criteria.append({
-                "criterion_id": criterion_id,
-                "status": CriterionOutcome.INSUFFICIENT_EVIDENCE.value,
-                "score": None,
-                "evidence": [],
-                "rationale": "Không có bằng chứng CV được truy xuất cho tiêu chí này.",
-                "missing_information": [
-                    f"Bạn có thể nêu một ví dụ thực tế thể hiện năng lực {criterion.label_vi} không?"
-                ],
-            })
-        else:
-            normalized_criteria.append(item)
-    parsed["criteria"] = normalized_criteria
-    return json.dumps(parsed, ensure_ascii=False)
 
 
 async def create_assessment_run(
@@ -377,6 +337,8 @@ async def create_assessment_run(
         application_id=run.application_id,
         run_no=run.run_no,
         status=run.status,
+        strategy=run.strategy,
+        execution_trace=run.execution_trace or {},
         coverage=0.0,
     )
 
@@ -466,6 +428,7 @@ async def execute_assessment_job(
     spans = (await db.execute(stmt_spans)).scalars().all()
     span_registry = {s.span_id: s for s in spans}
     evidence_ids_by_criterion: dict[str, set[str]] | None = None
+    oversized_evidence_excluded = False
 
     if retrieval_strategy == "hybrid":
         try:
@@ -516,6 +479,7 @@ async def execute_assessment_job(
             if evidence_chars + span_chars <= MAX_ASSESSMENT_EVIDENCE_CHARS:
                 selected_span_ids.append(span_id)
                 evidence_chars += span_chars
+        oversized_evidence_excluded = bool(pack_span_ids) and not selected_span_ids
         selected_span_id_set = set(selected_span_ids)
         spans = [span_registry[span_id] for span_id in selected_span_ids]
         span_registry = {span.span_id: span for span in spans}
@@ -543,81 +507,68 @@ async def execute_assessment_job(
                 return
             evidence_ids_by_criterion[criterion.criterion_id] = retrieved_ids & selected_span_id_set
 
-    # The complete rubric remains in every prompt; only the registered spans
-    # selected above may cross the model boundary in hybrid mode.
-    user_prompt = build_assessment_user_prompt(
-        rubric_criteria,
-        spans,
-        retrieved_span_ids_by_criterion=(
-            {criterion_id: sorted(span_ids) for criterion_id, span_ids in evidence_ids_by_criterion.items()}
-            if evidence_ids_by_criterion is not None
-            else None
-        ),
-    )
+    source_span_ids = [span.span_id for span in spans]
+    if evidence_ids_by_criterion is None:
+        evidence_ids_by_criterion = {
+            criterion.criterion_id: set(source_span_ids)
+            for criterion in rubric_criteria
+        }
+    agent_pack = {
+        "strategy": retrieval_strategy,
+        "criteria_retrieval_map": {
+            criterion_id: ([{"span_ids": sorted(span_ids)}] if span_ids else [])
+            for criterion_id, span_ids in evidence_ids_by_criterion.items()
+        },
+        "source_span_ids": source_span_ids,
+    }
 
-    validated_output: Optional[AssessmentOutputSchema] = (
-        _build_no_evidence_assessment(rubric_criteria) if not spans else None
-    )
-    last_error: Optional[str] = None
-
-    # 4. Bounded Execution Loop (Attempt 1 + Max 1 Repair = 2 attempts total)
-    for attempt in (() if validated_output is not None else (1, 2)):
-        current_prompt = (
-            user_prompt
-            if attempt == 1
-            else build_repair_user_prompt(user_prompt, [last_error or "Unknown validation error"])
-        )
-
-        req = CompletionRequest(
-            task_kind="assessment",
-            system_prompt=system_prompt,
-            user_prompt=current_prompt,
-            model=get_settings().DEEPSEEK_MODEL,
-            max_output_tokens=4096,
-            thinking_mode="disabled",
-        )
-
+    # Avoid an egress attempt when every initially retrieved span exceeds the
+    # assessment context ceiling. An empty hybrid retrieval may still use the
+    # bounded read-only tool to search approved terms once more.
+    validated_output: Optional[AssessmentOutputSchema] = None
+    if (retrieval_strategy == "full_text_baseline" and not spans) or oversized_evidence_excluded:
+        validated_output = _build_no_evidence_assessment(rubric_criteria)
+        run.execution_trace = {
+            "retrieval_strategy": retrieval_strategy,
+            "tool_execution_count": 0,
+            "model_round_trips": 0,
+            "outcome": "insufficient_evidence",
+            "error_code": "ASSESSMENT_CONTEXT_LIMIT" if oversized_evidence_excluded else None,
+        }
+    else:
         try:
-            call_res = await execute_bounded_llm_call(
+            agent_result = await run_assessment_agent(
                 db=db,
-                job_id=job_id,
-                request=req,
-                logical_step=f"assessment_attempt_{attempt}",
-                attempt_no=attempt,
-                sanitized_version_id=run.sanitized_version_id,
+                run=run,
+                rubric_criteria=rubric_criteria,
+                initial_pack=agent_pack,
                 provider_override=provider_override,
+                focus_criterion_ids=run.snapshot.get("focus_criterion_ids"),
             )
-            candidate_content = call_res.content or ""
-            if evidence_ids_by_criterion is not None:
-                candidate_content = _replace_unretrieved_criteria_with_null(
-                    candidate_content,
-                    rubric_criteria,
-                    evidence_ids_by_criterion,
-                )
-            validated_output = validate_assessment_output(
-                candidate_content,
-                span_registry,
-                expected_criterion_ids=set(weights_by_id),
-                allowed_span_ids_by_criterion=evidence_ids_by_criterion,
-            )
-            break  # Success!
-        except (AssessmentValidationError, Exception) as e:
-            logger.warning(f"Assessment run {run.id} attempt {attempt} failed: {e}")
-            last_error = str(e)
-            if attempt == 2:
-                # Terminal failure
-                run.status = "failed"
-                run.failure_code = last_error[:100]
-                run.completed_at = datetime.now(timezone.utc)
-                await db.flush()
-                return
-
-    if not validated_output:
-        run.status = "failed"
-        run.failure_code = "OUTPUT_VALIDATION_FAILED"
-        run.completed_at = datetime.now(timezone.utc)
-        await db.flush()
-        return
+            validated_output = agent_result.output
+            span_registry = agent_result.source_spans
+            run.execution_trace = agent_result.trace
+        except AgentExecutionError as exc:
+            run.execution_trace = exc.trace
+            run.status = "failed"
+            run.failure_code = exc.code[:100]
+            run.completed_at = datetime.now(timezone.utc)
+            await db.flush()
+            return
+        except Exception as exc:
+            logger.warning("Assessment agent failed for run %s (%s).", run.id, type(exc).__name__)
+            run.execution_trace = {
+                "retrieval_strategy": retrieval_strategy,
+                "tool_execution_count": 0,
+                "model_round_trips": 0,
+                "outcome": "failed",
+                "error_code": type(exc).__name__[:64],
+            }
+            run.status = "failed"
+            run.failure_code = type(exc).__name__[:100]
+            run.completed_at = datetime.now(timezone.utc)
+            await db.flush()
+            return
 
     # SEC-10 Late Arrival / Deletion Check
     app_check = (await db.execute(stmt_app_check)).first()
@@ -872,6 +823,8 @@ async def get_assessment_run_detail(
         application_id=run.application_id,
         run_no=run.run_no,
         status=run.status,
+        strategy=run.strategy,
+        execution_trace=run.execution_trace or {},
         observed_score=float(run.observed_score) if run.observed_score is not None else None,
         coverage=float(run.coverage),
         comparable_score=float(run.comparable_score) if run.comparable_score is not None else None,

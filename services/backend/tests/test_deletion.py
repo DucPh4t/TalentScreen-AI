@@ -398,6 +398,15 @@ async def test_purge_worker_execution_and_clean_verification_report(test_session
     """Test purge worker deletes physical blob, cleans database child records, and writes verification report."""
     async with test_session_factory() as session:
         ctx = await setup_deletion_fixture(session)
+        run = (await session.execute(
+            select(AssessmentRun).where(AssessmentRun.id == ctx["run_id"])
+        )).scalar_one()
+        run.execution_trace = {
+            "outcome": "validated",
+            "tool_execution_count": 1,
+            "tool_calls": [{"tool_name": "retrieve_more_evidence", "criterion_ids": ["python_backend"]}],
+        }
+        await session.commit()
 
     transport = ASGITransport(app=app)
     cookies = {SESSION_COOKIE_NAME: ctx["o_token"]}

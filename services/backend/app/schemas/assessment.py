@@ -109,6 +109,8 @@ class AssessmentRunResponse(BaseModel):
     application_id: uuid.UUID
     run_no: int
     status: str
+    strategy: str = "fulltext"
+    execution_trace: dict[str, Any] = Field(default_factory=dict)
     observed_score: Optional[float] = None
     coverage: float
     comparable_score: Optional[float] = None

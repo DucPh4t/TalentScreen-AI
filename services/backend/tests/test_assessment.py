@@ -563,11 +563,18 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
         "criteria": [
             {
                 "criterion_id": cid.value,
-                "status": "assessed",
-                "score": 3,
-                "evidence": [{"span_id": first_span.span_id, "quote": first_span.text}],
-                "rationale": f"Candidate demonstrated level 3 competency in {cid.value}",
-                "missing_information": [],
+                "status": "insufficient_evidence" if assessment_path == "hybrid_empty" else "assessed",
+                "score": None if assessment_path == "hybrid_empty" else 3,
+                "evidence": [] if assessment_path == "hybrid_empty" else [
+                    {"span_id": first_span.span_id, "quote": first_span.text}
+                ],
+                "rationale": (
+                    "Không có bằng chứng CV được truy xuất cho tiêu chí này."
+                    if assessment_path == "hybrid_empty"
+                    else f"Candidate demonstrated level 3 competency in {cid.value}"
+                ),
+                "missing_information": ["Cần hỏi ví dụ thực tế thể hiện năng lực này."]
+                if assessment_path == "hybrid_empty" else [],
             }
             for cid in CriterionId
         ]
@@ -627,13 +634,25 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
         await complete_job_fenced(session, job_id=j_id, worker_id="test_assess_worker", epoch=epoch, success=True)
         await session.commit()
 
-    if assessment_path in {"hybrid_empty", "hybrid_oversize"}:
+    if assessment_path == "hybrid_oversize":
         assert mock_llm.invocation_count == 0
     else:
         assert mock_llm.invocation_count == 1
-        prompt_payload = json.loads(mock_llm.requests[0].user_prompt)
+        user_message = next(
+            message["content"]
+            for message in mock_llm.requests[0].messages
+            if message["role"] == "user"
+        )
+        prompt_payload = json.loads(user_message)
         if rag_mode == "hybrid":
-            assert prompt_payload["source_spans"] == [{"span_id": first_span.span_id, "quote": first_span.text}]
+            if assessment_path == "hybrid_empty":
+                assert prompt_payload["source_spans"] == []
+                assert any(
+                    tool["function"]["name"] == "retrieve_more_evidence"
+                    for tool in mock_llm.requests[0].tools
+                )
+            else:
+                assert prompt_payload["source_spans"] == [{"span_id": first_span.span_id, "quote": first_span.text}]
         else:
             assert {item["span_id"] for item in prompt_payload["source_spans"]} == {span.span_id for span in spans}
 
@@ -643,6 +662,8 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
         assert res.status_code == 200
         data = res.json()
         assert data["status"] == "succeeded"
+        assert data["strategy"] == rag_mode
+        assert data["execution_trace"]["outcome"] in {"validated", "insufficient_evidence"}
         assert len(data["criteria"]) == 6
         if assessment_path in {"hybrid_empty", "hybrid_oversize"}:
             assert data["coverage"] == 0.0

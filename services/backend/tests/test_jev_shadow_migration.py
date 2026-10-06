@@ -1,4 +1,4 @@
-"""Regression checks for the latest Alembic additions used by interview workflows."""
+"""Regression checks for current Alembic additions used by assessment and interview workflows."""
 from __future__ import annotations
 
 from sqlalchemy import text
@@ -16,6 +16,16 @@ async def test_current_migrations_include_jev_output_and_optional_interview_bank
                 )
             )
         ).scalar_one_or_none()
+        trace_column = (
+            await session.execute(
+                text(
+                    "SELECT data_type, is_nullable, column_default FROM information_schema.columns "
+                    "WHERE table_schema = current_schema() "
+                    "AND table_name = 'assessment_runs' "
+                    "AND column_name = 'execution_trace'"
+                )
+            )
+        ).one_or_none()
         bank_nullable = (
             await session.execute(
                 text(
@@ -37,6 +47,7 @@ async def test_current_migrations_include_jev_output_and_optional_interview_bank
         revision = (await session.execute(text("SELECT version_num FROM alembic_version"))).scalar_one()
 
     assert jev_column == "jsonb"
+    assert trace_column == ("jsonb", "NO", "'{}'::jsonb")
     assert bank_nullable == "YES"
     assert scorecard_table == "interview_scorecards"
-    assert revision == "a6b9031d8f42"
+    assert revision == "6f2c91a4d8e0"

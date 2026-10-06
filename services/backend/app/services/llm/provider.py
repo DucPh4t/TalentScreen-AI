@@ -172,7 +172,18 @@ class MockLLMProvider(BaseLLMProvider):
             content = json.dumps({"followups": []})
         elif request.task_kind == "assessment":
             try:
-                prompt_payload = json.loads(request.user_prompt)
+                prompt_text = request.user_prompt
+                if request.messages:
+                    prompt_text = next(
+                        (
+                            message.get("content")
+                            for message in reversed(request.messages)
+                            if message.get("role") == "user"
+                            and isinstance(message.get("content"), str)
+                        ),
+                        prompt_text,
+                    )
+                prompt_payload = json.loads(prompt_text)
             except (TypeError, ValueError):
                 prompt_payload = {}
             rubric = prompt_payload.get("rubric", []) if isinstance(prompt_payload, dict) else []
