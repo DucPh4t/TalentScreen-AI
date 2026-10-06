@@ -443,6 +443,8 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
                 "expected_application_version": current_app_version,
                 "expected_sha256": sanitized_hash,
                 "acknowledged": True,
+                # The fixture is a known CV, but the conservative classifier may return unknown.
+                "confirmed_document_is_cv": True,
             },
         )
         assert appr_res.status_code == 200

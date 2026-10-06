@@ -89,6 +89,46 @@ def detect_language_vi_or_en(text: str) -> str:
     return "vi" if has_vi else "en"
 
 
+_JD_DOCUMENT_PATTERNS = (
+    re.compile(r"\bjob description\b", re.IGNORECASE),
+    re.compile(r"\b(?:your|key) responsibilities\b", re.IGNORECASE),
+    re.compile(r"\b(?:job|candidate|application) requirements\b", re.IGNORECASE),
+    re.compile(r"\bqualifications\b", re.IGNORECASE),
+    re.compile(r"\bapply now\b|\bhow to apply\b", re.IGNORECASE),
+    re.compile(r"mô tả công việc|yêu cầu ứng viên|quyền lợi|cách thức ứng tuyển", re.IGNORECASE),
+    # Product roles often describe deliverables rather than using generic job-ad headings.
+    re.compile(r"\bproduct owner intern\b", re.IGNORECASE),
+    re.compile(r"\buser stories?\b", re.IGNORECASE),
+    re.compile(r"\bacceptance criteria\b", re.IGNORECASE),
+)
+_CV_DOCUMENT_PATTERNS = (
+    re.compile(r"\bwork experience\b|\bprofessional experience\b", re.IGNORECASE),
+    re.compile(r"\btechnical skills\b|\bskills summary\b", re.IGNORECASE),
+    re.compile(r"\bprojects?\b|\bpersonal projects?\b", re.IGNORECASE),
+    re.compile(r"\beducation\b|\bcertifications\b", re.IGNORECASE),
+    re.compile(r"kinh nghiệm làm việc|kỹ năng chuyên môn|dự án cá nhân|học vấn", re.IGNORECASE),
+    re.compile(r"\bresume\b|\bcurriculum vitae\b", re.IGNORECASE),
+)
+
+
+def classify_document_type(text: str) -> dict[str, Any]:
+    """Return a conservative CV/JD hint for HR review; never use it as an eligibility decision."""
+    jd_hits = sum(bool(pattern.search(text or "")) for pattern in _JD_DOCUMENT_PATTERNS)
+    cv_hits = sum(bool(pattern.search(text or "")) for pattern in _CV_DOCUMENT_PATTERNS)
+    if jd_hits >= 3 and jd_hits - cv_hits >= 2:
+        kind, confidence = "job_description", "high"
+    elif cv_hits >= 2 and cv_hits - jd_hits >= 2:
+        kind, confidence = "cv", "medium"
+    else:
+        kind, confidence = "unknown", "low"
+    return {
+        "document_type_hint": kind,
+        "document_type_confidence": confidence,
+        "document_type_jd_signals": jd_hits,
+        "document_type_cv_signals": cv_hits,
+    }
+
+
 def docx_renderer_available() -> bool:
     return shutil.which("soffice") is not None or shutil.which("libreoffice") is not None
 
@@ -259,6 +299,7 @@ def compute_quality_report(
     elif suspected_scanned:
         status = "warning_scanned"
 
+    combined_text = "\n".join(text for _, text in pages_text)
     return {
         "total_pages": total_pages,
         "total_characters": total_chars,
@@ -269,6 +310,7 @@ def compute_quality_report(
         "ocr_pages": ocr_pages or [],
         "average_chars_per_page": round(avg_chars_per_page, 1),
         "quality_status": status,
+        **classify_document_type(combined_text),
     }
 
 

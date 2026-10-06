@@ -77,6 +77,8 @@ GENDER_MARITAL_REGEX = re.compile(
     re.IGNORECASE,
 )
 
+GENDER_WORD_REGEX = re.compile(r"\b(?:male|female|nam|nữ)\b", re.IGNORECASE)
+
 ADDRESS_ORIGIN_REGEX = re.compile(
     r"(?:địa\s*chỉ|address|quê\s*quán|nơi\s*sinh|hộ\s*khẩu|thường\s*trú|tạm\s*trú|place\s*of\s*birth|residence)[\s:]*([^\n\r,;]{3,60}(?:,[^\n\r,;]{2,60})*)",
     re.IGNORECASE,
@@ -99,6 +101,24 @@ SCHOOL_REGEX = re.compile(
 
 SCHOOL_SUFFIX_REGEX = re.compile(
     r"\b(?:[A-ZÀ-Ỹ][A-Za-zÀ-ỹ'’-]+[ \t]+){1,7}(?:University|College|Institute|Academy)\b"
+)
+
+# OCR, acronyms, and lowercased PDF exports can defeat the title-case suffix rule.
+SCHOOL_SUFFIX_FUZZY_REGEX = re.compile(
+    r"\b(?!(?:bachelor|master|doctor|phd|bsc|msc|science|arts|engineering|degree)\b)"
+    r"(?:[A-Za-zÀ-ỹ][A-Za-zÀ-ỹ'’.-]*[ \t]+){1,3}(?:university|college|school|institute|academy)\b",
+    re.IGNORECASE,
+)
+
+ADDRESS_FIELD_REGEX = re.compile(
+    r"(?:^|\n)[ \t]*(?:current\s+)?(?:location|address|home\s*town|hometown|district|ward|"
+    r"quê\s*quán|địa\s*chỉ|nơi\s*ở|quận|phường)[ \t]*[:：-][^\n\r]*",
+    re.IGNORECASE,
+)
+
+DISTRICT_WARD_REGEX = re.compile(
+    r"\b(?:district|ward)(?:\s+[0-9A-Za-z-]{1,24})?\b|\b(?:quận|phường)(?:\s+[0-9A-Za-z-]{1,24})?\b",
+    re.IGNORECASE,
 )
 
 # Company / Organization indicators (single-line only, do not match across newlines)
@@ -237,6 +257,12 @@ def sanitize_text(
             )
         )
 
+    # Catch standalone labels/values and common given names that can expose gender.
+    for m in GENDER_WORD_REGEX.finditer(normalized):
+        redaction_candidates.append(
+            RedactionMatch(m.start(), m.end(), m.group(), "[THÔNG_TIN_NHÂN_THÂN]", "demographic")
+        )
+
     # 7. Address & Origin
     for m in ADDRESS_ORIGIN_REGEX.finditer(normalized):
         redaction_candidates.append(
@@ -247,6 +273,19 @@ def sanitize_text(
                 replacement="[ĐỊA_CHỈ]",
                 entity_type="address",
             )
+        )
+
+    for m in ADDRESS_FIELD_REGEX.finditer(normalized):
+        start = m.start()
+        if normalized[start:start + 1] == "\n":
+            start += 1
+        redaction_candidates.append(
+            RedactionMatch(start, m.end(), normalized[start:m.end()], "[ĐỊA_CHỈ]", "address")
+        )
+
+    for m in DISTRICT_WARD_REGEX.finditer(normalized):
+        redaction_candidates.append(
+            RedactionMatch(m.start(), m.end(), m.group(), "[ĐỊA_CHỈ]", "address")
         )
 
     for m in LOCATION_REGEX.finditer(normalized):
@@ -270,6 +309,11 @@ def sanitize_text(
             )
 
     for m in SCHOOL_SUFFIX_REGEX.finditer(normalized):
+        redaction_candidates.append(
+            RedactionMatch(m.start(), m.end(), m.group(), "[TRƯỜNG_ĐẠI_HỌC]", "school")
+        )
+
+    for m in SCHOOL_SUFFIX_FUZZY_REGEX.finditer(normalized):
         redaction_candidates.append(
             RedactionMatch(m.start(), m.end(), m.group(), "[TRƯỜNG_ĐẠI_HỌC]", "school")
         )

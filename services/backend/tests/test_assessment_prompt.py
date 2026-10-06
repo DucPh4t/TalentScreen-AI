@@ -44,12 +44,14 @@ def test_seed_rubric_anchors_and_jd_quotes_reach_assessment_prompt() -> None:
 
 def test_assessment_prompt_requires_rationale_and_untrusted_source_handling() -> None:
     prompt = build_assessment_system_prompt()
-    assert ASSESSMENT_PROMPT_VERSION == "assessment-v1.3.0"
+    assert ASSESSMENT_PROMPT_VERSION == "assessment-v1.4.0"
     assert '"rationale"' in prompt
     assert "untrusted candidate data" in prompt
     assert "Missing information is not score 0" in prompt
     assert "Write every rationale and missing_information question in Vietnamese" in prompt
     assert "Never return an evidence 'text' field" in prompt
+    assert "45 Vietnamese words maximum" in prompt
+    assert "single best exact span" in prompt
 
 
 @pytest.mark.asyncio

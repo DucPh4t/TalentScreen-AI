@@ -60,17 +60,16 @@ def test_eval_metrics_mae_and_kappa():
 
 
 def test_full_evaluation_harness():
-    """B19: Evaluation uses recorded predictions; a wrong score changes MAE."""
-    criterion_ids = ["python_backend", "api_design", "sql_data", "testing_debugging", "security_privacy", "delivery_ops"]
+    """B19: Mixed role rubrics are compared only within their approved rubric."""
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
         labels = [
-            {"sample_id": "a", "split": "dev", "language": "vi", "label_origin": "hr_blind", "reviewer_id": "hr1", "criterion_scores": {key: 2 for key in criterion_ids}, "recommendation": "consider_next_round"},
-            {"sample_id": "b", "split": "dev", "language": "en", "label_origin": "hr_blind", "reviewer_id": "hr1", "criterion_scores": {key: 1 for key in criterion_ids}, "recommendation": "review_required"},
+            {"sample_id": "a", "rubric_id": "backend_node_intern", "role_family": "backend_node", "split": "dev", "language": "vi", "label_origin": "hr_blind", "reviewer_id": "hr1", "criterion_scores": {"backend_build": 2, "api_design": 2}, "recommendation": "consider_next_round"},
+            {"sample_id": "b", "rubric_id": "android_intern", "role_family": "android", "split": "dev", "language": "en", "label_origin": "hr_blind", "reviewer_id": "hr1", "criterion_scores": {"android_build": 1, "mobile_data": 1, "testing": None}, "recommendation": "review_required"},
         ]
         predictions = [
-            {"sample_id": "a", "run_id": "run-a", "prompt_version": "v1", "model": "mock", "criterion_scores": {key: 3 for key in criterion_ids}, "recommendation": "consider_next_round"},
-            {"sample_id": "b", "run_id": "run-b", "prompt_version": "v1", "model": "mock", "criterion_scores": {key: 1 for key in criterion_ids}, "recommendation": "needs_clarification"},
+            {"sample_id": "a", "rubric_id": "backend_node_intern", "run_id": "run-a", "prompt_version": "v1", "model": "mock", "criterion_scores": {"backend_build": 3, "api_design": 2}, "recommendation": "consider_next_round"},
+            {"sample_id": "b", "rubric_id": "android_intern", "run_id": "run-b", "prompt_version": "v1", "model": "mock", "criterion_scores": {"android_build": 1, "mobile_data": 1, "testing": None}, "recommendation": "needs_clarification"},
         ]
         labels_path, predictions_path = root / "labels.json", root / "predictions.json"
         labels_path.write_text(json.dumps(labels), encoding="utf-8")
@@ -78,22 +77,24 @@ def test_full_evaluation_harness():
         res = run_evaluation(predictions_path, labels_path, "dev")
     summary = res["evaluation_summary"]
     assert summary["total_evaluated"] == 2
-    assert summary["mean_absolute_error_score"] == 0.5
+    assert summary["mean_absolute_error_score"] == 0.25
     assert summary["human_assessable_coverage"] == 1.0
     assert summary["linear_weighted_kappa_score"] is not None
     assert summary["recommendation_accuracy"] == 0.5
     assert summary["observed_cost_usd"] is None
     assert "vi" in res["disaggregated_by_language"]
     assert "en" in res["disaggregated_by_language"]
+    assert res["per_rubric"]["backend_node_intern"]["comparable_score_pairs"] == 2
+    assert res["per_rubric"]["android_intern"]["comparable_score_pairs"] == 2
+    assert res["disaggregated_by_role_family"]["android"]["total_samples"] == 1
     assert res["gate_eligible"] is False
 
 
-def test_eval_rejects_missing_predictions_and_legacy_criteria(tmp_path):
-    criterion_ids = ["python_backend", "api_design", "sql_data", "testing_debugging", "security_privacy", "delivery_ops"]
-    label = {"sample_id": "a", "split": "holdout", "language": "mixed", "label_origin": "design_expected", "criterion_scores": {key: None for key in criterion_ids}, "recommendation": "review_required"}
+def test_eval_rejects_missing_predictions_and_invalid_dynamic_criteria(tmp_path):
+    label = {"sample_id": "a", "rubric_id": "ai_intern", "split": "holdout", "language": "mixed", "label_origin": "design_expected", "criterion_scores": {"python": None, "model_evaluation": None}, "recommendation": "review_required"}
     label_path, prediction_path = tmp_path / "labels.jsonl", tmp_path / "predictions.jsonl"
     label_path.write_text(json.dumps(label) + "\n", encoding="utf-8")
-    prediction_path.write_text(json.dumps({"sample_id": "a", "run_id": "r", "prompt_version": "v1", "model": "mock", "criterion_scores": {key: None for key in criterion_ids}, "recommendation": "review_required"}) + "\n", encoding="utf-8")
+    prediction_path.write_text(json.dumps({"sample_id": "a", "rubric_id": "ai_intern", "run_id": "r", "prompt_version": "v1", "model": "mock", "criterion_scores": {"python": None, "model_evaluation": None}, "recommendation": "review_required"}) + "\n", encoding="utf-8")
     report = run_evaluation(prediction_path, label_path, "holdout")
     assert report["gate_eligible"] is False
     assert report["evaluation_summary"]["mean_absolute_error_score"] is None
@@ -101,14 +102,24 @@ def test_eval_rejects_missing_predictions_and_legacy_criteria(tmp_path):
     bad = json.loads(prediction_path.read_text(encoding="utf-8"))
     bad["criterion_scores"] = {"technical_competence": 4}
     prediction_path.write_text(json.dumps(bad), encoding="utf-8")
-    with pytest.raises(ValueError, match="six production rubric IDs"):
+    with pytest.raises(ValueError, match="criterion_scores must contain 2..12"):
         run_evaluation(prediction_path, label_path, "holdout")
 
 
+def test_eval_rejects_prediction_from_wrong_role_rubric(tmp_path):
+    label = {"sample_id": "a", "rubric_id": "backend_node", "split": "dev", "language": "vi", "label_origin": "design_expected", "criterion_scores": {"api": 2, "database": 1}, "recommendation": "review_required"}
+    prediction = {"sample_id": "a", "rubric_id": "backend_python", "run_id": "r", "prompt_version": "v1", "model": "mock", "criterion_scores": {"api": 2, "database": 1}, "recommendation": "review_required"}
+    labels_path, predictions_path = tmp_path / "labels.json", tmp_path / "predictions.json"
+    labels_path.write_text(json.dumps([label]), encoding="utf-8")
+    predictions_path.write_text(json.dumps([prediction]), encoding="utf-8")
+    with pytest.raises(ValueError, match="rubric_id does not match"):
+        run_evaluation(predictions_path, labels_path, "dev")
+
+
 def test_prompt_variants_use_identical_cases(tmp_path):
-    keys = ["python_backend", "api_design", "sql_data", "testing_debugging", "security_privacy", "delivery_ops"]
+    keys = ["backend_build", "api_design"]
     labels = [
-        {"sample_id": sid, "split": "dev", "language": lang, "label_origin": "hr_blind", "reviewer_id": "hr1", "criterion_scores": {key: score for key in keys}, "recommendation": rec}
+        {"sample_id": sid, "rubric_id": "backend_node", "role_family": "backend_node", "split": "dev", "language": lang, "label_origin": "hr_blind", "reviewer_id": "hr1", "criterion_scores": {key: score for key in keys}, "recommendation": rec}
         for sid, lang, score, rec in [("a", "vi", 2, "review_required"), ("b", "en", 3, "consider_next_round")]
     ]
     label_path = tmp_path / "labels.json"
@@ -116,7 +127,7 @@ def test_prompt_variants_use_identical_cases(tmp_path):
     paths = {}
     for name, score in [("v1", 2), ("v2", 3)]:
         path = tmp_path / f"{name}.json"
-        rows = [{"sample_id": row["sample_id"], "run_id": f"run-{name}-{row['sample_id']}", "prompt_version": name, "model": "mock", "criterion_scores": {key: score for key in keys}, "recommendation": row["recommendation"]} for row in labels]
+        rows = [{"sample_id": row["sample_id"], "rubric_id": row["rubric_id"], "run_id": f"run-{name}-{row['sample_id']}", "prompt_version": name, "model": "mock", "criterion_scores": {key: score for key in keys}, "recommendation": row["recommendation"]} for row in labels]
         path.write_text(json.dumps(rows), encoding="utf-8")
         paths[name] = path
     comparison = compare_variants(label_path, paths, "dev")

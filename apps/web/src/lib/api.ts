@@ -382,13 +382,14 @@ export const api = {
     });
   },
 
-  async approveSanitizedVersion(versionId: string, expectedApplicationVersion: number, expectedSha256: string): Promise<any> {
+  async approveSanitizedVersion(versionId: string, expectedApplicationVersion: number, expectedSha256: string, confirmedDocumentIsCv: boolean = false): Promise<any> {
     return apiRequest<any>(`/sanitized-versions/${versionId}/approve`, {
       method: "POST",
       body: JSON.stringify({
         expected_application_version: expectedApplicationVersion,
         expected_sha256: expectedSha256,
         acknowledged: true,
+        confirmed_document_is_cv: confirmedDocumentIsCv,
       }),
     });
   },

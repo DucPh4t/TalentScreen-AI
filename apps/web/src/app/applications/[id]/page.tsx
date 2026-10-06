@@ -60,6 +60,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   // Sanitization action state
   const [approvingSanitized, setApprovingSanitized] = useState(false);
   const [acknowledgedSanitization, setAcknowledgedSanitization] = useState(false);
+  const [confirmedDocumentIsCv, setConfirmedDocumentIsCv] = useState(false);
   const [editingSanitization, setEditingSanitization] = useState(false);
   const [editedSanitizedText, setEditedSanitizedText] = useState("");
   const [sanitizationEditReason, setSanitizationEditReason] = useState("");
@@ -179,9 +180,14 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       warning("Vui lòng tích chọn xác nhận đã kiểm tra thông tin đã che.");
       return;
     }
+    const requiresDocumentTypeConfirmation = sanitizedVersion.quality_flags?.document_type_hint !== "cv";
+    if (requiresDocumentTypeConfirmation && !confirmedDocumentIsCv) {
+      warning("Hệ thống chưa xác nhận chắc chắn đây là CV. Hãy đối chiếu bản gốc và xác nhận trước khi cho phép AI xử lý.");
+      return;
+    }
     setApprovingSanitized(true);
     try {
-      await api.approveSanitizedVersion(sanitizedVersion.id, application.row_version, sanitizedVersion.sha256);
+      await api.approveSanitizedVersion(sanitizedVersion.id, application.row_version, sanitizedVersion.sha256, confirmedDocumentIsCv);
       success("Đã phê duyệt phiên bản khử định danh thành công!");
       await loadData();
       setActiveTab("assessment");
@@ -717,7 +723,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                       <button
                         className="btn btn-primary btn-sm"
                         onClick={handleApproveSanitization}
-                        disabled={!canManage || !!loadWarnings.length || approvingSanitized || !acknowledgedSanitization}
+                        disabled={!canManage || !!loadWarnings.length || approvingSanitized || !acknowledgedSanitization || (sanitizedVersion.quality_flags?.document_type_hint !== "cv" && !confirmedDocumentIsCv)}
                       >
                         <IconCheckCircle size={14} />
                         <span>Duyệt bản đã che</span>
@@ -768,12 +774,25 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                         setEditedSanitizedText(sanitizedVersion.canonical_text);
                         setEditingSanitization(!editingSanitization);
                         setAcknowledgedSanitization(false);
+                        setConfirmedDocumentIsCv(false);
                       }}
                     >
                       {editingSanitization ? "Hủy chỉnh sửa" : "Sửa thông tin còn sót trong bản đã che"}
                     </button>
                   </div>
                 )}
+                {sanitizedVersion.quality_flags?.document_type_hint !== "cv" && (
+                    <section role="alert" style={{ marginBottom: "1rem", padding: "1rem", border: "1px solid var(--amber-border)", borderRadius: "var(--radius-md)", background: "var(--amber-bg)" }}>
+                      <strong>{sanitizedVersion.quality_flags?.document_type_hint === "job_description" ? "Tệp này có dấu hiệu là mô tả công việc, không phải CV." : "Hệ thống chưa xác định chắc chắn đây là CV ứng viên."}</strong>
+                      <p style={{ marginTop: "0.35rem", color: "var(--text-secondary)" }}>Đối chiếu tài liệu gốc trước khi cho phép AI xử lý.</p>
+                      {sanitizedVersion.status === "draft" && (
+                        <label style={{ marginTop: "0.6rem", display: "flex", gap: "0.5rem", alignItems: "flex-start", cursor: "pointer" }}>
+                          <input type="checkbox" checked={confirmedDocumentIsCv} onChange={(event) => setConfirmedDocumentIsCv(event.target.checked)} />
+                          <span>Tôi đã kiểm tra tài liệu gốc và xác nhận đây là CV của ứng viên.</span>
+                        </label>
+                      )}
+                    </section>
+                  )}
                 {editingSanitization ? (
                   <div className="form-group">
                     <label htmlFor="sanitizedTextEdit" className="form-label">Toàn văn bản đã che</label>

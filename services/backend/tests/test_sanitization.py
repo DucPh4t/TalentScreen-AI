@@ -123,6 +123,23 @@ def test_sanitizer_redacts_unlabeled_location_and_suffix_school_name():
     assert "Python APIs" in sanitized
 
 
+def test_sanitizer_redacts_lowercase_school_gender_and_labeled_location():
+    cv_text = (
+        "Backend Developer\n"
+        "Education: BSc, north valley technical school\n"
+        "Male\n"
+        "Current location: District 7, Ho Chi Minh City\n"
+        "Built REST APIs with Python."
+    )
+    sanitized, _, _ = sanitize_text(cv_text)
+    assert "north valley technical school" not in sanitized.casefold()
+    assert "Male" not in sanitized
+    assert "District 7" not in sanitized
+    assert "District 7" not in sanitize_text("District 7, Ho Chi Minh City")[0]
+    assert "Ho Chi Minh City" not in sanitized
+    assert "Built REST APIs with Python" in sanitized
+
+
 def test_sanitizer_redacts_spaced_vietnamese_phone():
     from app.services.sanitizer import residual_contact_types
 
@@ -440,6 +457,12 @@ async def test_approve_and_revoke_lifecycle(test_session_factory):
     """Test approval with hash verification, superseding, and revoking approval."""
     async with test_session_factory() as session:
         ctx = await setup_test_context(session)
+        flagged = await session.get(SanitizedVersion, ctx["sanitized_id"])
+        flagged.quality_flags = {
+            "document_type_hint": "job_description",
+            "document_type_confidence": "high",
+        }
+        await session.commit()
 
     transport = ASGITransport(app=app)
 
@@ -472,6 +495,34 @@ async def test_approve_and_revoke_lifecycle(test_session_factory):
         assert bad_hash_res.status_code == 409
         assert "HASH_MISMATCH" in bad_hash_res.json()["detail"]
 
+        # A high-confidence JD needs explicit CV confirmation.
+        wrong_document_type_res = await client.post(
+            f"/api/v1/sanitized-versions/{ctx['sanitized_id']}/approve",
+            json={
+                "expected_application_version": 1,
+                "expected_sha256": ctx["sanitized_hash"],
+                "acknowledged": True,
+            },
+        )
+        assert wrong_document_type_res.status_code == 422
+        assert "DOCUMENT_TYPE_CONFIRMATION_REQUIRED" in wrong_document_type_res.json()["detail"]
+
+        # Unknown documents need the same explicit confirmation; this catches classifier misses.
+        async with test_session_factory() as session:
+            uncertain = await session.get(SanitizedVersion, ctx["sanitized_id"])
+            uncertain.quality_flags = {"document_type_hint": "unknown", "document_type_confidence": "low"}
+            await session.commit()
+        unknown_document_type_res = await client.post(
+            f"/api/v1/sanitized-versions/{ctx['sanitized_id']}/approve",
+            json={
+                "expected_application_version": 1,
+                "expected_sha256": ctx["sanitized_hash"],
+                "acknowledged": True,
+            },
+        )
+        assert unknown_document_type_res.status_code == 422
+        assert "DOCUMENT_TYPE_CONFIRMATION_REQUIRED" in unknown_document_type_res.json()["detail"]
+
         # 3. Approve with correct hash & version
         approve_res = await client.post(
             f"/api/v1/sanitized-versions/{ctx['sanitized_id']}/approve",
@@ -479,6 +530,7 @@ async def test_approve_and_revoke_lifecycle(test_session_factory):
                 "expected_application_version": 1,
                 "expected_sha256": ctx["sanitized_hash"],
                 "acknowledged": True,
+                "confirmed_document_is_cv": True,
             },
         )
         assert approve_res.status_code == 200

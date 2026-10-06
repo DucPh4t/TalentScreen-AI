@@ -22,7 +22,8 @@ from app.services.interview_prompts import build_interview_system_prompt
 RELEASES_DIR = Path(__file__).resolve().parent.parent / "releases"
 
 RUBRIC_DRAFT_SYSTEM_PROMPT = """Task: draft a competency rubric for HR review, using the supplied JD requirements.
-The seed structure and allowed criterion IDs are fixed for this MVP. Preserve them.
+Create role-specific criterion IDs and criteria from this JD; do not reuse an unrelated role's rubric.
+Use only job-related abilities explicitly supported by the supplied JD.
 Propose anchors describing demonstrated scope/complexity of work, not eloquence,
 school prestige, years alone, or number of tools listed. Every criterion must map
 to at least one supplied JD requirement_id and its exact quotation.

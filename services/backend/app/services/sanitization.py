@@ -455,6 +455,13 @@ async def approve_sanitized_version(
             detail="RESIDUAL_CONTACT_DATA: Bản CV đã che vẫn chứa thông tin liên hệ; cần sửa trước khi duyệt.",
         )
 
+    quality_flags = v.quality_flags or {}
+    if quality_flags.get("document_type_hint") != "cv" and not payload.confirmed_document_is_cv:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="DOCUMENT_TYPE_CONFIRMATION_REQUIRED: Hệ thống chưa xác nhận chắc chắn đây là CV ứng viên; cần đối chiếu tài liệu gốc và xác nhận trước khi cho phép AI xử lý.",
+        )
+
     now = datetime.now(timezone.utc)
 
     # Supersede existing approved versions for this document
@@ -489,6 +496,7 @@ async def approve_sanitized_version(
             "version_no": v.version_no,
             "sha256": v.sha256,
             "approved_at": now.isoformat(),
+            "document_type_confirmed_as_cv": payload.confirmed_document_is_cv,
         },
     )
 

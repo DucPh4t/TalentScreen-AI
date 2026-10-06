@@ -37,11 +37,36 @@ from app.services.auth import create_session
 from app.services.parser import (
     DocumentParsingError,
     build_spans_from_pages,
+    classify_document_type,
     detect_language_vi_or_en,
     normalize_to_nfc_lf,
     parse_docx_bytes,
     parse_pdf_bytes,
 )
+
+
+def test_document_type_preflight_flags_job_description_without_auto_rejecting_cv():
+    jd = """Product Owner Intern
+    Your responsibilities include product research and backlog refinement.
+    Job requirements: basic knowledge of APIs and user research.
+    How to apply: submit your application online.
+    """
+    cv = """Work Experience
+    Technical Skills
+    Projects
+    Built a mobile app and tested the API integration.
+    Education
+    """
+    assert classify_document_type(jd)["document_type_hint"] == "job_description"
+    assert classify_document_type(jd)["document_type_confidence"] == "high"
+    product_jd = """Product Owner Intern
+    Work with engineering to refine user stories and acceptance criteria.
+    Support backlog prioritization and user research.
+    """
+    assert classify_document_type(product_jd)["document_type_hint"] == "job_description"
+    assert classify_document_type(product_jd)["document_type_confidence"] == "high"
+    assert classify_document_type(cv)["document_type_hint"] == "cv"
+    assert classify_document_type("Python, FastAPI, SQL")["document_type_hint"] == "unknown"
 
 
 def test_mixed_language_detected_per_section_without_scoring_technical_terms():

@@ -40,6 +40,7 @@ class SanitizedApproveRequest(BaseModel):
     expected_application_version: int
     expected_sha256: str = Field(min_length=64, max_length=64, description="SHA256 của canonical_text để kiểm tra tính toàn vẹn")
     acknowledged: bool = Field(description="Xác nhận đã rà soát trước khi cho phép AI xử lý")
+    confirmed_document_is_cv: bool = Field(default=False, description="Xác nhận tài liệu là CV ứng viên khi bộ phân loại cảnh báo có thể là JD")
 
 
 class SanitizedRevokeRequest(BaseModel):

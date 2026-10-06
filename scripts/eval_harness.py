@@ -9,13 +9,13 @@ import argparse
 from collections import Counter, defaultdict
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 
-CRITERIA = frozenset({
-    "python_backend", "api_design", "sql_data", "testing_debugging",
-    "security_privacy", "delivery_ops",
-})
+CRITERION_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,49}$")
+MIN_CRITERIA = 2
+MAX_CRITERIA = 12
 RECOMMENDATIONS = frozenset({
     "consider_next_round", "needs_clarification", "review_required",
 })
@@ -82,9 +82,14 @@ def _read_records(path: Path) -> dict[str, dict[str, Any]]:
 
 def _validate_row(row: dict[str, Any], *, is_label: bool) -> None:
     sample_id = row["sample_id"]
+    rubric_id = row.get("rubric_id")
+    if not isinstance(rubric_id, str) or not CRITERION_ID_PATTERN.fullmatch(rubric_id):
+        raise ValueError(f"{sample_id}: rubric_id must be a stable lowercase slug")
     scores = row.get("criterion_scores")
-    if not isinstance(scores, dict) or set(scores) != CRITERIA:
-        raise ValueError(f"{sample_id}: criterion_scores must contain exactly the six production rubric IDs")
+    if not isinstance(scores, dict) or not MIN_CRITERIA <= len(scores) <= MAX_CRITERIA:
+        raise ValueError(f"{sample_id}: criterion_scores must contain {MIN_CRITERIA}..{MAX_CRITERIA} rubric criteria")
+    if any(not isinstance(key, str) or not CRITERION_ID_PATTERN.fullmatch(key) for key in scores):
+        raise ValueError(f"{sample_id}: criterion IDs must be stable lowercase slugs")
     if any(value is not None and (type(value) is not int or not 0 <= value <= 4) for value in scores.values()):
         raise ValueError(f"{sample_id}: scores must be integer anchors 0..4 or null")
     if row.get("recommendation") not in RECOMMENDATIONS:
@@ -122,9 +127,12 @@ def run_evaluation(predictions_path: Path, labels_path: Path, split: str | None 
     hr_assessable = 0
     ai_abstained_on_hr_assessable = 0
     ai_scored_without_hr_score = 0
-    criterion_pairs: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    criterion_pairs: dict[tuple[str, str], list[tuple[float, float]]] = defaultdict(list)
+    rubric_pairs: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    rubric_recommendations: dict[str, list[tuple[str, str]]] = defaultdict(list)
     recommendation_pairs: list[tuple[str, str]] = []
     by_language: dict[str, dict[str, Any]] = defaultdict(lambda: {"count": 0, "scores": [], "recommendations": []})
+    by_role_family: dict[str, dict[str, Any]] = defaultdict(lambda: {"count": 0, "scores": [], "recommendations": []})
     origins: Counter[str] = Counter()
     token_input = token_output = 0
     observed_cost = 0.0
@@ -133,13 +141,28 @@ def run_evaluation(predictions_path: Path, labels_path: Path, split: str | None 
 
     for sid in matched_ids:
         label, pred = selected[sid], predictions[sid]
+        if label["rubric_id"] != pred["rubric_id"]:
+            raise ValueError(f"{sid}: prediction rubric_id does not match expected label")
+        rubric_id = label["rubric_id"]
+        label_criteria = set(label["criterion_scores"])
+        prediction_criteria = set(pred["criterion_scores"])
+        if label_criteria != prediction_criteria:
+            raise ValueError(
+                f"{sid}: prediction criterion IDs do not match rubric '{rubric_id}' "
+                f"(missing={sorted(label_criteria - prediction_criteria)}, "
+                f"unexpected={sorted(prediction_criteria - label_criteria)})"
+            )
         lang = label["language"]
+        role_family = label.get("role_family") or rubric_id
         origins[label["label_origin"]] += 1
         models[pred["model"]] += 1
         recommendation_pairs.append((pred["recommendation"], label["recommendation"]))
+        rubric_recommendations[rubric_id].append((pred["recommendation"], label["recommendation"]))
         by_language[lang]["count"] += 1
         by_language[lang]["recommendations"].append((pred["recommendation"], label["recommendation"]))
-        for criterion in sorted(CRITERIA):
+        by_role_family[role_family]["count"] += 1
+        by_role_family[role_family]["recommendations"].append((pred["recommendation"], label["recommendation"]))
+        for criterion in sorted(label_criteria):
             gold, value = label["criterion_scores"][criterion], pred["criterion_scores"][criterion]
             if gold is not None:
                 hr_assessable += 1
@@ -150,8 +173,10 @@ def run_evaluation(predictions_path: Path, labels_path: Path, split: str | None 
             if gold is not None and value is not None:
                 pair = (float(value), float(gold))
                 score_pairs.append(pair)
-                criterion_pairs[criterion].append(pair)
+                criterion_pairs[(rubric_id, criterion)].append(pair)
+                rubric_pairs[rubric_id].append(pair)
                 by_language[lang]["scores"].append(pair)
+                by_role_family[role_family]["scores"].append(pair)
         token_input += int(pred.get("input_tokens") or 0)
         token_output += int(pred.get("output_tokens") or 0)
         if pred.get("observed_cost_usd") is not None:
@@ -186,6 +211,17 @@ def run_evaluation(predictions_path: Path, labels_path: Path, split: str | None 
         }
         for lang, values in sorted(by_language.items())
     }
+    role_disaggregated = {
+        role: {
+            "total_samples": values["count"],
+            "mean_score_error": compute_mae(values["scores"]),
+            "recommendation_accuracy": round(
+                sum(a == b for a, b in values["recommendations"]) / values["count"], 3
+            ),
+            "cohens_kappa": compute_cohens_kappa(values["recommendations"], categories),
+        }
+        for role, values in sorted(by_role_family.items())
+    }
     warnings = []
     if missing_ids:
         warnings.append("Some labeled samples have no AI prediction")
@@ -209,8 +245,29 @@ def run_evaluation(predictions_path: Path, labels_path: Path, split: str | None 
         warnings.append("Missing at least one language group: vi, en or mixed")
     return {
         "evaluation_summary": summary,
-        "per_criterion_mae": {criterion: compute_mae(criterion_pairs[criterion]) for criterion in sorted(CRITERIA)},
+        "per_criterion_mae": {
+            f"{rubric_id}/{criterion}": compute_mae(pairs)
+            for (rubric_id, criterion), pairs in sorted(criterion_pairs.items())
+        },
+        "per_rubric": {
+            rubric_id: {
+                "comparable_score_pairs": len(rubric_pairs[rubric_id]),
+                "mean_absolute_error_score": compute_mae(rubric_pairs[rubric_id]),
+                "recommendation_accuracy": round(
+                    sum(a == b for a, b in rubric_recommendations[rubric_id])
+                    / len(rubric_recommendations[rubric_id]), 3
+                ),
+                "sample_count": len(rubric_recommendations[rubric_id]),
+            }
+            for rubric_id in sorted(rubric_recommendations)
+        },
+        "macro_mean_absolute_error_by_rubric": (
+            round(sum(value for value in (compute_mae(pairs) for pairs in rubric_pairs.values()) if value is not None)
+                    / sum(compute_mae(pairs) is not None for pairs in rubric_pairs.values()), 3)
+            if any(compute_mae(pairs) is not None for pairs in rubric_pairs.values()) else None
+        ),
         "disaggregated_by_language": disaggregated,
+        "disaggregated_by_role_family": role_disaggregated,
         "label_origins": dict(origins),
         "draft_threshold_observations": {
             "conditional_mae_le_0_75": summary["mean_absolute_error_score"] <= 0.75 if summary["mean_absolute_error_score"] is not None else None,
