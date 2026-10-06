@@ -1,0 +1,38 @@
+{
+  "benchmark_id": "synthetic_multirole_smoke_v1",
+  "data_scope": "synthetic_only",
+  "dataset_sha256": "0369563274eeeb4748ac7c64f648d066a840d43eaa69330e4db6e1ce066fc101",
+  "schema_version": 1,
+  "split_sample_ids": {
+    "development": [
+      "syn_ai_001",
+      "syn_backend_base_001",
+      "syn_backend_identity_001",
+      "syn_dotnet_001"
+    ],
+    "locked_holdout": [
+      "syn_android_001",
+      "syn_java_failure_001"
+    ]
+  },
+  "split_sha256": {
+    "development": "07d8514be8e122d841b6902473077256760b74b9a0419c05eef6265c5abbadc1",
+    "locked_holdout": "a0c9105c8e76d54acb013ea0f79403ca2e5fc9c9e003b354fe09e2c29c7302f8"
+  },
+  "version_context": {
+    "approved_rubric_version": "synthetic-rubric-v1",
+    "embedding_model": "synthetic-e5-fixture",
+    "extractor_version": "synthetic-extractor-v1",
+    "model_ids": {
+      "deepseek": "deepseek-chat",
+      "jev": "typesafe/jev-1.13",
+      "mock": "mock"
+    },
+    "prompt_versions": {
+      "deepseek": "synthetic-assessment-v1",
+      "jev": "synthetic-shadow-v1",
+      "mock": "mock-v1"
+    },
+    "retrieval_version": "synthetic-hybrid-rag-v1"
+  }
+}
