@@ -28,6 +28,7 @@ from app.db.models import (
 from app.domain.authorization import AuthenticatedContext
 from app.domain.enums import (
     AccountRole,
+    CriterionOutcome,
     JobStatus,
     JobType,
     RequisitionStatus,
@@ -38,14 +39,17 @@ from app.schemas.assessment import (
     AssessmentOutputSchema,
     AssessmentRunCreateRequest,
     AssessmentRunResponse,
+    CriterionAssessmentSchema,
     CriterionAssessmentResponse,
     CriterionEvidenceResponse,
 )
 from app.services.assessment.prompt import (
+    AGENT_PROMPT_VERSION,
     ASSESSMENT_PROMPT_VERSION,
-    build_assessment_system_prompt,
+    HYBRID_ASSESSMENT_PROMPT_VERSION,
     build_assessment_user_prompt,
     build_repair_user_prompt,
+    get_assessment_prompt,
 )
 from app.services.assessment.scoring import calculate_deterministic_scores
 from app.services.assessment.validator import (
@@ -57,8 +61,11 @@ from app.services.llm.orchestrator import execute_bounded_llm_call
 from app.services.llm.provider import BaseLLMProvider
 from app.services.llm.types import CompletionRequest
 from app.services.jev import JevDecisionResponse, JevQuestion, get_jev_provider
+from app.services.embedding import index_sanitized_version
+from app.services.retrieval import build_hybrid_assessment_pack
 
 logger = logging.getLogger(__name__)
+MAX_ASSESSMENT_EVIDENCE_CHARS = 24_000
 
 
 def _build_jev_shadow_payload(
@@ -114,6 +121,95 @@ def _map_jev_score_to_anchor(answer: dict[str, Any], question: JevQuestion) -> f
     if 0 <= raw <= level_count - 1:
         return raw
     raise ValueError("Jev score falls outside the requested anchor levels")
+
+
+def _assessment_snapshot_is_current(app_check: Any, run: AssessmentRun) -> bool:
+    return bool(
+        app_check
+        and app_check[0] != "deleted"
+        and app_check[1] == run.application_generation
+        and app_check[2] == run.document_id
+        and app_check[3] == run.sanitized_version_id
+        and app_check[4] == run.rubric_version_id
+        and app_check[5] == SanitizedVersionStatus.APPROVED
+    )
+
+
+def _validate_focus_criterion_ids(
+    requested_ids: list[str] | None,
+    approved_criterion_ids: set[str],
+) -> list[str] | None:
+    """Reject focus requests outside the immutable approved rubric before enqueue."""
+    if requested_ids is None:
+        return None
+    if len(requested_ids) != len(set(requested_ids)):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="focus_criterion_ids không được chứa tiêu chí trùng lặp.",
+        )
+    unknown = sorted(set(requested_ids) - approved_criterion_ids)
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": "UNKNOWN_FOCUS_CRITERION", "criterion_ids": unknown},
+        )
+    return list(requested_ids)
+
+
+def _build_no_evidence_assessment(
+    rubric_criteria: list[RubricCriterion],
+) -> AssessmentOutputSchema:
+    """Produce a complete, unscored result without calling a model when retrieval is empty."""
+    return AssessmentOutputSchema(
+        criteria=[
+            CriterionAssessmentSchema(
+                criterion_id=criterion.criterion_id,
+                status=CriterionOutcome.INSUFFICIENT_EVIDENCE,
+                score=None,
+                evidence=[],
+                rationale="Không tìm thấy bằng chứng CV phù hợp trong các đoạn đã truy xuất.",
+                missing_information=[
+                    f"Bạn có thể nêu một ví dụ thực tế thể hiện năng lực {criterion.label_vi} không?"
+                ],
+            )
+            for criterion in rubric_criteria
+        ]
+    )
+
+
+def _replace_unretrieved_criteria_with_null(
+    raw_content: str,
+    rubric_criteria: list[RubricCriterion],
+    allowed_span_ids_by_criterion: dict[str, set[str]],
+) -> str:
+    """Enforce retrieval coverage before schema/provenance validation; never accept a guessed score."""
+    try:
+        parsed = json.loads(raw_content)
+    except (json.JSONDecodeError, TypeError):
+        return raw_content
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("criteria"), list):
+        return raw_content
+
+    rubric_by_id = {criterion.criterion_id: criterion for criterion in rubric_criteria}
+    normalized_criteria = []
+    for item in parsed["criteria"]:
+        criterion_id = item.get("criterion_id") if isinstance(item, dict) else None
+        criterion = rubric_by_id.get(criterion_id)
+        if criterion is not None and not allowed_span_ids_by_criterion.get(criterion_id, set()):
+            normalized_criteria.append({
+                "criterion_id": criterion_id,
+                "status": CriterionOutcome.INSUFFICIENT_EVIDENCE.value,
+                "score": None,
+                "evidence": [],
+                "rationale": "Không có bằng chứng CV được truy xuất cho tiêu chí này.",
+                "missing_information": [
+                    f"Bạn có thể nêu một ví dụ thực tế thể hiện năng lực {criterion.label_vi} không?"
+                ],
+            })
+        else:
+            normalized_criteria.append(item)
+    parsed["criteria"] = normalized_criteria
+    return json.dumps(parsed, ensure_ascii=False)
 
 
 async def create_assessment_run(
@@ -186,6 +282,24 @@ async def create_assessment_run(
             detail="ASSESSMENT_INPUT_STALE: Chỉ được chấm theo rubric hiện hành của đợt tuyển dụng.",
         )
 
+    stmt_criteria = (
+        select(RubricCriterion)
+        .where(RubricCriterion.rubric_version_id == rubric.id)
+        .order_by(RubricCriterion.criterion_id.asc())
+    )
+    approved_criteria = (await db.execute(stmt_criteria)).scalars().all()
+    focus_criterion_ids = _validate_focus_criterion_ids(
+        payload.focus_criterion_ids,
+        {criterion.criterion_id for criterion in approved_criteria},
+    )
+    settings = get_settings()
+    retrieval_strategy = settings.RAG_MODE
+    assessment_prompt_version = (
+        HYBRID_ASSESSMENT_PROMPT_VERSION
+        if retrieval_strategy == "hybrid"
+        else ASSESSMENT_PROMPT_VERSION
+    )
+
     # Next run number
     stmt_max = select(func.max(AssessmentRun.run_no)).where(AssessmentRun.application_id == application_id)
     max_run = (await db.execute(stmt_max)).scalar() or 0
@@ -193,7 +307,10 @@ async def create_assessment_run(
 
     now = datetime.now(timezone.utc)
     snapshot = {
-        "assessment_prompt_version": ASSESSMENT_PROMPT_VERSION,
+        "assessment_prompt_version": assessment_prompt_version,
+        "agent_prompt_version": AGENT_PROMPT_VERSION,
+        "retrieval_strategy": retrieval_strategy,
+        "focus_criterion_ids": focus_criterion_ids,
         "application_id": str(application_id),
         "document_id": str(sanitized.document_id),
         "sanitized_version_id": str(sanitized.id),
@@ -231,7 +348,7 @@ async def create_assessment_run(
         document_id=sanitized.document_id,
         sanitized_version_id=sanitized.id,
         rubric_version_id=rubric.id,
-        strategy="fulltext",
+        strategy=retrieval_strategy,
         output_schema_version="1.0",
         coverage=0.0,
         created_at=now,
@@ -246,7 +363,13 @@ async def create_assessment_run(
         entity_type="assessment_run",
         entity_id=run.id,
         requisition_id=app_obj.requisition_id,
-        safe_metadata={"run_no": next_run, "strategy": "fulltext"},
+        safe_metadata={
+            "run_no": next_run,
+            "strategy": retrieval_strategy,
+            "assessment_prompt_version": assessment_prompt_version,
+            "agent_prompt_version": AGENT_PROMPT_VERSION,
+            "focus_criterion_count": len(focus_criterion_ids or []),
+        },
     )
 
     return AssessmentRunResponse(
@@ -263,7 +386,7 @@ async def execute_assessment_job(
     job_id: uuid.UUID,
     provider_override: Optional[BaseLLMProvider] = None,
 ) -> None:
-    """Background worker handler for executing full-text AI assessment with bounded repair."""
+    """Execute an assessment against the prompt and retrieval strategy frozen at enqueue."""
     now = datetime.now(timezone.utc)
 
     # 1. Load AssessmentRun
@@ -289,19 +412,14 @@ async def execute_assessment_job(
             Application.current_document_id,
             Application.current_sanitized_version_id,
             Requisition.current_rubric_version_id,
+            SanitizedVersion.status,
         )
         .join(Requisition, Requisition.id == Application.requisition_id)
+        .join(SanitizedVersion, SanitizedVersion.id == Application.current_sanitized_version_id)
         .where(Application.id == run.application_id)
     )
     app_check = (await db.execute(stmt_app_check)).first()
-    if (
-        not app_check
-        or app_check[0] == "deleted"
-        or app_check[1] != run.application_generation
-        or app_check[2] != run.document_id
-        or app_check[3] != run.sanitized_version_id
-        or app_check[4] != run.rubric_version_id
-    ):
+    if not _assessment_snapshot_is_current(app_check, run):
         logger.warning("Assessment %s input snapshot is stale before model call.", run.id)
         run.status = "failed"
         run.failure_code = "APPLICATION_TOMBSTONED" if not app_check or app_check[0] == "deleted" else "ASSESSMENT_INPUT_STALE"
@@ -318,6 +436,25 @@ async def execute_assessment_job(
     rubric_criteria = (await db.execute(stmt_crit)).scalars().all()
     weights_by_id = {c.criterion_id: c.weight for c in rubric_criteria}
 
+    retrieval_strategy = run.snapshot.get("retrieval_strategy", "full_text_baseline")
+    assessment_prompt_version = run.snapshot.get(
+        "assessment_prompt_version", ASSESSMENT_PROMPT_VERSION
+    )
+    try:
+        system_prompt = get_assessment_prompt(assessment_prompt_version)
+    except ValueError:
+        run.status = "failed"
+        run.failure_code = "ASSESSMENT_PROMPT_VERSION_UNKNOWN"
+        run.completed_at = datetime.now(timezone.utc)
+        await db.flush()
+        return
+    if retrieval_strategy not in {"full_text_baseline", "hybrid"}:
+        run.status = "failed"
+        run.failure_code = "ASSESSMENT_RETRIEVAL_STRATEGY_UNKNOWN"
+        run.completed_at = datetime.now(timezone.utc)
+        await db.flush()
+        return
+
     stmt_rubric = select(RubricVersion).where(RubricVersion.id == run.rubric_version_id)
     rubric_ver = (await db.execute(stmt_rubric)).scalar_one_or_none()
 
@@ -328,16 +465,103 @@ async def execute_assessment_job(
     )
     spans = (await db.execute(stmt_spans)).scalars().all()
     span_registry = {s.span_id: s for s in spans}
+    evidence_ids_by_criterion: dict[str, set[str]] | None = None
 
-    # 3. Build Prompts
-    system_prompt = build_assessment_system_prompt()
-    user_prompt = build_assessment_user_prompt(rubric_criteria, spans)
+    if retrieval_strategy == "hybrid":
+        try:
+            # The sanitized version is immutable after approval; indexing is
+            # keyed by its pinned embedding config and safe to retry.
+            await index_sanitized_version(db, run.sanitized_version_id)
+            focus_ids = set(run.snapshot.get("focus_criterion_ids") or [])
+            ordered_criteria = sorted(
+                rubric_criteria,
+                key=lambda criterion: (criterion.criterion_id not in focus_ids, criterion.criterion_id),
+            )
+            pack = await build_hybrid_assessment_pack(
+                db,
+                run.sanitized_version_id,
+                [
+                    {
+                        "id": criterion.criterion_id,
+                        "name": criterion.label_vi,
+                        "description": criterion.description_vi,
+                        "anchors": criterion.anchors,
+                        "bilingual_terms": criterion.bilingual_terms,
+                    }
+                    for criterion in ordered_criteria
+                ],
+            )
+        except Exception as exc:
+            # Model or retrieval errors never silently widen context to the full
+            # CV. HR gets a failed run and can use the baseline/manual path.
+            logger.warning("Hybrid retrieval failed for assessment %s (%s).", run.id, type(exc).__name__)
+            run.status = "failed"
+            run.failure_code = "HYBRID_RETRIEVAL_FAILED"
+            run.completed_at = datetime.now(timezone.utc)
+            await db.flush()
+            return
 
-    validated_output: Optional[AssessmentOutputSchema] = None
+        pack_span_ids = list(dict.fromkeys(pack.get("source_span_ids") or []))
+        if any(span_id not in span_registry for span_id in pack_span_ids):
+            run.status = "failed"
+            run.failure_code = "HYBRID_RETRIEVAL_PROVENANCE_INVALID"
+            run.completed_at = datetime.now(timezone.utc)
+            await db.flush()
+            return
+        pack_span_id_set = set(pack_span_ids)
+        selected_span_ids = []
+        evidence_chars = 0
+        for span_id in pack_span_ids:
+            span_chars = len(span_registry[span_id].text)
+            if evidence_chars + span_chars <= MAX_ASSESSMENT_EVIDENCE_CHARS:
+                selected_span_ids.append(span_id)
+                evidence_chars += span_chars
+        selected_span_id_set = set(selected_span_ids)
+        spans = [span_registry[span_id] for span_id in selected_span_ids]
+        span_registry = {span.span_id: span for span in spans}
+
+        raw_criterion_map = pack.get("criteria_retrieval_map") or {}
+        expected_criterion_ids = {criterion.criterion_id for criterion in rubric_criteria}
+        if not isinstance(raw_criterion_map, dict) or set(raw_criterion_map) - expected_criterion_ids:
+            run.status = "failed"
+            run.failure_code = "HYBRID_RETRIEVAL_PROVENANCE_INVALID"
+            run.completed_at = datetime.now(timezone.utc)
+            await db.flush()
+            return
+        evidence_ids_by_criterion = {}
+        for criterion in rubric_criteria:
+            retrieved_ids = {
+                span_id
+                for match in raw_criterion_map.get(criterion.criterion_id, [])
+                for span_id in match.get("span_ids", [])
+            }
+            if not retrieved_ids.issubset(pack_span_id_set):
+                run.status = "failed"
+                run.failure_code = "HYBRID_RETRIEVAL_PROVENANCE_INVALID"
+                run.completed_at = datetime.now(timezone.utc)
+                await db.flush()
+                return
+            evidence_ids_by_criterion[criterion.criterion_id] = retrieved_ids & selected_span_id_set
+
+    # The complete rubric remains in every prompt; only the registered spans
+    # selected above may cross the model boundary in hybrid mode.
+    user_prompt = build_assessment_user_prompt(
+        rubric_criteria,
+        spans,
+        retrieved_span_ids_by_criterion=(
+            {criterion_id: sorted(span_ids) for criterion_id, span_ids in evidence_ids_by_criterion.items()}
+            if evidence_ids_by_criterion is not None
+            else None
+        ),
+    )
+
+    validated_output: Optional[AssessmentOutputSchema] = (
+        _build_no_evidence_assessment(rubric_criteria) if not spans else None
+    )
     last_error: Optional[str] = None
 
     # 4. Bounded Execution Loop (Attempt 1 + Max 1 Repair = 2 attempts total)
-    for attempt in (1, 2):
+    for attempt in (() if validated_output is not None else (1, 2)):
         current_prompt = (
             user_prompt
             if attempt == 1
@@ -363,10 +587,18 @@ async def execute_assessment_job(
                 sanitized_version_id=run.sanitized_version_id,
                 provider_override=provider_override,
             )
+            candidate_content = call_res.content or ""
+            if evidence_ids_by_criterion is not None:
+                candidate_content = _replace_unretrieved_criteria_with_null(
+                    candidate_content,
+                    rubric_criteria,
+                    evidence_ids_by_criterion,
+                )
             validated_output = validate_assessment_output(
-                call_res.content or "",
+                candidate_content,
                 span_registry,
                 expected_criterion_ids=set(weights_by_id),
+                allowed_span_ids_by_criterion=evidence_ids_by_criterion,
             )
             break  # Success!
         except (AssessmentValidationError, Exception) as e:
@@ -389,14 +621,7 @@ async def execute_assessment_job(
 
     # SEC-10 Late Arrival / Deletion Check
     app_check = (await db.execute(stmt_app_check)).first()
-    if (
-        not app_check
-        or app_check[0] == "deleted"
-        or app_check[1] != run.application_generation
-        or app_check[2] != run.document_id
-        or app_check[3] != run.sanitized_version_id
-        or app_check[4] != run.rubric_version_id
-    ):
+    if not _assessment_snapshot_is_current(app_check, run):
         logger.warning("Assessment %s input snapshot changed during model call; discarding output.", run.id)
         run.status = "failed"
         run.failure_code = "APPLICATION_TOMBSTONED" if not app_check or app_check[0] == "deleted" else "ASSESSMENT_INPUT_STALE"
@@ -446,13 +671,7 @@ async def execute_assessment_job(
                 shadow_response = JevDecisionResponse.model_validate_json(shadow_result.content or "")
                 # Re-check tombstone/current-version after Jev's network request too.
                 app_check = (await db.execute(stmt_app_check)).first()
-                if (
-                    not app_check or app_check[0] == "deleted"
-                    or app_check[1] != run.application_generation
-                    or app_check[2] != run.document_id
-                    or app_check[3] != run.sanitized_version_id
-                    or app_check[4] != run.rubric_version_id
-                ):
+                if not _assessment_snapshot_is_current(app_check, run):
                     logger.warning("Assessment %s input changed during Jev shadow call; discarding all output.", run.id)
                     run.status = "failed"
                     run.failure_code = "APPLICATION_TOMBSTONED" if not app_check or app_check[0] == "deleted" else "ASSESSMENT_INPUT_STALE"

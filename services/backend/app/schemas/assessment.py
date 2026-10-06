@@ -79,6 +79,13 @@ class AssessmentOutputSchema(BaseModel):
 class AssessmentRunCreateRequest(BaseModel):
     sanitized_version_id: uuid.UUID
     rubric_version_id: uuid.UUID
+    focus_criterion_ids: Optional[list[str]] = Field(default=None, max_length=12)
+
+    @model_validator(mode="after")
+    def validate_focus_criterion_ids(self) -> AssessmentRunCreateRequest:
+        if self.focus_criterion_ids is not None and len(set(self.focus_criterion_ids)) != len(self.focus_criterion_ids):
+            raise ValueError("focus_criterion_ids cannot contain duplicates.")
+        return self
 
 
 class CriterionEvidenceResponse(BaseModel):

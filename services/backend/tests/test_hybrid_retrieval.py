@@ -30,7 +30,11 @@ def deterministic_embedding_model(monkeypatch):
     class FakeModel:
         tokenizer = FakeTokenizer()
 
+        def __init__(self):
+            self.encode_calls = 0
+
         def encode(self, texts, **kwargs):
+            self.encode_calls += 1
             return [embedding._deterministic_mock_embed(text) for text in texts]
 
     model = FakeModel()
@@ -180,6 +184,24 @@ async def test_index_and_hybrid_retrieval(test_session_factory, deterministic_em
         indexed_count = await index_sanitized_version(session, san.id)
         await session.commit()
         assert indexed_count == 2
+
+        original_chunk_ids = {
+            chunk.id
+            for chunk in (await session.execute(
+                select(RetrievalChunk).where(RetrievalChunk.sanitized_version_id == san.id)
+            )).scalars().all()
+        }
+        original_encode_calls = deterministic_embedding_model.encode_calls
+        assert await index_sanitized_version(session, san.id) == 2
+        await session.commit()
+        repeated_chunk_ids = {
+            chunk.id
+            for chunk in (await session.execute(
+                select(RetrievalChunk).where(RetrievalChunk.sanitized_version_id == san.id)
+            )).scalars().all()
+        }
+        assert repeated_chunk_ids == original_chunk_ids
+        assert deterministic_embedding_model.encode_calls == original_encode_calls
 
         # Verify pgvector rows exist
         chunks = (

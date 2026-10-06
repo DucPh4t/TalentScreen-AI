@@ -9,8 +9,10 @@ import pytest
 
 from app.services.assessment.prompt import (
     ASSESSMENT_PROMPT_VERSION,
+    AGENT_PROMPT_VERSION,
     build_assessment_system_prompt,
     build_assessment_user_prompt,
+    get_assessment_prompt,
 )
 from app.services.llm.provider import DeepSeekHTTPXProvider
 from app.services.llm.types import CompletionRequest
@@ -52,6 +54,18 @@ def test_assessment_prompt_requires_rationale_and_untrusted_source_handling() ->
     assert "Never return an evidence 'text' field" in prompt
     assert "45 Vietnamese words maximum" in prompt
     assert "single best exact span" in prompt
+
+
+def test_assessment_prompt_versions_are_immutable_and_unknown_versions_fail() -> None:
+    baseline = get_assessment_prompt("assessment-v1.4.0")
+    hybrid = get_assessment_prompt("assessment-v1.5.0")
+
+    assert baseline == build_assessment_system_prompt()
+    assert "retrieved evidence pack" in hybrid
+    assert "No retrieved evidence means insufficient_evidence" in hybrid
+    assert AGENT_PROMPT_VERSION == "assessment-agent.v1"
+    with pytest.raises(ValueError, match="Unknown assessment prompt version"):
+        get_assessment_prompt("assessment-v99")
 
 
 @pytest.mark.asyncio

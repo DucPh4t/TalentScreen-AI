@@ -10,11 +10,12 @@ import uuid
 from functools import lru_cache
 from typing import Any, Callable
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.db.models.document import RetrievalChunk, SourceSpan
+from app.db.models.document import RetrievalChunk, SanitizedVersion, SourceSpan
+from app.domain.enums import SanitizedVersionStatus
 
 EMBEDDING_DIMENSION = 768
 CHUNK_FORMAT_VERSION = "section-token-v1"
@@ -313,7 +314,32 @@ async def index_sanitized_version(
     db: AsyncSession,
     sanitized_version_id: uuid.UUID,
 ) -> int:
-    """Index approved source spans with the pinned local E5 model in pgvector."""
+    """Index approved source spans once per immutable version and embedding config."""
+    # Serialize workers for the same sanitized version. The source version is
+    # immutable after approval, so a committed config-matched index is reusable.
+    version_stmt = (
+        select(SanitizedVersion.id)
+        .where(
+            SanitizedVersion.id == sanitized_version_id,
+            SanitizedVersion.status == SanitizedVersionStatus.APPROVED,
+        )
+        .with_for_update()
+    )
+    version_exists = (await db.execute(version_stmt)).scalar_one_or_none()
+    if version_exists is None:
+        return 0
+
+    existing_count = (
+        await db.execute(
+            select(func.count(RetrievalChunk.id)).where(
+                RetrievalChunk.sanitized_version_id == sanitized_version_id,
+                RetrievalChunk.embedding_config_id == EMBEDDING_CONFIG_ID,
+            )
+        )
+    ).scalar_one()
+    if existing_count:
+        return int(existing_count)
+
     stmt = (
         select(SourceSpan)
         .where(SourceSpan.sanitized_version_id == sanitized_version_id)

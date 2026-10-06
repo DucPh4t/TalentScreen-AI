@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import json
+from types import MappingProxyType
 from typing import Any
 
 from app.db.models.document import SourceSpan
 from app.db.models import RubricCriterion
 
 ASSESSMENT_PROMPT_VERSION = "assessment-v1.4.0"
+HYBRID_ASSESSMENT_PROMPT_VERSION = "assessment-v1.5.0"
+AGENT_PROMPT_VERSION = "assessment-agent.v1"
 
 
 def build_assessment_system_prompt() -> str:
@@ -45,9 +48,33 @@ JSON OUTPUT CONTRACT:
 """
 
 
+_ASSESSMENT_PROMPT_REGISTRY = MappingProxyType(
+    {
+        ASSESSMENT_PROMPT_VERSION: build_assessment_system_prompt(),
+        HYBRID_ASSESSMENT_PROMPT_VERSION: (
+            build_assessment_system_prompt()
+            + "\n\nRETRIEVAL-AWARE RULES:\n"
+            + "The source_spans are a bounded retrieved evidence pack, not the entire CV.\n"
+            + "Use a source span for a criterion only when its span_id is listed for that criterion in retrieved_evidence_by_criterion.\n"
+            + "No retrieved evidence means insufficient_evidence with score null; never fill retrieval gaps from general knowledge.\n"
+        ),
+    }
+)
+
+
+def get_assessment_prompt(version: str) -> str:
+    """Resolve an immutable assessment system prompt version or fail closed."""
+    try:
+        return _ASSESSMENT_PROMPT_REGISTRY[version]
+    except KeyError as exc:
+        raise ValueError(f"Unknown assessment prompt version: {version}") from exc
+
+
 def build_assessment_user_prompt(
     rubric_criteria: list[RubricCriterion],
     source_spans: list[SourceSpan],
+    *,
+    retrieved_span_ids_by_criterion: dict[str, list[str]] | None = None,
 ) -> str:
     """Build user prompt containing structured Rubric definitions and candidate Source Spans."""
     rubric_data = []
@@ -83,6 +110,15 @@ def build_assessment_user_prompt(
             "Return each supplied criterion_id exactly once in a JSON object with key 'criteria'."
         ),
     }
+    if retrieved_span_ids_by_criterion is not None:
+        payload["retrieved_evidence_by_criterion"] = {
+            criterion_id: list(dict.fromkeys(span_ids))
+            for criterion_id, span_ids in sorted(retrieved_span_ids_by_criterion.items())
+        }
+        payload["instructions"] += (
+            " Use only span IDs listed under each criterion in retrieved_evidence_by_criterion. "
+            "A criterion with an empty list must be insufficient_evidence with score null."
+        )
 
     return json.dumps(payload, ensure_ascii=False, indent=2)
 

@@ -63,20 +63,20 @@ The feature is one end-to-end assessment subsystem: each task has a separately t
 - Add `build_chunks_from_spans(spans: list[SourceSpan], token_count: Callable[[str], int], target_tokens: int = 300, max_tokens: int = 480) -> list[dict[str, Any]]`; return `text`, `span_ids`, and `section_label`, without crossing sections.
 - Keep deterministic vectors as an explicitly injected test double only. If the configured model cannot load while `RAG_MODE=hybrid`, raise a typed failure; do not silently fall back to hash vectors.
 
-- [ ] **Step 1: Write the failing tests** `test_embed_texts_uses_e5_prefix_and_returns_normalized_768d_vectors`, `test_embedding_model_is_loaded_once_per_process`, and `test_chunking_preserves_sections_and_span_ids_for_mixed_language_cv`. Include a long span above 480 tokens and assert it is split with exact source span coverage.
-- [ ] **Step 2: Run the focused tests**
+- [x] **Step 1: Write the failing tests** `test_embed_texts_uses_e5_prefix_and_returns_normalized_768d_vectors`, `test_embedding_model_is_loaded_once_per_process`, and `test_chunking_preserves_sections_and_span_ids_for_mixed_language_cv`. Include a long span above 480 tokens and assert it is split with exact source span coverage.
+- [x] **Step 2: Run the focused tests**
 
 Run: `make test-backend`
 Expected: the isolated backend suite reports the new embedding/chunking tests failing because runtime vectors are currently deterministic hash vectors and chunking is character-based; the fixture uses a disposable pgvector database.
 
-- [ ] **Step 3: Implement cached E5 loading and token-aware chunking** in `embedding.py`; choose MPS on supported macOS, otherwise CPU unless `EMBEDDING_DEVICE` explicitly selects a supported device. Pin the model revision through existing config and include model/revision in `EMBEDDING_CONFIG_ID`.
-- [ ] **Step 4: Add `sentence-transformers` to project dependencies and regenerate `services/backend/requirements.lock` with `uv pip compile services/backend/pyproject.toml --all-extras --output-file services/backend/requirements.lock`; rerun the isolated backend suite with the deterministic test double.**
+- [x] **Step 3: Implement cached E5 loading and token-aware chunking** in `embedding.py`; choose MPS on supported macOS, otherwise CPU unless `EMBEDDING_DEVICE` explicitly selects a supported device. Pin the model revision through existing config and include model/revision in `EMBEDDING_CONFIG_ID`.
+- [x] **Step 4: Add `sentence-transformers` to project dependencies and regenerate `services/backend/requirements.lock` with `uv pip compile services/backend/pyproject.toml --all-extras --output-file services/backend/requirements.lock`; rerun the isolated backend suite with the deterministic test double.**
 
 Run: `make test-backend`
 Expected: PASS without downloading model weights during ordinary tests.
 
-- [ ] **Step 5: Run one opt-in local E5 smoke check** on Vietnamese, English, and mixed-language strings; assert dimensions, finite values, normalization, and that the real model path—not the test double—was used. Record only aggregate output.
-- [ ] **Step 6: Commit** the task as `feat: use multilingual e5 for cv retrieval`.
+- [x] **Step 5: Run one opt-in local E5 smoke check** on Vietnamese, English, and mixed-language strings; assert dimensions, finite values, normalization, and that the real model path—not the test double—was used. Record only aggregate output.
+- [x] **Step 6: Commit** the task as `feat: use multilingual e5 for cv retrieval`.
 
 ### Task 2: Rubric-aware hybrid retrieval and evidence pack
 
@@ -90,19 +90,19 @@ Expected: PASS without downloading model weights during ordinary tests.
 - Preserve `build_hybrid_assessment_pack(db, sanitized_version_id, criteria, max_evidence_chars=24000) -> dict[str, Any]`; each criterion mapping may contain `id`, `name`, `description`, `anchors`, and `bilingual_terms`.
 - The pack returns `strategy`, `criteria_retrieval_map`, `chunks`, `fallback_needed`, and an ordered list of source span IDs. Do not return applicant identity fields.
 
-- [ ] **Step 1: Write failing retrieval tests** `test_hybrid_retrieval_uses_approved_bilingual_terms_and_anchor_terms`, `test_rrf_is_deterministic_and_deduplicates_chunks`, `test_hybrid_assessment_uses_null_when_retrieval_has_no_reliable_evidence`, and `test_retrieval_is_scoped_to_sanitized_version`.
-- [ ] **Step 2: Run the focused tests**
+- [x] **Step 1: Write failing retrieval tests** `test_hybrid_retrieval_uses_approved_bilingual_terms_and_anchor_terms`, `test_rrf_is_deterministic_and_deduplicates_chunks`, `test_hybrid_assessment_uses_null_when_retrieval_has_no_reliable_evidence`, and `test_retrieval_is_scoped_to_sanitized_version`.
+- [x] **Step 2: Run the focused tests**
 
 Run: `make test-backend`
 Expected: the isolated backend suite reports bilingual/anchor query expansion and empty-evidence tests failing; existing basic RRF tests continue to pass.
 
-- [ ] **Step 3: Implement normalized bilingual query assembly** from criterion label/description, approved anchor phrases, and stored `bilingual_terms`; cap terms to eight lexical tokens and enforce the spec's top-10 lexical/top-10 dense retrieval and top-four deduplicated evidence chunks per criterion.
-- [ ] **Step 4: Verify RRF rank fusion and scope tests** with `RRF k=60`, deterministic tie-break by `chunk_index`, and strict `sanitized_version_id` plus `embedding_config_id` filters.
+- [x] **Step 3: Implement normalized bilingual query assembly** from criterion label/description, approved anchor phrases, and stored `bilingual_terms`; cap terms to eight lexical tokens and enforce the spec's top-10 lexical/top-10 dense retrieval and top-four deduplicated evidence chunks per criterion.
+- [x] **Step 4: Verify RRF rank fusion and scope tests** with `RRF k=60`, deterministic tie-break by `chunk_index`, and strict `sanitized_version_id` plus `embedding_config_id` filters.
 
 Run: `make test-backend`
 Expected: PASS, including empty-corpus fallback and version isolation.
 
-- [ ] **Step 5: Commit** as `feat: add rubric-aware hybrid evidence retrieval`.
+- [x] **Step 5: Commit** as `feat: add rubric-aware hybrid evidence retrieval`.
 
 ### Task 3: Connect RAG to the assessment snapshot and prompts
 
@@ -120,20 +120,20 @@ Expected: PASS, including empty-corpus fallback and version isolation.
 - Use the existing `RAG_MODE` setting (`full_text_baseline | hybrid`) when creating a run; keep the default on the current full-text baseline.
 - The prompt builder receives only the selected registered source spans. The validator remains `validate_assessment_output(raw_content, span_registry, expected_criterion_ids)` and must reject evidence not in the retrieved/approved span registry.
 
-- [ ] **Step 1: Write failing worker tests** `test_hybrid_assessment_sends_only_retrieved_source_spans`, `test_run_snapshot_freezes_prompt_and_retrieval_versions`, `test_focus_criterion_ids_must_belong_to_approved_rubric`, and `test_missing_retrieval_evidence_remains_null_not_zero`.
-- [ ] **Step 2: Run those tests**
+- [x] **Step 1: Write failing worker tests** `test_hybrid_assessment_sends_only_retrieved_source_spans`, `test_run_snapshot_freezes_prompt_and_retrieval_versions`, `test_focus_criterion_ids_must_belong_to_approved_rubric`, and `test_missing_retrieval_evidence_remains_null_not_zero`.
+- [x] **Step 2: Run those tests**
 
 Run: `make test-backend`
 Expected: the isolated backend suite reports the new hybrid/snapshot/focus tests failing because the worker currently sends all sanitized spans and always records `strategy="fulltext"`.
 
-- [ ] **Step 3: Add prompt-version selection** in `assessment/prompt.py`: keep the current prompt as a named immutable version, add the retrieval-aware prompt as a new version, expose `get_assessment_prompt(version: str)`, and fail on unknown versions. Record the selected version and strategy in the run snapshot and audit metadata.
-- [ ] **Step 4: Integrate the hybrid pack in `execute_assessment_job`** only when the frozen strategy is `hybrid`; ensure the approved sanitized version is indexed idempotently with `index_sanitized_version` before retrieval, convert returned span IDs back to canonical `SourceSpan` rows, pass only those to the prompt and validator, and retain the current full-text baseline path when explicitly configured.
-- [ ] **Step 5: Run the focused tests and existing assessment regression suite**
+- [x] **Step 3: Add prompt-version selection** in `assessment/prompt.py`: keep the current prompt as a named immutable version, add the retrieval-aware prompt as a new version, expose `get_assessment_prompt(version: str)`, and fail on unknown versions. Record the selected version and strategy in the run snapshot and audit metadata.
+- [x] **Step 4: Integrate the hybrid pack in `execute_assessment_job`** only when the frozen strategy is `hybrid`; ensure the approved sanitized version is indexed idempotently with `index_sanitized_version` before retrieval, convert returned span IDs back to canonical `SourceSpan` rows, pass only those to the prompt and validator, and retain the current full-text baseline path when explicitly configured.
+- [x] **Step 5: Run the focused tests and existing assessment regression suite**
 
 Run: `make test-backend`
 Expected: PASS; output schema still contains the complete approved rubric ID set and missing evidence remains `null`.
 
-- [ ] **Step 6: Commit** as `feat: ground assessment prompts in retrieved spans`.
+- [x] **Step 6: Commit** as `feat: ground assessment prompts in retrieved spans`.
 
 ### Task 4: DeepSeek tool-call protocol and mock contract
 

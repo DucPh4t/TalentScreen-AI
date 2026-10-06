@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+from typing import Mapping, Optional
 from pydantic import ValidationError
 
 from app.db.models.document import SourceSpan
@@ -26,6 +26,8 @@ def validate_assessment_output(
     raw_content: str,
     span_registry: dict[str, SourceSpan],
     expected_criterion_ids: Optional[set[str]] = None,
+    *,
+    allowed_span_ids_by_criterion: Mapping[str, set[str]] | None = None,
 ) -> AssessmentOutputSchema:
     """Validate model output string against schema and DB source span registry.
     Raises AssessmentValidationError on failure with specific error codes.
@@ -66,6 +68,16 @@ def validate_assessment_output(
     provenance_errors = []
     for crit in assessment.criteria:
         for ev in crit.evidence:
+            allowed_for_criterion = (
+                allowed_span_ids_by_criterion.get(crit.criterion_id)
+                if allowed_span_ids_by_criterion is not None
+                else None
+            )
+            if allowed_for_criterion is not None and ev.span_id not in allowed_for_criterion:
+                provenance_errors.append(
+                    f"UNRETRIEVED_SPAN: Span '{ev.span_id}' was not retrieved for criterion '{crit.criterion_id}'."
+                )
+                continue
             span = span_registry.get(ev.span_id)
             if not span:
                 provenance_errors.append(

@@ -242,6 +242,46 @@ def test_validator_verifies_exact_verbatim_quote():
     assert "QUOTE_MISMATCH" in str(exc.value)
 
 
+def test_validator_rejects_span_not_retrieved_for_the_cited_criterion():
+    span_id = "spn_" + "2" * 24
+    span = SourceSpan(
+        span_id=span_id,
+        full_hash="full_hash",
+        sanitized_version_id=uuid.uuid4(),
+        start_cp=0,
+        end_cp=20,
+        text="Exact original text.",
+    )
+    payload = {
+        "criteria": [
+            {
+                "criterion_id": "python_backend",
+                "status": "assessed",
+                "score": 3,
+                "evidence": [{"span_id": span_id, "quote": span.text}],
+                "rationale": "Rationale grounded in the span.",
+                "missing_information": [],
+            },
+            {
+                "criterion_id": "api_design",
+                "status": "assessed",
+                "score": 3,
+                "evidence": [{"span_id": span_id, "quote": span.text}],
+                "rationale": "Rationale grounded in the span.",
+                "missing_information": [],
+            },
+        ]
+    }
+
+    with pytest.raises(AssessmentValidationError, match="UNRETRIEVED_SPAN"):
+        validate_assessment_output(
+            json.dumps(payload),
+            {span_id: span},
+            expected_criterion_ids={"python_backend", "api_design"},
+            allowed_span_ids_by_criterion={"python_backend": {span_id}, "api_design": set()},
+        )
+
+
 # ---------------- Integration Test: Full Assessment Pipeline (B10 & B11) ---------------- #
 
 
@@ -293,8 +333,19 @@ def sample_docx_cv() -> bytes:
 
 
 @pytest.mark.asyncio
-async def test_end_to_end_assessment_and_worker_execution(test_session_factory, sample_docx_cv):
+@pytest.mark.parametrize(
+    "assessment_path",
+    ["full_text_baseline", "hybrid", "hybrid_partial", "hybrid_empty", "hybrid_oversize"],
+    ids=["baseline", "hybrid-retrieved", "hybrid-partial", "hybrid-empty", "hybrid-oversize"],
+)
+async def test_end_to_end_assessment_and_worker_execution(test_session_factory, sample_docx_cv, monkeypatch, assessment_path):
     """End-to-end: Setup Requisition + Approved Rubric -> Ingest Document -> Approve Sanitized -> Enqueue Assessment -> Worker Executes -> Query Results."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    rag_mode = "full_text_baseline" if assessment_path == "full_text_baseline" else "hybrid"
+    monkeypatch.setattr(settings, "RAG_MODE", rag_mode)
+
     # 1. Setup user & requisition
     async with test_session_factory() as session:
         from app.services.requisition import get_or_create_default_org
@@ -419,6 +470,9 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
         spans = (await session.execute(stmt_spans)).scalars().all()
         assert len(spans) > 0
         first_span = spans[0]
+        if assessment_path == "hybrid_oversize":
+            first_span.text = "X" * 24_001
+            await session.commit()
 
         stmt_app = select(Application).where(Application.id == app_id)
         app_rec = (await session.execute(stmt_app)).scalar_one()
@@ -455,10 +509,54 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
             json={
                 "sanitized_version_id": str(sanitized_id),
                 "rubric_version_id": str(rubric_id),
+                "focus_criterion_ids": [CriterionId.PYTHON_BACKEND.value],
             },
         )
         assert assess_res.status_code == 202
         run_id = assess_res.json()["id"]
+
+        invalid_focus_res = await client.post(
+            f"/api/v1/applications/{app_id}/assessments",
+            json={
+                "sanitized_version_id": str(sanitized_id),
+                "rubric_version_id": str(rubric_id),
+                "focus_criterion_ids": ["unknown_skill"],
+            },
+        )
+        assert invalid_focus_res.status_code == 422
+
+    from sqlalchemy import func, select
+    from app.db.models.assessment import AssessmentRun
+    from app.db.models.ops import Job
+
+    async with test_session_factory() as session:
+        run_snapshot = (await session.execute(
+            select(AssessmentRun).where(AssessmentRun.id == uuid.UUID(run_id))
+        )).scalar_one()
+        expected_prompt_version = "assessment-v1.4.0" if rag_mode == "full_text_baseline" else "assessment-v1.5.0"
+        assert run_snapshot.snapshot["assessment_prompt_version"] == expected_prompt_version
+        assert run_snapshot.snapshot["agent_prompt_version"] == "assessment-agent.v1"
+        assert run_snapshot.snapshot["retrieval_strategy"] == rag_mode
+        assert run_snapshot.snapshot["focus_criterion_ids"] == [CriterionId.PYTHON_BACKEND.value]
+        assert run_snapshot.strategy == rag_mode
+        assessment_run_count = (await session.execute(
+            select(func.count(AssessmentRun.id)).where(AssessmentRun.application_id == app_id)
+        )).scalar_one()
+        assessment_job_count = (await session.execute(
+            select(func.count(Job.id)).where(
+                Job.target_id == app_id,
+                Job.type == JobType.ASSESS_APPLICATION,
+            )
+        )).scalar_one()
+        assert assessment_run_count == 1
+        assert assessment_job_count == 1
+
+    # A later config change must not mutate the already queued run.
+    monkeypatch.setattr(
+        settings,
+        "RAG_MODE",
+        "hybrid" if rag_mode == "full_text_baseline" else "full_text_baseline",
+    )
 
     # 6. Execute assessment worker job with Mock provider returning valid evaluation
     mock_eval = {
@@ -474,7 +572,45 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
             for cid in CriterionId
         ]
     }
-    mock_llm = MockLLMProvider(custom_content=json.dumps(mock_eval))
+    class CapturingMockLLMProvider(MockLLMProvider):
+        def __init__(self, custom_content: str):
+            super().__init__(custom_content=custom_content)
+            self.requests = []
+
+        async def complete(self, request):
+            self.requests.append(request)
+            return await super().complete(request)
+
+    mock_llm = CapturingMockLLMProvider(custom_content=json.dumps(mock_eval))
+
+    if rag_mode == "hybrid":
+        import app.services.assessment.service as assessment_service
+
+        async def fake_index_sanitized_version(_db, _sanitized_version_id):
+            return len(spans)
+
+        async def fake_build_hybrid_assessment_pack(_db, _sanitized_version_id, criteria):
+            empty = assessment_path == "hybrid_empty"
+            criterion_map = {
+                criterion["id"]: (
+                    []
+                    if empty or (assessment_path == "hybrid_partial" and criterion["id"] != "python_backend")
+                    else [{"span_ids": [first_span.span_id]}]
+                )
+                for criterion in criteria
+            }
+            return {
+                "strategy": "fulltext_fallback" if empty else "hybrid",
+                "criteria_retrieval_map": criterion_map,
+                "packed_chunks_count": 0 if empty else 1,
+                "total_evidence_characters": 0 if empty else len(first_span.text),
+                "fallback_needed": empty,
+                "chunks": [],
+                "source_span_ids": [] if empty else [first_span.span_id],
+            }
+
+        monkeypatch.setattr(assessment_service, "index_sanitized_version", fake_index_sanitized_version)
+        monkeypatch.setattr(assessment_service, "build_hybrid_assessment_pack", fake_build_hybrid_assessment_pack)
 
     async with test_session_factory() as session:
         from app.services.assessment.service import execute_assessment_job
@@ -491,14 +627,40 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
         await complete_job_fenced(session, job_id=j_id, worker_id="test_assess_worker", epoch=epoch, success=True)
         await session.commit()
 
+    if assessment_path in {"hybrid_empty", "hybrid_oversize"}:
+        assert mock_llm.invocation_count == 0
+    else:
+        assert mock_llm.invocation_count == 1
+        prompt_payload = json.loads(mock_llm.requests[0].user_prompt)
+        if rag_mode == "hybrid":
+            assert prompt_payload["source_spans"] == [{"span_id": first_span.span_id, "quote": first_span.text}]
+        else:
+            assert {item["span_id"] for item in prompt_payload["source_spans"]} == {span.span_id for span in spans}
+
     # 7. Query assessment results via REST API
     async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies, headers=headers) as client:
         res = await client.get(f"/api/v1/applications/{app_id}/assessments/{run_id}")
         assert res.status_code == 200
         data = res.json()
         assert data["status"] == "succeeded"
-        assert data["coverage"] == 1.0
-        assert data["comparable_score"] == 75.0
-        assert data["recommendation"] == "consider_next_round"
         assert len(data["criteria"]) == 6
-        assert data["criteria"][0]["evidence"][0]["quote"] == first_span.text
+        if assessment_path in {"hybrid_empty", "hybrid_oversize"}:
+            assert data["coverage"] == 0.0
+            assert data["comparable_score"] is None
+            assert all(criterion["score"] is None for criterion in data["criteria"])
+            assert all(criterion["status"] == "insufficient_evidence" for criterion in data["criteria"])
+        elif assessment_path == "hybrid_partial":
+            by_criterion = {criterion["criterion_id"]: criterion for criterion in data["criteria"]}
+            assert data["coverage"] == 0.2
+            assert by_criterion["python_backend"]["score"] == 3
+            assert by_criterion["python_backend"]["evidence"][0]["quote"] == first_span.text
+            for criterion_id, criterion in by_criterion.items():
+                if criterion_id != "python_backend":
+                    assert criterion["score"] is None
+                    assert criterion["evidence"] == []
+                    assert criterion["status"] == "insufficient_evidence"
+        else:
+            assert data["coverage"] == 1.0
+            assert data["comparable_score"] == 75.0
+            assert data["recommendation"] == "consider_next_round"
+            assert data["criteria"][0]["evidence"][0]["quote"] == first_span.text
