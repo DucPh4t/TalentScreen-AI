@@ -87,7 +87,7 @@ Alternatives considered included whole-document context without retrieval, a fix
 ### 5.3 Failure behavior
 
 - Parse/OCR uncertainty, low retrieval coverage, provider outage, invalid JSON, invalid citation, or failed authorization produces a visible not-ready/failed state; it must not produce a fabricated low score.
-- Retry only transient provider errors once, with a per-job retry budget. Do not retry invalid content or permission failures.
+- Allow at most one extra provider attempt per assessment, used either for one transient retry or one schema/citation repair. Never retry authorization, quota, or permission failures. All outbound attempts, including Jev, share the four-call assessment cap; skip Jev shadow if a retry/repair has consumed its remaining slot.
 - Offer HR a manual review path from the original workflow. Never silently substitute mock output in a live workflow.
 - If the source document or approved rubric changes, invalidate downstream retrieval/assessment caches by version and require a new assessment.
 
@@ -244,7 +244,7 @@ Track these weekly during early operation. If latency/error targets are exceeded
 
 - Generate embeddings locally and only once per immutable sanitized document version; cache by content/model/preprocessing hash and delete with the source lifecycle.
 - Send retrieved evidence rather than the entire CV to DeepSeek. Keep prompts compact and cap context by the RAG limits above.
-- Enforce at most three normal DeepSeek model round trips per candidate assessment: the model can request a first read-only retrieval, receive its result and request one more, then return the final structured response. This allows at most two tool executions; if no tool is needed, the model returns the structured response immediately. Allow at most one retry overall for a transient provider failure, so no assessment can exceed four outbound attempts. Tool executions remain capped at two even if a provider response is retried.
+- Enforce at most three normal DeepSeek model round trips per candidate assessment: the model can request a first read-only retrieval, receive its result and request one more, then return the final structured response. This allows at most two tool executions; if no tool is needed, the model returns the structured response immediately. The entire assessment has a hard cap of four outbound provider attempts, including Jev shadow. Permit at most one extra attempt total for a transient retry or schema/citation repair; that attempt consumes a slot, so skip Jev whenever the four-call cap is already reached. Tool executions remain capped at two even if a provider response is retried.
 - Jev is off by default and limited to locked benchmark/shadow cohorts or a specifically configured sample and budget. It must never run without the required institutional approval and provider credentials.
 - Record token usage, provider, model, request purpose, latency, retry, and estimated cost per assessment. Configure a hard cost ceiling per requisition and stop optional shadow calls when the ceiling is reached.
 - Limit worker concurrency and request rate; use circuit breakers for provider outages. Do not lower evidence or safety validation to save cost.
