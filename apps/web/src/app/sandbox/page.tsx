@@ -318,6 +318,33 @@ export default function SandboxPage() {
         </div>
       )}
 
+      <section className="sandbox-learning-callout" aria-labelledby="sandbox-learning-title">
+        <div className="sandbox-learning-heading">
+          <span className="badge badge-subtle">CHỈ DÙNG DỮ LIỆU MẪU</span>
+          <div>
+            <h2 id="sandbox-learning-title">Ba điều cần nhớ khi rà soát đánh giá</h2>
+            <p>Đây là hướng dẫn mô phỏng; không có thông tin từ ứng viên thật.</p>
+          </div>
+        </div>
+        <div className="sandbox-learning-grid">
+          <article>
+            <span>01</span>
+            <h3>Điểm quan sát ≠ năng lực tuyệt đối</h3>
+            <p>Điểm 0–4 mô tả bằng chứng trong CV so với anchor của tiêu chí đã duyệt; nó không đo toàn bộ khả năng của ứng viên.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Gợi ý AI ≠ quyết định tuyển dụng</h3>
+            <p>AI chỉ tổng hợp bằng chứng. HR kiểm tra trích dẫn, cân nhắc bối cảnh và tự ghi quyết định cùng lý do.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Thiếu bằng chứng ≠ điểm thấp</h3>
+            <p>Thông tin chưa có căn cứ cần được ghi nhận là chưa đủ hoặc cần làm rõ, rồi chuyển thành câu hỏi phỏng vấn phù hợp.</p>
+          </article>
+        </div>
+      </section>
+
       {/* Stepper Navigation Bar */}
       <div className="stepper-nav">
         {scenarios.map((sc, idx) => {

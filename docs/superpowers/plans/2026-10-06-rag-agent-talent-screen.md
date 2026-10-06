@@ -248,27 +248,28 @@ Expected: PASS; concurrent reservations cannot exceed either ceiling and DeepSee
 - Create: `docs/evaluation/rag-agent-benchmark-protocol.md`
 - Create: `docs/runbooks/rag-agent-readiness.md`
 - Create: `fixtures/rag_benchmark/synthetic.jsonl`
+- Create: `fixtures/rag_benchmark/synthetic.manifest.json`
 
 **Interfaces:**
-- Add pure functions `recall_at_k(expected_span_ids: set[str], retrieved_span_ids: list[str], k: int) -> float`, `criterion_mae(reference: list[int | None], predicted: list[int | None]) -> float | None` (ignore pairs missing on both sides; raise on one-sided missing labels), and `quadratic_weighted_kappa(reference: list[int], predicted: list[int], scale: int = 5) -> float | None`.
+- Add pure functions `recall_at_k(expected_span_ids: set[str], retrieved_span_ids: list[str], k: int) -> float`, `criterion_mae(reference: list[int | None], predicted: list[int | None]) -> float | None` (ignore pairs missing on both sides; raise on one-sided missing labels), and linear/quadratic weighted kappa over ordinal anchors.
 - Add CLI `python scripts/run_rag_benchmark.py --dataset PATH --output PATH`; report per-role retrieval, grounding, scoring, disagreement, latency, and estimated cost aggregates. Never put CV text, PII, prompt contents, or raw model responses into output.
-- Benchmark manifest distinguishes development and locked holdout datasets by immutable IDs/hash. Only synthetic fixtures are committed; real CV/JD labels remain in approved private storage and reports are aggregate-only.
+- Version-2 benchmark manifest distinguishes development and locked holdout by immutable sample IDs/hash, ties duplicates/counterfactuals with opaque private cluster IDs, and pins safe version labels/revisions. Only synthetic fixtures are committed; real CV/JD labels remain in approved private storage and reports are aggregate-only.
 
-- [ ] **Step 1: Write failing metric tests** `test_recall_at_k_uses_span_intersection`, `test_criterion_mae_ignores_jointly_missing_and_rejects_one_sided_missing`, `test_quadratic_weighted_kappa_matches_known_ordinal_example`, and `test_counterfactual_assessment_is_invariant_to_name_pronoun_and_school_changes`.
-- [ ] **Step 2: Run metric tests**
+- [x] **Step 1: Write failing metric tests** `test_recall_at_k_uses_span_intersection`, `test_criterion_mae_ignores_jointly_missing_and_rejects_one_sided_missing`, `test_quadratic_weighted_kappa_matches_known_ordinal_example`, and `test_counterfactual_assessment_is_invariant_to_name_pronoun_and_school_changes`.
+- [x] **Step 2: Run metric tests**
 
 Run: `make test-backend`
 Expected: the isolated backend suite reports metric and counterfactual tests failing because the evaluation module is not present.
 
-- [ ] **Step 3: Implement metrics and synthetic benchmark schema** with validation for role IDs, criterion IDs, source span IDs, reviewer labels, and split. Reject any row that includes raw candidate identity fields.
-- [ ] **Step 4: Implement the CLI and report template**; compute Recall@5/10, exact citation support, unsupported claim rate, criterion MAE, quadratic weighted kappa, human-human baseline, rank correlation diagnostic, counterfactual invariance, agent tool counts, P50/P95, extraction/OCR failures, and cost by role/provider. Report pass/fail against provisional SLOs from the spec and recommend manual fallback when an error budget is exceeded.
-- [ ] **Step 5: Add an evaluation protocol** requiring HR/IT independent labels, adjudication, a locked holdout, thresholds selected from development and human-human baseline before holdout evaluation, and DeepSeek/Jev separation. Identify the roles represented by the locally authorized eight CVs, then source a current public JD per intended role; record source URL, retrieval date, role mapping, and derived job-related requirements, not full copyrighted posting text. State explicitly that eight mixed-role CVs are integration smoke data only, not sufficient role-specific validation, and must remain local/private.
-- [ ] **Step 6: Test CLI privacy and deterministic report output**
+- [x] **Step 3: Implement metrics and synthetic benchmark schema** with validation for role IDs, criterion IDs, source span IDs, reviewer labels, and split. Reject any row that includes raw candidate identity fields.
+- [x] **Step 4: Implement the CLI and report template**; compute Recall@5/10, exact citation support, unsupported claim rate, criterion MAE, linear/quadratic weighted kappa, human-human baseline, confidence intervals, rank correlation diagnostic, counterfactual invariance, agent tool counts, P50/P95, extraction/OCR failures, and cost by role/provider. Report separate provisional profiles; they remain unapproved and cannot authorize a hiring decision.
+- [x] **Step 5: Add an evaluation protocol** requiring HR/IT independent labels, adjudication, a locked holdout, thresholds selected from development and human-human baseline before holdout evaluation, and DeepSeek/Jev separation. Identify the roles represented by the locally authorized eight CVs, then source a current public JD per intended role; record source URL, retrieval date, role mapping, and derived job-related requirements, not full copyrighted posting text. State explicitly that eight mixed-role CVs are integration smoke data only, not sufficient role-specific validation, and must remain local/private.
+- [x] **Step 6: Test CLI privacy and deterministic report output**
 
 Run: `make test-backend`
 Expected: PASS; report contains aggregate metrics and no fixture CV text.
 
-- [ ] **Step 7: Commit** as `feat: add role-specific rag evaluation harness`.
+- [x] **Step 7: Commit** as `feat: add role-specific rag evaluation harness`; follow-up review fixes are in a separate commit.
 
 ### Task 8: Evidence-first HR UI, readiness controls, and regression handoff
 
@@ -280,6 +281,9 @@ Expected: PASS; report contains aggregate metrics and no fixture CV text.
 - Modify: `apps/web/src/app/sandbox/page.tsx`
 - Modify: `README.md`
 - Modify: `docs/runbooks/rag-agent-readiness.md`
+- Modify: `scripts/deployment_smoke.py`
+- Modify: `services/backend/app/services/agent/assessment_graph.py`
+- Modify: `services/backend/tests/test_assessment.py`
 
 **Interfaces:**
 - Extend `AssessmentRunData` with typed `strategy` and minimized `execution_trace` fields returned by the backend.
@@ -287,21 +291,23 @@ Expected: PASS; report contains aggregate metrics and no fixture CV text.
 - `AssessmentExecutionTrace` renders strategy, prompt/model versions, retrieval outcome, and tool count/criterion/span references; it never renders raw tool queries, full prompts, or raw CV text.
 - “Tìm thêm bằng chứng” appears only for insufficient/conflicting criteria and creates a new complete assessment run focused on those criteria. Reuse the current evidence/candidate workspace, matrix, and interview actions; no general chat.
 
-- [ ] **Step 1: Run the frontend build before UI changes**
+- [x] **Step 1: Run the frontend build before UI changes**
 
 Run: `cd apps/web && npm run build`
 Expected: PASS on the approved baseline.
 
-- [ ] **Step 2: Add `AssessmentExecutionTrace` and contextual retry action** in the current candidate assessment page; disable duplicate actions while a run is queued/running and show explicit provider failure/manual-review states.
-- [ ] **Step 3: Add a short synthetic-only walkthrough in the sandbox** that explains evidence observation vs. ability, score vs. HR decision, and missing evidence vs. low score. Keep candidate identity fields hidden in queue/comparison views by default.
-- [ ] **Step 4: Update README and readiness runbook** to describe real E5/hybrid RAG and bounded agent honestly, keep “not approved for live decisions” until gates pass, and document model weights, local setup, privacy controls, limits, and manual fallback.
-- [ ] **Step 5: Run the full regression suite and local workflow smoke**
+- [x] **Step 2: Add `AssessmentExecutionTrace` and contextual retry action** in the current candidate assessment page; disable duplicate actions while a run is queued/running and show explicit provider failure/manual-review states. Trace labels the actual adapter (`mock`, `deepseek`, or `jev`) and does not display the configured DeepSeek model as if Mock used it.
+- [x] **Step 3: Add a short synthetic-only walkthrough in the sandbox** that explains evidence observation vs. ability, score vs. HR decision, and missing evidence vs. low score. Keep candidate identity fields hidden in queue/comparison views by default.
+- [x] **Step 4: Update README and readiness runbook** to describe real E5/hybrid RAG and bounded agent honestly, keep “not approved for live decisions” until gates pass, and document model weights, local setup, privacy controls, limits, and manual fallback. Mobile criteria-table scrolling has an accessible region label and an explicit swipe hint.
+- [x] **Step 5: Run the full regression suite and local workflow smoke**
 
 Run: `make test`
 Expected: backend isolated tests and Next.js production build pass. Then run local Postgres/backend/worker/frontend with `RAG_MODE=hybrid`, mock provider, and synthetic CVs; verify intake → sanitization approval → retrieval/agent trace → evidence review → HR decision, plus mobile-width candidate page. Live provider calls are separate from `make test`: DeepSeek may use the already authorized, consented data; Jev remains off unless `JEV_DATA_PROCESSING_APPROVED=true` and its rate card is verified.
 
-- [ ] **Step 6: Review the readiness report against every hard gate** in the spec. Do not enable AI-assisted recommendations for an actual hiring round if any data-quality, citation, scope, fairness, provider, deletion, or reviewer-agreement gate is unmet.
-- [ ] **Step 7: Commit** as `feat: surface evidence agent in hr review workflow`.
+Result: `make test` passed (backend suite and production build). `scripts/deployment_smoke.py` passed through the isolated local frontend proxy, auth/CSRF, JD/rubric approval, synthetic CV intake and sanitization approval, hybrid assessment with local E5/MPS and Mock provider, exact evidence validation, comparison, access isolation, and logout; the retired open-ended Copilot route is expected to return 404. Browser check at 390×844 found no document-width overflow; the criteria table remains horizontally scrollable within its own labeled region and the swipe hint is visible. The HR decision screen correctly keeps submission disabled until criteria review and attestations are complete. No HR decision was recorded for the synthetic candidate.
+
+- [x] **Step 6: Review the readiness report against every hard gate** in the spec. G1–G7 remain PENDING; there is no approved role holdout, independent HR/IT agreement, institutional privacy/provider sign-off, fairness result, live-provider validation, or deletion/rollback drill. Do not enable AI-assisted recommendations for an actual hiring round while any such gate is unmet.
+- [x] **Step 7: Commit** as `feat: surface evidence agent in hr review workflow`.
 
 ## Final Verification
 

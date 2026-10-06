@@ -229,7 +229,18 @@ async def run_assessment_agent(
             for criterion_id, span_ids in allowed_span_ids_by_criterion.items()
         },
     )
-    initial_provider = type(provider_override).__name__ if provider_override else get_settings().LLM_PROVIDER
+    if provider_override is None:
+        initial_provider = get_settings().LLM_PROVIDER
+    else:
+        provider_type = type(provider_override).__name__.lower()
+        if "mock" in provider_type:
+            initial_provider = "mock"
+        elif "deepseek" in provider_type:
+            initial_provider = "deepseek"
+        elif "jev" in provider_type:
+            initial_provider = "jev"
+        else:
+            initial_provider = type(provider_override).__name__[:64]
     state: _AgentState = {
         "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
         "source_spans": source_spans,
@@ -248,7 +259,7 @@ async def run_assessment_agent(
             "assessment_prompt_version": assessment_prompt_version,
             "retrieval_strategy": snapshot.get("retrieval_strategy", "unknown"),
             "provider": initial_provider,
-            "model": get_settings().DEEPSEEK_MODEL,
+            "model": "mock" if initial_provider == "mock" else get_settings().DEEPSEEK_MODEL,
             "model_round_trips": 0,
             "tool_execution_count": 0,
             "tool_calls": [],
@@ -323,8 +334,8 @@ async def run_assessment_agent(
         count = current["model_round_trips"] + 1
         trace = dict(current["trace"])
         trace["model_round_trips"] = count
-        trace["provider"] = type(provider_override).__name__ if provider_override else request.provider
-        trace["model"] = completion.reported_model or request.model
+        trace["provider"] = initial_provider
+        trace["model"] = "mock" if initial_provider == "mock" else completion.reported_model or request.model
         if completion.tool_calls and not tool_schemas:
             trace["outcome"] = "failed"
             trace["error_code"] = "AGENT_UNAUTHORIZED_TOOL_CALL"

@@ -1946,10 +1946,291 @@ textarea::placeholder {
   grid-template-columns: 1.1fr 1.3fr;
 }
 
+.assessment-trace {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.1rem;
+  background: var(--bg-surface-reading);
+  box-shadow: var(--shadow-sm);
+}
+
+.assessment-trace-failed,
+.assessment-failure-card {
+  border-color: var(--amber-border);
+  background: linear-gradient(135deg, var(--amber-bg), rgba(255, 255, 255, 0.94));
+}
+
+.assessment-trace-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.assessment-trace-heading h3,
+.assessment-failure-card h2 {
+  color: var(--text-primary);
+  font-size: 0.98rem;
+  font-weight: 750;
+}
+
+.assessment-trace-heading p,
+.assessment-failure-card > p {
+  margin-top: 0.25rem;
+  max-width: 58rem;
+  color: var(--text-secondary);
+  font-size: 0.79rem;
+  line-height: 1.55;
+}
+
+.assessment-trace-status {
+  max-width: 100%;
+  border: 1px solid var(--emerald-border);
+  border-radius: var(--radius-full);
+  padding: 0.25rem 0.65rem;
+  background: var(--emerald-bg);
+  color: var(--emerald-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.assessment-trace-status.is-failed {
+  border-color: var(--amber-border);
+  background: var(--amber-bg);
+  color: var(--amber-text);
+}
+
+.assessment-trace-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0.9rem 0;
+}
+
+.assessment-trace-facts > div {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-surface-subtle);
+}
+
+.assessment-trace-facts dt {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.assessment-trace-facts dd {
+  margin-top: 0.2rem;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.assessment-trace-error {
+  margin: 0.5rem 0;
+  color: var(--amber-text);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.assessment-trace-details {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.7rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.assessment-trace-details summary {
+  width: fit-content;
+  color: var(--accent-teal);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.assessment-trace-details summary:focus-visible,
+.evidence-followup-button:focus-visible {
+  outline: 3px solid var(--border-focus);
+  outline-offset: 3px;
+}
+
+.assessment-trace-versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-top: 0.65rem;
+}
+
+.assessment-trace-tools {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.7rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.assessment-trace-tools li {
+  padding-left: 0.2rem;
+  line-height: 1.5;
+}
+
+.assessment-trace-tools li > span {
+  margin-left: 0.55rem;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.assessment-trace-ref-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.assessment-trace-empty {
+  margin-top: 0.6rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.assessment-criteria-scroll-hint {
+  display: none;
+}
+
+.assessment-failure-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 1.5rem;
+}
+
+.assessment-failure-icon {
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--amber-bg);
+  color: var(--amber-text);
+}
+
+.sandbox-learning-callout {
+  margin: 1rem 0 1.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1.1rem;
+  background: var(--bg-surface-reading);
+  box-shadow: var(--shadow-sm);
+}
+
+.sandbox-learning-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.sandbox-learning-heading h2 {
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.sandbox-learning-heading p {
+  margin-top: 0.2rem;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.sandbox-learning-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.9rem;
+}
+
+.sandbox-learning-grid article {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  background: var(--bg-surface-subtle);
+}
+
+.sandbox-learning-grid article > span {
+  color: var(--accent-teal);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.sandbox-learning-grid h3 {
+  margin-top: 0.25rem;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.sandbox-learning-grid p {
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
 @media (max-width: 900px) {
   .retention-grid,
   .sandbox-workspace-grid {
     grid-template-columns: 1fr;
+  }
+
+  .sandbox-learning-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .assessment-trace-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .assessment-trace,
+  .assessment-failure-card,
+  .sandbox-learning-callout {
+    padding: 0.85rem;
+  }
+
+  .assessment-trace-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .sandbox-learning-heading {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 780px) {
+  .workspace-shell .assessment-criteria-scroll {
+    scrollbar-width: thin;
+    overscroll-behavior-x: contain;
+  }
+
+  .workspace-shell .assessment-criteria-scroll:focus-visible {
+    outline: 3px solid var(--border-focus);
+    outline-offset: 2px;
+  }
+
+  .workspace-shell .assessment-criteria-scroll-hint {
+    display: block;
+    margin: 0.45rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    line-height: 1.4;
   }
 }
 

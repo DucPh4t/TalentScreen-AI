@@ -16,10 +16,12 @@ import {
   IconUserCheck,
   IconFileText,
   IconMessageSquare,
-  IconSliders
+  IconSliders,
+  IconRefresh
 } from "@/components/Icons";
 import { useToast } from "@/components/Toast";
 import HRRevisionEditor from "@/components/HRRevisionEditor";
+import AssessmentExecutionTrace from "@/components/AssessmentExecutionTrace";
 import RawPdfViewer from "@/components/RawPdfViewer";
 import { stageLabels } from "@/lib/workflow";
 import { SkeletonDossier } from "@/components/Skeleton";
@@ -147,7 +149,13 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       const warnings = results.flatMap((result, index) => result.status === "rejected" && !(index === 2 && String(result.reason.message).includes("403")) ? [`Không tải được ${names[index]}: ${result.reason.message}`] : []);
       setLoadWarnings(warnings);
       setRubric(value(0, null)); setQuestionBanks(value(1, [])); setSanitizedVersion(value(2, null));
-      const run = value(3, null); setAssessmentRun(run?.status === "succeeded" && !run.is_stale && value(7, null)?.assessment_status === "succeeded" ? run : null);
+      const run = value(3, null);
+      const latestProgress = value(7, null);
+      const usableRun = run && !run.is_stale && (
+        run.status === "failed" ||
+        (run.status === "succeeded" && latestProgress?.assessment_status === "succeeded")
+      ) ? run : null;
+      setAssessmentRun(usableRun);
       setHrRevisions(value(4, [])); setDecisions(value(5, [])); setInterviewDraft(value(6, null)); setProgress(value(7, null));
       setInterviewScorecards(value(8, []));
       if (!initialTab.current) {
@@ -281,7 +289,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
     }
   }
 
-  async function handleTriggerAssessment() {
+  async function handleTriggerAssessment(focusCriterionIds?: string[]) {
     if (sanitizedVersion?.status !== "approved" || !requisition?.current_rubric_version_id) {
       warning("Cần HR duyệt bản đã che thông tin và có bộ tiêu chí được phê duyệt.");
       return;
@@ -291,9 +299,12 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       await api.triggerAssessment(
         id,
         sanitizedVersion.id,
-        requisition.current_rubric_version_id
+        requisition.current_rubric_version_id,
+        focusCriterionIds,
       );
-      success("Đã đưa yêu cầu đánh giá AI vào hàng đợi xử lý.");
+      success(focusCriterionIds?.length
+        ? "Đã đưa lượt đánh giá mới vào hàng đợi. Hệ thống vẫn trả kết quả đầy đủ theo rubric đã duyệt."
+        : "Đã đưa yêu cầu đánh giá AI vào hàng đợi xử lý.");
       await loadData();
     } catch (err: any) {
       toastError(err.message || "Lỗi kích hoạt đánh giá");
@@ -558,7 +569,31 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       {/* Tab 1: Evidence-first Assessment */}
       {activeTab === "assessment" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-          {!assessmentRun ? (
+          {assessmentRun?.status === "failed" ? (
+            <div className="card assessment-failure-card" role="alert">
+              <div className="assessment-failure-icon"><IconAlertTriangle size={24} /></div>
+              <h2>Không có đánh giá hợp lệ — hồ sơ cần HR xử lý thủ công</h2>
+              <p>Hệ thống không sử dụng kết quả lỗi để chấm điểm hay thay đổi trạng thái ứng viên. Kiểm tra trace bên dưới; nếu nguyên nhân đã được xử lý, HR có thể tạo một lượt mới.</p>
+              <AssessmentExecutionTrace
+                strategy={assessmentRun.strategy}
+                trace={Object.keys(assessmentRun.execution_trace || {}).length
+                  ? assessmentRun.execution_trace
+                  : { outcome: "failed", error_code: assessmentRun.failure_code }}
+                criterionLabels={Object.fromEntries((rubric?.criteria || []).map((criterion: any) => [criterion.id, criterion.label]))}
+              />
+              {canManage && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => void handleTriggerAssessment()}
+                  disabled={!!loadWarnings.length || !!progress?.pending || triggeringAssessment || sanitizedVersion?.status !== "approved"}
+                >
+                  <IconRefresh size={15} />
+                  {triggeringAssessment ? "Đang đưa vào hàng đợi…" : "Tạo lượt đánh giá mới"}
+                </button>
+              )}
+            </div>
+          ) : !assessmentRun ? (
             <div className="card" style={{ textAlign: "center", padding: "4rem 1.5rem" }}>
               <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "rgba(56, 189, 248, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem auto" }}>
                 <IconSparkles size={28} color="#38bdf8" />
@@ -571,7 +606,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               </p>
               <button
                 className="btn btn-primary"
-                onClick={handleTriggerAssessment}
+                onClick={() => void handleTriggerAssessment()}
                 disabled={!canManage || !!loadWarnings.length || progress?.pending || triggeringAssessment || sanitizedVersion?.status !== "approved" || !requisition?.current_rubric_version_id}
               >
                 <IconSparkles size={16} />
@@ -632,6 +667,12 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                   </div>
                 </div>
               </div>
+
+              <AssessmentExecutionTrace
+                strategy={assessmentRun.strategy}
+                trace={assessmentRun.execution_trace || {}}
+                criterionLabels={Object.fromEntries((rubric?.criteria || []).map((criterion: any) => [criterion.id, criterion.label]))}
+              />
 
               {assessmentRun.secondary_model_output && (
                 <section className="card" aria-label="Kết quả đối chiếu Jev" style={{ marginBottom: "1.5rem", borderColor: "var(--border-subtle)" }}>
@@ -704,7 +745,13 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                   )}
                 </div>
 
-                <div className="table-wrapper" style={{ border: "none" }}>
+                <div
+                  className="table-wrapper assessment-criteria-scroll"
+                  role="region"
+                  aria-label="Bảng tiêu chí năng lực; cuộn ngang để xem đủ các cột"
+                  tabIndex={0}
+                  style={{ border: "none" }}
+                >
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -777,6 +824,18 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                                 </button>
                               ))}
                               {canManage && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingCriterion(c.criterion_id)}>Điều chỉnh đánh giá</button>}
+                              {canManage && ["insufficient_evidence", "conflicting_evidence"].includes(c.status) && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm evidence-followup-button"
+                                  onClick={() => void handleTriggerAssessment([c.criterion_id])}
+                                  disabled={assessmentRun.strategy !== "hybrid" || !!progress?.pending || triggeringAssessment || !!loadWarnings.length || sanitizedVersion?.status !== "approved"}
+                                  title={assessmentRun.strategy === "hybrid" ? "Tìm thêm nguồn trong CV đã duyệt, tập trung vào tiêu chí này" : "Tính năng truy xuất thêm chỉ có khi bật Hybrid RAG"}
+                                >
+                                  <IconSparkles size={14} />
+                                  {triggeringAssessment ? "Đang xử lý…" : assessmentRun.strategy === "hybrid" ? "Tìm thêm bằng chứng" : "Tìm thêm · cần Hybrid RAG"}
+                                </button>
+                              )}
                               <label className="rubric-ack"><input type="checkbox" checked={reviewedIds.includes(c.criterion_id)} onChange={event => setReviewedIds(previous => event.target.checked ? [...previous.filter(x => x !== c.criterion_id), c.criterion_id] : previous.filter(x => x !== c.criterion_id))} />Tôi đã đối chiếu tiêu chí này</label>
                               {c.evidence.length === 0 && (
                                 <span style={{ color: "var(--text-muted)", fontSize: "0.775rem" }}>
@@ -790,10 +849,13 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                     </tbody>
                   </table>
                 </div>
+                <p className="assessment-criteria-scroll-hint">
+                  Trên màn hình nhỏ, vuốt ngang trong bảng để xem đủ trạng thái, giải trình và thao tác.
+                </p>
               </div>
             </div>
           )}
-          {assessmentRun && canManage && rubric && <HRRevisionEditor application={application} rubric={rubric} run={assessmentRun} revisions={hrRevisions} selectedCriterion={editingCriterion} onSaved={() => loadData(true)} />}
+          {assessmentRun?.status === "succeeded" && canManage && rubric && <HRRevisionEditor application={application} rubric={rubric} run={assessmentRun} revisions={hrRevisions} selectedCriterion={editingCriterion} onSaved={() => loadData(true)} />}
         </div>
       )}
 
@@ -1129,7 +1191,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               <button
                 className="btn btn-primary btn-sm"
                 onClick={handleTriggerInterview}
-                disabled={!canManage || !!loadWarnings.length || triggeringInterview || !assessmentRun}
+                disabled={!canManage || !!loadWarnings.length || triggeringInterview || assessmentRun?.status !== "succeeded"}
               >
                 <IconSparkles size={14} />
                 <span>{triggeringInterview ? "Đang tạo câu hỏi…" : "Tạo câu hỏi gợi ý"}</span>

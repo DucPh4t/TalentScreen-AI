@@ -48,7 +48,8 @@ flowchart LR
 - **Mock provider is the default.** Local development and `make test` do not require a model API key and do not make live LLM calls.
 - **DeepSeek** is available through the backend provider adapter when explicitly configured. Keep credentials in the untracked root `.env` file; never commit keys or applicant data.
 - **Jev 1.13** is implemented as an optional structured secondary scorer in shadow mode. It is off by default and requires separate data-processing approval, a key, and a verified rate card. Jev output is for comparison and does not determine the HR outcome.
-- **Retrieval maturity:** PostgreSQL/pgvector tables and hybrid retrieval code are present, but the default mode is `full_text_baseline`. The current embedding function generates deterministic offline vectors; it does not yet load the configured multilingual E5 transformer. Vector similarity should therefore not be presented as validated semantic matching.
+- **Retrieval and agent:** the opt-in `hybrid` path uses local `intfloat/multilingual-e5-base` embeddings at a pinned model revision, section-aware token chunks, lexical + vector ranking with reciprocal-rank fusion, and source-span citations. A LangGraph agent can make up to two bounded read-only evidence retrieval calls; it cannot choose an applicant/requisition scope or write a decision. Default `RAG_MODE=full_text_baseline` keeps hybrid retrieval off until explicitly enabled.
+- **Validation boundary:** E5, hybrid retrieval, and agent behavior have automated mock/synthetic regression coverage. The committed role-specific fixture is invented smoke data, not an HR/IT-labeled holdout; semantic retrieval quality, human agreement, fairness, latency under hiring load, and live-provider behavior are still unvalidated. No synthetic “pass” authorizes real hiring decisions.
 
 ## Design and technology
 
@@ -59,12 +60,13 @@ flowchart LR
 | Persistence | PostgreSQL 16, SQLAlchemy async, Alembic migrations, pgvector extension |
 | Background work | Database-backed job queue and a separate CV/AI worker |
 | Document processing | PDF/DOCX text extraction, PDF OCR fallback, source-span tracking |
-| Model adapters | Mock and DeepSeek primary provider; optional Jev 1.13 shadow provider |
+| Retrieval / agent | Local multilingual E5, PostgreSQL full-text + pgvector RRF, section-aware provenance, bounded LangGraph read-only tools |
+| Model adapters | Mock and DeepSeek primary provider; optional Jev 1.13 structured shadow provider |
 | Local services | Docker Compose for PostgreSQL; frontend served on port 2004 |
 
 ### Evidence and decision flow
 
-Model output is treated as untrusted structured data. The backend checks that criterion IDs match the approved rubric and that cited quotes match registered source spans. The score and recommendation are calculated from the approved weights and thresholds; the model does not choose the hiring outcome. HR must review the evidence and record the decision.
+Model output is treated as untrusted structured data. The backend checks that criterion IDs match the approved rubric and that cited quotes match registered source spans. Hybrid retrieval is criterion-scoped; the agent's tools are read-only, bounded, and restricted to the assessment snapshot. The score and recommendation are calculated from the approved weights and thresholds; the model does not choose the hiring outcome. HR must review the evidence and record the decision.
 
 The rubric policy rejects a set of explicitly disallowed demographic and proxy criteria. This is a technical guardrail, not proof that the system is free of bias. Fairness still requires representative data, independent human evaluation, and ongoing monitoring.
 
@@ -146,7 +148,7 @@ talentscreen-mvp-plan/       Product and implementation plan
 
 - This is not approved for public deployment or AI-assisted decisions in a live hiring round. The repository does not contain validated agreement results against independent HR/IT labels or a representative, locked holdout set.
 - A passing mock test suite proves software contracts and workflow behavior, not that a model scores candidates accurately or fairly.
-- The default embedding path generates deterministic hash-based vectors for offline development rather than semantic text embeddings; retrieval quality and role-specific model quality have not been measured.
+- `RAG_MODE` defaults to `full_text_baseline`; the hybrid E5 path requires downloading/loading local model weights and has not passed a representative HR/IT retrieval benchmark. Its presence in code is not a quality claim.
 - The redaction rules can miss identifiers. Human review is mandatory before an external provider receives sanitized text.
 - The deletion and retention UI/API workflows exist, but backup-restore deletion replay and production purge operations still need an independently verified drill.
 - Production ingress controls, sustained-load/SLO evidence, alerting, and live-provider failure testing remain outstanding. ATS integration, candidate email, interview scheduling, and dossier export are not implemented.

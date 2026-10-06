@@ -138,9 +138,10 @@ def main() -> None:
                 assert span["text"] == evidence["quote"]
         progress = call("GET", f"/applications/{app_id}/progress")
         assert progress["stage"] == "awaiting_decision"
-        copilot = call("POST", f"/applications/{app_id}/copilot", json={"message": "CV còn thiếu bằng chứng nào?"})
-        assert copilot["provider"] == "mock" and copilot["facts"]
-        assert all(fact["score"] is None for fact in copilot["facts"])
+        # The former open-ended CV Copilot was intentionally removed. Keep the
+        # smoke check aligned with the bounded assessment agent and verify that
+        # the retired chat endpoint is not exposed.
+        call("POST", f"/applications/{app_id}/copilot", 404, json={"message": "Synthetic smoke only"})
         if args.output_metadata:
             Path(args.output_metadata).write_text(json.dumps({"requisition_id": req_id, "application_id": app_id, "rubric_id": rubric["id"], "synthetic_only": True}, indent=2))
         call("GET", f"/requisitions/{req_id}/comparison")
@@ -151,7 +152,7 @@ def main() -> None:
         call("GET", "/admin/metrics")
         call("POST", "/auth/logout")
         call("GET", "/auth/me", 401)
-        print("PASS mock assessment, grounded evidence, comparison, independent-review role isolation, metrics and logout")
+        print("PASS mock assessment, grounded evidence, no open-ended copilot endpoint, comparison, independent-review role isolation, metrics and logout")
 
 
 if __name__ == "__main__":

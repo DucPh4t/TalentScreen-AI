@@ -54,15 +54,40 @@ export interface CriterionAssessmentData {
   }>;
 }
 
+export interface AssessmentExecutionToolCallData {
+  tool_name?: string;
+  outcome?: string;
+  criterion_ids?: string[];
+  span_ids?: string[];
+  result_count?: number;
+  error_code?: string;
+}
+
+export interface AssessmentExecutionTraceData {
+  retrieval_strategy?: string;
+  agent_prompt_version?: string;
+  assessment_prompt_version?: string;
+  provider?: string;
+  model?: string;
+  model_round_trips?: number;
+  tool_execution_count?: number;
+  result_criterion_count?: number;
+  outcome?: string;
+  error_code?: string | null;
+  tool_calls?: AssessmentExecutionToolCallData[];
+}
+
 export interface AssessmentRunData {
   id: string;
   application_id: string;
   run_no: number;
   status: string;
+  strategy: string;
+  execution_trace: AssessmentExecutionTraceData;
   observed_score: number | null;
   coverage: number;
   comparable_score: number | null;
-  recommendation: "consider_next_round" | "needs_clarification" | "review_required";
+  recommendation: "consider_next_round" | "needs_clarification" | "review_required" | null;
   secondary_model_output?: {
     status: "succeeded" | "failed" | "skipped_insufficient_evidence" | string;
     requested_model?: string;
@@ -433,12 +458,18 @@ export const api = {
   },
 
   // Assessment
-  async triggerAssessment(applicationId: string, sanitizedVersionId: string, rubricVersionId: string): Promise<any> {
+  async triggerAssessment(
+    applicationId: string,
+    sanitizedVersionId: string,
+    rubricVersionId: string,
+    focusCriterionIds?: string[],
+  ): Promise<any> {
     return apiRequest<any>(`/applications/${applicationId}/assessments`, {
       method: "POST",
       body: JSON.stringify({
         sanitized_version_id: sanitizedVersionId,
         rubric_version_id: rubricVersionId,
+        ...(focusCriterionIds?.length ? { focus_criterion_ids: focusCriterionIds } : {}),
       }),
     });
   },

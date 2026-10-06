@@ -28,6 +28,8 @@ python scripts/run_rag_benchmark.py \
 
 The report should say `data_scope: synthetic_only`, `readiness: NOT_AUTHORIZED_FOR_LIVE_DECISIONS`, and may recommend manual fallback when synthetic provisional checks fail or lack data. Its visible `locked_holdout` entries are deliberately synthetic and public; the holdout flag is not access control. Never present their metric values as evidence for a role or a provider.
 
+The current evaluator uses manifest/report schema v2: retrieval, sufficient-evidence, citations, and scored claims are criterion-scoped; role/provider thresholds are reported separately; private low-count groups are suppressed; and confidence intervals use candidate-cluster bootstrap where at least two independent clusters are present. `threshold_profiles.*.state` remains `PROVISIONAL_NOT_APPROVED`; reported PASS/FAIL values are comparisons to candidate targets, not a release decision. The RAG design candidate profile and older MVP P1 profile differ (2-minute vs 5-minute targets and QWK vs linear kappa); do not merge or select one for holdout sign-off until HR/IT approve a dated profile. Provider-wide aggregates cannot override a failing or unevaluable role/provider scope. Jev shadow failures are reported separately and do not change the DeepSeek primary result.
+
 For a protected private holdout, only the named evaluation custodian should grant access after thresholds and analysis plan are signed. Keep its records, CV/JD, labels, evidence spans, embeddings, provider payloads, and row-level predictions out of Git and public reports. Use the benchmark output for aggregates only and suppress low-count group results per institutional policy.
 
 ## Error-budget response

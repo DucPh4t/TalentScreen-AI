@@ -664,6 +664,12 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
         assert data["status"] == "succeeded"
         assert data["strategy"] == rag_mode
         assert data["execution_trace"]["outcome"] in {"validated", "insufficient_evidence"}
+        if assessment_path == "hybrid_oversize":
+            assert "provider" not in data["execution_trace"]
+            assert "model" not in data["execution_trace"]
+        else:
+            assert data["execution_trace"]["provider"] == "mock"
+            assert data["execution_trace"]["model"] == "mock"
         assert len(data["criteria"]) == 6
         if assessment_path in {"hybrid_empty", "hybrid_oversize"}:
             assert data["coverage"] == 0.0
