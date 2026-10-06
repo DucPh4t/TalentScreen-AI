@@ -96,7 +96,10 @@ class Settings(BaseSettings):
     # Embeddings & Retrieval
     EMBEDDING_MODEL: str = Field(default="intfloat/multilingual-e5-base")
     EMBEDDING_DEVICE: str = Field(default="auto")
-    EMBEDDING_MODEL_REVISION: str = Field(default="main")
+    EMBEDDING_MODEL_REVISION: str = Field(
+        default="d128750597153bb5987e10b1c3493a34e5a4502a",
+        description="Immutable model repository commit used for reproducible retrieval",
+    )
     RAG_MODE: Literal["full_text_baseline", "hybrid"] = Field(
         default="full_text_baseline",
     )
