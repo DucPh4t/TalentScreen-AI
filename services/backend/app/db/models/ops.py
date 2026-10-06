@@ -102,6 +102,9 @@ class BudgetPeriod(Base, PrimaryKeyMixin, TimestampMixin):
 
 class BudgetReservation(Base, PrimaryKeyMixin, TimestampMixin):
     __tablename__ = "budget_reservations"
+    __table_args__ = (
+        Index("ix_budget_reservations_requisition_status", "requisition_id", "status"),
+    )
 
     budget_period_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -114,6 +117,11 @@ class BudgetReservation(Base, PrimaryKeyMixin, TimestampMixin):
         ForeignKey("jobs.id", ondelete="CASCADE"),
         index=True,
         nullable=False,
+    )
+    requisition_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("requisitions.id", ondelete="SET NULL"),
+        nullable=True,
     )
     amount_usd: Mapped[float] = mapped_column(Numeric(18, 8), nullable=False)
     settled_usd: Mapped[float] = mapped_column(Numeric(18, 8), default=0.0, nullable=False)

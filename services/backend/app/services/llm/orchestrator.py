@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.db.models import Application, AssessmentRun
 from app.db.models.document import SanitizedVersion
 from app.db.models.ops import LLMInvocation
 from app.domain.enums import BudgetScope, LLMInvocationStatus, SanitizedVersionStatus
@@ -40,7 +41,6 @@ from app.services.sanitizer import residual_contact_types
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS_PER_STAGE = 2
-MAX_EXTERNAL_CALLS_PER_RUN = 4
 
 
 def _serialized_request_payload(request: CompletionRequest) -> str:
@@ -91,11 +91,12 @@ async def verify_llm_preconditions(
         )
 
     # Invariant 2: Bounded total external calls per run
+    max_external_calls = get_settings().ASSESSMENT_MAX_EXTERNAL_CALLS
     stmt_count = select(func.count(LLMInvocation.id)).where(LLMInvocation.job_id == job_id)
     total_calls = (await db.execute(stmt_count)).scalar() or 0
-    if total_calls >= MAX_EXTERNAL_CALLS_PER_RUN:
+    if total_calls >= max_external_calls:
         raise PreconditionViolationError(
-            f"MAX_RUN_EXTERNAL_CALLS_EXCEEDED: Total external calls ({total_calls}) reached run limit of {MAX_EXTERNAL_CALLS_PER_RUN}."
+            f"MAX_RUN_EXTERNAL_CALLS_EXCEEDED: Total external calls ({total_calls}) reached run limit of {max_external_calls}."
         )
 
     # Invariant 3: Every candidate-derived prompt needs an approved, contact-free source.
@@ -110,6 +111,16 @@ async def verify_llm_preconditions(
             raise PreconditionViolationError(
                 "RESIDUAL_CONTACT_DATA: Bản sanitized vẫn chứa thông tin liên hệ; chặn gửi ra mô hình AI ngoài."
             )
+
+
+async def _resolve_requisition_id_for_job(db: AsyncSession, job_id: uuid.UUID) -> uuid.UUID | None:
+    """Resolve an assessment job's requisition for its independent spend ceiling."""
+    stmt = (
+        select(Application.requisition_id)
+        .join(AssessmentRun, AssessmentRun.application_id == Application.id)
+        .where(AssessmentRun.job_id == job_id)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
 async def execute_bounded_llm_call(
@@ -152,7 +163,14 @@ async def execute_bounded_llm_call(
             model=request.model,
         )
     budget_scope = BudgetScope.DEVELOPMENT if get_settings().APP_ENV == "sandbox" else BudgetScope.PILOT
-    reservation = await reserve_budget(db, job_id=job_id, amount_usd=estimated_cost, scope=budget_scope)
+    requisition_id = await _resolve_requisition_id_for_job(db, job_id)
+    reservation = await reserve_budget(
+        db,
+        job_id=job_id,
+        amount_usd=estimated_cost,
+        scope=budget_scope,
+        requisition_id=requisition_id,
+    )
     await db.commit()  # commit reservation before network I/O
 
     # 3. Create invocation record in RESERVED status

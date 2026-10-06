@@ -36,6 +36,16 @@ async def test_current_migrations_include_jev_output_and_optional_interview_bank
                 )
             )
         ).scalar_one_or_none()
+        requisition_budget_column = (
+            await session.execute(
+                text(
+                    "SELECT data_type, is_nullable FROM information_schema.columns "
+                    "WHERE table_schema = current_schema() "
+                    "AND table_name = 'budget_reservations' "
+                    "AND column_name = 'requisition_id'"
+                )
+            )
+        ).one_or_none()
         scorecard_table = (
             await session.execute(
                 text(
@@ -50,4 +60,5 @@ async def test_current_migrations_include_jev_output_and_optional_interview_bank
     assert trace_column == ("jsonb", "NO", "'{}'::jsonb")
     assert bank_nullable == "YES"
     assert scorecard_table == "interview_scorecards"
-    assert revision == "6f2c91a4d8e0"
+    assert requisition_budget_column == ("uuid", "YES")
+    assert revision == "43de8b507ac2"

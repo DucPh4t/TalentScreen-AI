@@ -1,4 +1,6 @@
 """Unit tests for configuration validation and security masking."""
+from decimal import Decimal
+
 import pytest
 from app.config import Settings
 
@@ -38,6 +40,7 @@ def test_pilot_env_requires_valid_pilot_stage():
         PILOT_STAGE="shadow",
         SECRET_KEY="a" * 64,
         APP_ORIGIN="https://talentscreen.example.edu",
+        REQUISITION_LLM_BUDGET_USD="10.00",
     )
     assert settings_shadow.PILOT_STAGE == "shadow"
 
@@ -46,13 +49,15 @@ def test_pilot_env_requires_valid_pilot_stage():
         PILOT_STAGE="assisted",
         SECRET_KEY="a" * 64,
         APP_ORIGIN="https://talentscreen.example.edu",
+        REQUISITION_LLM_BUDGET_USD="10.00",
     )
     assert settings_assisted.PILOT_STAGE == "assisted"
 
 
 def test_pilot_rejects_insecure_deployment_configuration():
     secure = dict(_env_file=None, APP_ENV="pilot", PILOT_STAGE="shadow",
-                  SECRET_KEY="a" * 64, APP_ORIGIN="https://hr.example.edu")
+                  SECRET_KEY="a" * 64, APP_ORIGIN="https://hr.example.edu",
+                  REQUISITION_LLM_BUDGET_USD="10.00")
     with pytest.raises(ValueError, match="non-default SECRET_KEY"):
         Settings(**{**secure, "SECRET_KEY": "dev_secret_key"})
     with pytest.raises(ValueError, match="HTTPS APP_ORIGIN"):
@@ -111,3 +116,42 @@ def test_openrouter_jev_requires_system_one_route_and_pinned_model():
         Settings(**{**shared, "JEV_BASE_URL": "https://openrouter.ai/api/v1/chat/completions"})
     with pytest.raises(ValueError, match="pinned Jev model ID"):
         Settings(**{**shared, "JEV_MODEL": "typesafe/jev-latest"})
+
+
+def test_non_sandbox_requires_explicit_positive_requisition_budget():
+    pilot = {
+        "_env_file": None,
+        "APP_ENV": "pilot",
+        "PILOT_STAGE": "shadow",
+        "SECRET_KEY": "s" * 48,
+        "APP_ORIGIN": "https://hr.example.edu",
+    }
+    with pytest.raises(ValueError, match="REQUISITION_LLM_BUDGET_USD"):
+        Settings(**pilot)
+    with pytest.raises(ValueError):
+        Settings(**{**pilot, "REQUISITION_LLM_BUDGET_USD": "Infinity"})
+
+    configured = Settings(**{**pilot, "REQUISITION_LLM_BUDGET_USD": "25.00"})
+    assert configured.requisition_budget_limit_usd == Decimal("25.00")
+    sandbox = Settings(_env_file=None, APP_ENV="sandbox")
+    assert sandbox.requisition_budget_limit_usd == Decimal("10.00")
+    blank_sandbox = Settings(
+        _env_file=None,
+        APP_ENV="sandbox",
+        REQUISITION_LLM_BUDGET_USD="",
+    )
+    assert blank_sandbox.REQUISITION_LLM_BUDGET_USD is None
+
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, APP_ENV="sandbox", DEV_EVAL_BUDGET_USD=float("inf"))
+
+
+def test_assessment_external_call_limit_has_hard_maximum_four():
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, APP_ENV="sandbox", ASSESSMENT_MAX_EXTERNAL_CALLS=5)
+
+    assert Settings(
+        _env_file=None,
+        APP_ENV="sandbox",
+        ASSESSMENT_MAX_EXTERNAL_CALLS=3,
+    ).ASSESSMENT_MAX_EXTERNAL_CALLS == 3

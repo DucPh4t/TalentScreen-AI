@@ -3,8 +3,10 @@ Strictly typed via Pydantic Settings. Adheres to 02-architecture and 07-operatio
 """
 from __future__ import annotations
 
+import math
 import os
 import re
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal, Optional
 from urllib.parse import urlsplit
@@ -117,13 +119,14 @@ class Settings(BaseSettings):
 
     # Reliability & Timeouts
     LLM_STAGE_MAX_ATTEMPTS: int = Field(default=2)
-    ASSESSMENT_MAX_EXTERNAL_CALLS: int = Field(default=4)
+    ASSESSMENT_MAX_EXTERNAL_CALLS: int = Field(default=4, ge=1, le=4)
     LLM_READ_TIMEOUT_SECONDS: int = Field(default=90)
     ASSESSMENT_DEADLINE_SECONDS: int = Field(default=900)
 
     # Budget Caps (USD)
-    DEV_EVAL_BUDGET_USD: float = Field(default=10.00)
-    PILOT_MONTHLY_BUDGET_USD: float = Field(default=10.00)
+    DEV_EVAL_BUDGET_USD: float = Field(default=10.00, gt=0)
+    PILOT_MONTHLY_BUDGET_USD: float = Field(default=10.00, gt=0)
+    REQUISITION_LLM_BUDGET_USD: Optional[Decimal] = Field(default=None, gt=0)
     RATE_CARD_VERIFIED_AT: Optional[str] = Field(default=None)
 
     # Data Retention
@@ -134,6 +137,7 @@ class Settings(BaseSettings):
         "DEEPSEEK_API_KEY",
         "JEV_API_KEY",
         "JEV_INPUT_PRICE_PER_MILLION_USD",
+        "REQUISITION_LLM_BUDGET_USD",
         "RATE_CARD_VERIFIED_AT",
         "JEV_RATE_CARD_VERIFIED_AT",
         "DATABASE_SYNC_URL",
@@ -144,6 +148,20 @@ class Settings(BaseSettings):
         if isinstance(v, str) and not v.strip():
             return None
         return v
+
+    @field_validator("DEV_EVAL_BUDGET_USD", "PILOT_MONTHLY_BUDGET_USD")
+    @classmethod
+    def require_finite_budget_caps(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("Budget caps must be finite values")
+        return value
+
+    @field_validator("REQUISITION_LLM_BUDGET_USD")
+    @classmethod
+    def require_finite_requisition_budget(cls, value: Decimal | None) -> Decimal | None:
+        if value is not None and not value.is_finite():
+            raise ValueError("REQUISITION_LLM_BUDGET_USD must be finite")
+        return value
 
     @field_validator("JEV_BASE_URL")
     @classmethod
@@ -168,6 +186,13 @@ class Settings(BaseSettings):
         path = Path(self.PRIVATE_STORAGE_ROOT).resolve()
         path.mkdir(parents=True, exist_ok=True)
         return path
+
+    @property
+    def requisition_budget_limit_usd(self) -> Decimal:
+        """Return the per-requisition ceiling, inheriting the dev cap in sandbox."""
+        if self.REQUISITION_LLM_BUDGET_USD is not None:
+            return self.REQUISITION_LLM_BUDGET_USD
+        return Decimal(str(self.DEV_EVAL_BUDGET_USD))
 
     @model_validator(mode="after")
     def validate_provider_and_stage(self) -> Settings:
@@ -197,6 +222,10 @@ class Settings(BaseSettings):
             if self.PILOT_STAGE not in ("shadow", "assisted"):
                 raise ValueError(
                     "PILOT_STAGE must be 'shadow' or 'assisted' when APP_ENV is 'pilot'"
+                )
+            if self.REQUISITION_LLM_BUDGET_USD is None:
+                raise ValueError(
+                    "REQUISITION_LLM_BUDGET_USD must be explicitly configured outside sandbox"
                 )
             if len(self.SECRET_KEY) < 32 or self.SECRET_KEY.startswith("dev_secret_key"):
                 raise ValueError("Pilot requires a non-default SECRET_KEY of at least 32 characters")

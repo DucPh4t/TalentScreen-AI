@@ -223,20 +223,20 @@ Expected: PASS; the agent cannot access or mutate data outside the run snapshot 
 - Extend `reserve_budget(db, job_id, amount_usd, scope=BudgetScope.PILOT, requisition_id: uuid.UUID | None = None) -> BudgetReservation`; enforce both the existing period cap and the configured requisition cap under PostgreSQL advisory transaction locks. Use the configured `ASSESSMENT_MAX_EXTERNAL_CALLS` (default 4, hard maximum 4) instead of a duplicated constant.
 - In `execute_bounded_llm_call`, resolve the requisition from the `AssessmentRun` associated with `job_id` and pass it into the reservation. Count primary calls, tool-call round trips, repair/retry, and Jev against the same four-outbound-attempt cap.
 
-- [ ] **Step 1: Write failing ledger tests** `test_requisition_budget_reservation_refuses_over_limit`, `test_same_requisition_reservations_are_serialized`, `test_non_sandbox_requires_explicit_requisition_budget`, and `test_assessment_call_budget_includes_jev_and_repair`.
-- [ ] **Step 2: Run the focused tests**
+- [x] **Step 1: Write failing ledger tests** `test_requisition_budget_reservation_refuses_over_limit`, `test_same_requisition_reservations_are_serialized`, `test_non_sandbox_requires_explicit_requisition_budget`, and `test_assessment_call_budget_includes_jev_and_repair`.
+- [x] **Step 2: Run the focused tests**
 
 Run: `make test-backend`
 Expected: the isolated backend suite reports the new per-requisition budget tests failing because current reservations have only global development/pilot periods and no requisition attribution.
 
-- [ ] **Step 3: Add the reservation migration and typed setting**; verify existing reservations migrate with `requisition_id = NULL` and remain covered by their global period cap.
-- [ ] **Step 4: Enforce the requisition reservation cap atomically** while preserving unknown-outcome holds and existing global cap settlement semantics. Skip Jev before egress if the shared call or budget cap is exhausted; never downgrade to mock.
-- [ ] **Step 5: Run budget, provider, Jev, and migration regression tests**
+- [x] **Step 3: Add the reservation migration and typed setting**; existing reservations retain nullable `requisition_id` and remain covered by their global period cap.
+- [x] **Step 4: Enforce the requisition reservation cap atomically** while preserving unknown-outcome holds and existing global cap settlement semantics. Skip Jev before egress if the shared call or budget cap is exhausted; never downgrade to mock.
+- [x] **Step 5: Run budget, provider, Jev, and migration regression tests**
 
 Run: `make test-backend`
 Expected: PASS; concurrent reservations cannot exceed either ceiling and DeepSeek's accepted result remains intact if Jev is skipped/fails.
 
-- [ ] **Step 6: Commit** as `feat: cap model spend per requisition`.
+- [x] **Step 6: Commit** as `feat: cap model spend per requisition`.
 
 ### Task 7: Role-specific benchmark, agreement metrics, and readiness report
 

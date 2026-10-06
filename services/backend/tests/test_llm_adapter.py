@@ -13,14 +13,17 @@ from sqlalchemy import select, update
 from httpx import ASGITransport, AsyncClient
 
 from app.db.models import (
+    AssessmentRun,
     Application,
     BudgetReservation,
     BudgetPeriod,
     Candidate,
     Document,
     Job,
+    JDVersion,
     LLMInvocation,
     Requisition,
+    RubricVersion,
     SanitizedVersion,
     User,
     UserAccountRole,
@@ -34,6 +37,7 @@ from app.domain.enums import (
     JobType,
     LLMInvocationStatus,
     RequisitionStatus,
+    RubricStatus,
     SanitizedVersionStatus,
     UserStatus,
 )
@@ -566,6 +570,226 @@ async def test_budget_ledger_atomic_reservation_and_outcome_unknown(test_session
         period = await get_or_create_active_budget_period(session, scope=BudgetScope.PILOT)
         assert period.reserved_usd == 8.0
         assert period.spent_usd == 0.0
+
+
+@pytest.mark.asyncio
+async def test_requisition_budget_reservation_refuses_over_limit(test_session_factory, monkeypatch):
+    from app.config import Settings
+    from app.services.llm import ledger
+
+    settings = Settings(
+        _env_file=None,
+        APP_ENV="sandbox",
+        DEV_EVAL_BUDGET_USD=100,
+        PILOT_MONTHLY_BUDGET_USD=100,
+        REQUISITION_LLM_BUDGET_USD=10,
+    )
+    monkeypatch.setattr(ledger, "get_settings", lambda: settings)
+    async with test_session_factory() as session:
+        _, requisition, _, _, _, job = await setup_llm_test_context(session)
+        requisition_id, job_id = requisition.id, job.id
+        period = await get_or_create_active_budget_period(session, BudgetScope.PILOT, for_update=True)
+        period.limit_usd = 100
+        period.reserved_usd = 0
+        period.spent_usd = 0
+        await session.commit()
+
+    async with test_session_factory() as session:
+        await reserve_budget(
+            session, job_id, Decimal("8"), BudgetScope.PILOT, requisition_id=requisition_id
+        )
+        await session.commit()
+
+    async with test_session_factory() as session:
+        with pytest.raises(BudgetExceededError, match="REQUISITION_BUDGET_LIMIT_EXCEEDED"):
+            await reserve_budget(
+                session, job_id, Decimal("3"), BudgetScope.PILOT, requisition_id=requisition_id
+            )
+
+
+@pytest.mark.asyncio
+async def test_same_requisition_reservations_are_serialized(test_session_factory, monkeypatch):
+    from app.config import Settings
+    from app.services.llm import ledger
+
+    settings = Settings(
+        _env_file=None,
+        APP_ENV="sandbox",
+        DEV_EVAL_BUDGET_USD=100,
+        PILOT_MONTHLY_BUDGET_USD=100,
+        REQUISITION_LLM_BUDGET_USD=10,
+    )
+    monkeypatch.setattr(ledger, "get_settings", lambda: settings)
+    async with test_session_factory() as session:
+        _, requisition, _, application, _, job = await setup_llm_test_context(session)
+        second_job = Job(
+            id=uuid.uuid4(),
+            type=JobType.ASSESS_APPLICATION,
+            status=JobStatus.RUNNING,
+            target_type="application",
+            target_id=application.id,
+            input_snapshot_hash=f"parallel-{uuid.uuid4().hex}",
+            priority=5,
+            lease_epoch=1,
+        )
+        session.add(second_job)
+        await session.flush()
+        requisition_id, job_ids = requisition.id, [job.id, second_job.id]
+        period = await get_or_create_active_budget_period(session, BudgetScope.PILOT, for_update=True)
+        period.limit_usd = 100
+        period.reserved_usd = 0
+        period.spent_usd = 0
+        await session.commit()
+
+    async def reserve(job_id):
+        async with test_session_factory() as session:
+            try:
+                await reserve_budget(
+                    session, job_id, Decimal("8"), BudgetScope.PILOT, requisition_id=requisition_id
+                )
+                await session.commit()
+                return True
+            except BudgetExceededError:
+                await session.rollback()
+                return False
+
+    admitted = await asyncio.wait_for(
+        asyncio.gather(*(reserve(job_id) for job_id in job_ids)),
+        timeout=10,
+    )
+    assert sum(admitted) == 1
+
+
+@pytest.mark.asyncio
+async def test_assessment_call_budget_includes_jev_agent_and_repair(test_session_factory, monkeypatch):
+    from app.config import Settings
+    from app.services.llm import orchestrator
+
+    settings = Settings(_env_file=None, APP_ENV="sandbox", ASSESSMENT_MAX_EXTERNAL_CALLS=3)
+    monkeypatch.setattr(orchestrator, "get_settings", lambda: settings)
+    async with test_session_factory() as session:
+        *_, job = await setup_llm_test_context(session)
+        job_id = job.id
+        for logical_step, provider in (
+            ("agent_turn_1", "DeepSeekHTTPXProvider"),
+            ("assessment_repair", "DeepSeekHTTPXProvider"),
+            ("jev_shadow", "JevHTTPXProvider"),
+        ):
+            session.add(LLMInvocation(
+                id=uuid.uuid4(),
+                job_id=job_id,
+                logical_step=logical_step,
+                attempt_no=1,
+                status=LLMInvocationStatus.SUCCEEDED,
+                provider=provider,
+                model_resolved="synthetic-model",
+                request_hash=f"hash_{logical_step}",
+                cost_reserved=0.01,
+            ))
+        await session.commit()
+
+    async with test_session_factory() as session:
+        with pytest.raises(PreconditionViolationError, match="MAX_RUN_EXTERNAL_CALLS_EXCEEDED"):
+            await verify_llm_preconditions(
+                session,
+                job_id=job_id,
+                task_kind="assessment",
+                stage_attempt_no=1,
+            )
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_attributes_assessment_reservation_to_requisition(test_session_factory, monkeypatch):
+    from app.config import Settings
+    from app.services.llm import ledger, orchestrator
+
+    settings = Settings(
+        _env_file=None,
+        APP_ENV="sandbox",
+        DEV_EVAL_BUDGET_USD=100,
+        ASSESSMENT_MAX_EXTERNAL_CALLS=4,
+        REQUISITION_LLM_BUDGET_USD=50,
+    )
+    monkeypatch.setattr(ledger, "get_settings", lambda: settings)
+    monkeypatch.setattr(orchestrator, "get_settings", lambda: settings)
+    sanitized_id = uuid.uuid4()
+    async with test_session_factory() as session:
+        _, requisition, _, application, document, job = await setup_llm_test_context(session)
+        owner = User(
+            id=uuid.uuid4(),
+            login_name=f"budget_test_{uuid.uuid4().hex[:8]}",
+            display_name="Synthetic Budget Test",
+            password_hash=hash_password("synthetic-budget-test-password"),
+            status=UserStatus.ACTIVE,
+        )
+        session.add(owner)
+        await session.flush()
+        jd = JDVersion(
+            id=uuid.uuid4(),
+            requisition_id=requisition.id,
+            version_no=1,
+            source_text="Synthetic backend role.",
+            text_hash="a" * 64,
+            created_by=owner.id,
+        )
+        session.add(jd)
+        await session.flush()
+        rubric = RubricVersion(
+            id=uuid.uuid4(),
+            requisition_id=requisition.id,
+            jd_version_id=jd.id,
+            version_no=1,
+            status=RubricStatus.APPROVED,
+            content_hash="b" * 64,
+        )
+        sanitized = SanitizedVersion(
+            id=sanitized_id,
+            application_id=application.id,
+            document_id=document.id,
+            version_no=1,
+            status=SanitizedVersionStatus.APPROVED,
+            canonical_text="Python backend experience.",
+            sha256="c" * 64,
+        )
+        session.add_all([rubric, sanitized])
+        await session.flush()
+        session.add(AssessmentRun(
+            id=uuid.uuid4(),
+            application_id=application.id,
+            job_id=job.id,
+            run_no=1,
+            status="queued",
+            snapshot={},
+            snapshot_hash="d" * 64,
+            application_generation=application.generation,
+            document_id=document.id,
+            sanitized_version_id=sanitized_id,
+            rubric_version_id=rubric.id,
+        ))
+        await session.commit()
+        job_id, requisition_id = job.id, requisition.id
+
+    async with test_session_factory() as session:
+        await execute_bounded_llm_call(
+            db=session,
+            job_id=job_id,
+            request=CompletionRequest(
+                task_kind="assessment",
+                system_prompt="Synthetic.",
+                user_prompt="Synthetic.",
+                model="deepseek-flash",
+            ),
+            logical_step="assessment_test",
+            attempt_no=1,
+            sanitized_version_id=sanitized_id,
+            provider_override=MockLLMProvider(fault_mode="success"),
+        )
+
+    async with test_session_factory() as session:
+        reservation = (await session.execute(
+            select(BudgetReservation).where(BudgetReservation.job_id == job_id)
+        )).scalar_one()
+        assert reservation.requisition_id == requisition_id
 
 
 @pytest.mark.asyncio

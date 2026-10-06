@@ -12,7 +12,7 @@ import logging
 from typing import Optional
 import uuid
 
-from sqlalchemy import select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -84,8 +84,9 @@ async def reserve_budget(
     job_id: uuid.UUID,
     amount_usd: Decimal,
     scope: BudgetScope = BudgetScope.PILOT,
+    requisition_id: uuid.UUID | None = None,
 ) -> BudgetReservation:
-    """Atomically reserve funds in the active budget period before initiating an external LLM request."""
+    """Atomically reserve global and per-requisition funds before an external LLM request."""
     now = datetime.now(timezone.utc)
     # Mock requests legitimately reserve zero; negative reservations never do.
     if amount_usd < 0:
@@ -103,6 +104,29 @@ async def reserve_budget(
             f"reserved: ${current_reserved:.4f}, limit: ${limit:.4f}"
         )
 
+    if requisition_id is not None:
+        lock_key = f"talentscreen:requisition-llm-budget:{requisition_id}"
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+            {"lock_key": lock_key},
+        )
+        active_total = case(
+            (BudgetReservation.status.in_(("reserved", "outcome_unknown")), BudgetReservation.amount_usd),
+            (BudgetReservation.status == "settled", BudgetReservation.settled_usd),
+            else_=0,
+        )
+        requisition_total = Decimal(str((await db.execute(
+            select(func.coalesce(func.sum(active_total), 0)).where(
+                BudgetReservation.requisition_id == requisition_id
+            )
+        )).scalar_one()))
+        requisition_limit = get_settings().requisition_budget_limit_usd
+        if requisition_total + amount_usd > requisition_limit:
+            raise BudgetExceededError(
+                f"REQUISITION_BUDGET_LIMIT_EXCEEDED: Cannot reserve ${amount_usd:.4f} for requisition. "
+                f"Current spent/reserved: ${requisition_total:.4f}, limit: ${requisition_limit:.4f}"
+            )
+
     period.reserved_usd = float(current_reserved + amount_usd)
     period.updated_at = now
 
@@ -110,6 +134,7 @@ async def reserve_budget(
         id=uuid.uuid4(),
         budget_period_id=period.id,
         job_id=job_id,
+        requisition_id=requisition_id,
         amount_usd=float(amount_usd),
         settled_usd=0.0,
         status="reserved",
