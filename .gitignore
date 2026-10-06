@@ -81,3 +81,5 @@ Thumbs.db
 
 # Large zip archives (keep handoff zip ignored or tracked as needed)
 *.tar.gz
+
+.worktrees/
