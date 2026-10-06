@@ -108,6 +108,9 @@ def main() -> None:
         call("POST", f"/sanitized-versions/{source['id']}/approve", json={
             "expected_application_version": application["row_version"],
             "expected_sha256": source["sha256"], "acknowledged": True,
+            # This fixture is explicitly a synthetic CV. Real reviewers must
+            # inspect the original document before making this confirmation.
+            "confirmed_document_is_cv": True,
         })
         print("PASS JD, seed rubric, approval, intake, background worker and sanitization")
 
