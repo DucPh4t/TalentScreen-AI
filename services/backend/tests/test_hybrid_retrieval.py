@@ -392,3 +392,186 @@ def test_embedding_load_failure_raises_typed_error_in_hybrid(monkeypatch, reques
         embed_texts(["Kỹ năng Python"])
 
     assert type(error.value).__name__ == "EmbeddingModelUnavailableError"
+
+
+class _FakeScalarResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._rows
+
+
+class _FakeRetrievalDB:
+    def __init__(self, results=()):
+        self._results = iter(results)
+        self.statements = []
+
+    async def execute(self, statement):
+        self.statements.append(statement)
+        return _FakeScalarResult(next(self._results, []))
+
+
+def _fake_chunk(index, text, span_id, *, score=0.01):
+    from types import SimpleNamespace
+
+    chunk_id = uuid.uuid4()
+    return SimpleNamespace(
+        id=chunk_id,
+        chunk_id=chunk_id,
+        chunk_index=index,
+        text=text,
+        span_ids=[span_id],
+        dense_rank=index,
+        lexical_rank=index,
+        rrf_score=score,
+    )
+
+
+@pytest.mark.asyncio
+async def test_hybrid_retrieval_uses_approved_bilingual_terms_and_anchor_terms(monkeypatch):
+    from app.services import retrieval
+
+    embedded_queries = []
+
+    def fake_embed_texts(texts, prefix):
+        assert prefix == "query: "
+        embedded_queries.extend(texts)
+        return [[0.0] * EMBEDDING_DIMENSION]
+
+    monkeypatch.setattr(retrieval, "embed_texts", fake_embed_texts)
+    db = _FakeRetrievalDB([[], []])
+
+    await retrieval.hybrid_retrieve_for_criterion(
+        db,
+        uuid.uuid4(),
+        criterion_name="Python backend",
+        criterion_description="Scalable production services",
+        bilingual_terms={"en": ["PostgreSQL relational database"], "vi": ["cơ sở dữ liệu"]},
+        anchor_terms=["FastAPI REST API"],
+    )
+
+    query_text = embedded_queries[0].lower()
+    assert "postgresql relational database" in query_text
+    assert "fastapi rest api" in query_text
+    assert "cơ sở dữ liệu" in query_text
+
+    lexical_params = db.statements[1].compile().params.values()
+    lexical_query = next(value for value in lexical_params if isinstance(value, str) and " | " in value)
+    lexical_terms = lexical_query.split(" | ")
+    assert len(lexical_terms) <= 8
+    assert "fastapi" in lexical_terms
+    assert "postgresql" in lexical_terms
+
+
+@pytest.mark.asyncio
+async def test_rrf_is_deterministic_and_deduplicates_chunks(monkeypatch):
+    from app.services import retrieval
+
+    monkeypatch.setattr(retrieval, "embed_texts", lambda *_args, **_kwargs: [[0.0] * EMBEDDING_DIMENSION])
+    lower_index = _fake_chunk(2, "PostgreSQL evidence", "spn_postgres")
+    higher_index = _fake_chunk(8, "FastAPI evidence", "spn_fastapi")
+    db = _FakeRetrievalDB([[higher_index, lower_index], [lower_index, higher_index]])
+
+    scores = await retrieval.hybrid_retrieve_for_criterion(
+        db, uuid.uuid4(), "backend", "Python API", top_k=4
+    )
+
+    assert [score.chunk_id for score in scores] == [lower_index.chunk_id, higher_index.chunk_id]
+    assert len({score.chunk_id for score in scores}) == 2
+    assert scores[0].rrf_score == pytest.approx(scores[1].rrf_score)
+
+
+@pytest.mark.asyncio
+async def test_retrieval_is_scoped_to_sanitized_version(monkeypatch):
+    from app.services import retrieval
+
+    monkeypatch.setattr(retrieval, "embed_texts", lambda *_args, **_kwargs: [[0.0] * EMBEDDING_DIMENSION])
+    sanitized_version_id = uuid.uuid4()
+    db = _FakeRetrievalDB([[], []])
+
+    await retrieval.hybrid_retrieve_for_criterion(
+        db, sanitized_version_id, "Python", "backend assessment"
+    )
+
+    assert len(db.statements) == 2
+    for statement in db.statements:
+        compiled = statement.compile()
+        assert sanitized_version_id in compiled.params.values()
+        assert EMBEDDING_CONFIG_ID in compiled.params.values()
+        assert "sanitized_version_id" in str(statement)
+
+
+@pytest.mark.asyncio
+async def test_hybrid_assessment_uses_null_when_retrieval_has_no_reliable_evidence(monkeypatch):
+    from app.services import retrieval
+
+    monkeypatch.setattr(retrieval, "embed_texts", lambda *_args, **_kwargs: [[0.0] * EMBEDDING_DIMENSION])
+    db = _FakeRetrievalDB([[], []])
+    pack = await retrieval.build_hybrid_assessment_pack(
+        db, uuid.uuid4(), [{"id": "python", "name": "Python", "description": "Backend"}]
+    )
+
+    assert pack["fallback_needed"] is True
+    assert pack["strategy"] == "fulltext_fallback"
+    assert pack["chunks"] == []
+    assert pack["source_span_ids"] == []
+    assert pack["criteria_retrieval_map"]["python"] == []
+
+
+@pytest.mark.asyncio
+async def test_hybrid_pack_deduplicates_chunks_and_returns_ordered_span_ids(monkeypatch):
+    from types import SimpleNamespace
+    from app.services import retrieval
+
+    first = _fake_chunk(2, "A" * 40, "spn_a", score=0.04)
+    same_section = _fake_chunk(1, "B" * 40, "spn_b", score=0.03)
+    another_section = _fake_chunk(3, "C" * 40, "spn_c", score=0.02)
+    fourth = _fake_chunk(4, "D" * 40, "spn_d", score=0.01)
+    database_match = _fake_chunk(3, "C" * 40, "spn_c", score=0.07)
+    database_match.id = another_section.id
+    database_match.chunk_id = another_section.chunk_id
+    database_match.dense_rank = 1
+    database_match.lexical_rank = 1
+    by_criterion = {
+        "Python": [first, same_section, another_section, fourth],
+        "Database": [database_match, fourth],
+    }
+
+    async def fake_retrieve(_db, _version_id, criterion_name, _description, **_kwargs):
+        return by_criterion[criterion_name]
+
+    monkeypatch.setattr(retrieval, "hybrid_retrieve_for_criterion", fake_retrieve)
+    source_spans = [
+        SimpleNamespace(span_id="spn_a", section_label="Experience"),
+        SimpleNamespace(span_id="spn_b", section_label="Experience"),
+        SimpleNamespace(span_id="spn_c", section_label="Projects"),
+        SimpleNamespace(span_id="spn_d", section_label="Skills"),
+    ]
+    db = _FakeRetrievalDB([source_spans])
+
+    sanitized_version_id = uuid.uuid4()
+    pack = await retrieval.build_hybrid_assessment_pack(
+        db,
+        sanitized_version_id,
+        [
+            {"id": "python", "name": "Python", "description": "Backend", "anchors": {"3": "production services"}},
+            {"id": "database", "name": "Database", "description": "SQL"},
+        ],
+        max_evidence_chars=100,
+    )
+
+    assert pack["packed_chunks_count"] == 2
+    assert pack["total_evidence_characters"] == 80
+    assert pack["source_span_ids"] == ["spn_a", "spn_c"]
+    assert [chunk["section_label"] for chunk in pack["chunks"]] == ["Experience", "Projects"]
+    assert len(pack["criteria_retrieval_map"]["python"]) <= 4
+    assert pack["criteria_retrieval_map"]["database"][0]["chunk_index"] == 3
+    assert pack["criteria_retrieval_map"]["database"][0]["dense_rank"] == 1
+    assert pack["criteria_retrieval_map"]["database"][0]["rrf_score"] == 0.07
+    assert "candidate_id" not in pack and "application_id" not in pack
+    scope_params = db.statements[0].compile().params.values()
+    assert sanitized_version_id in scope_params
