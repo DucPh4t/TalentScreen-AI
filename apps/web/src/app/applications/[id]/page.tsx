@@ -49,6 +49,11 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   const [decisions, setDecisions] = useState<any[]>([]);
   const [interviewDraft, setInterviewDraft] = useState<any>(null);
   const [questionBanks, setQuestionBanks] = useState<any[]>([]);
+  const [interviewScorecards, setInterviewScorecards] = useState<any[]>([]);
+  const [scorecardRoundNo, setScorecardRoundNo] = useState(1);
+  const [scorecardCriteria, setScorecardCriteria] = useState<any[]>([]);
+  const [scorecardDirty, setScorecardDirty] = useState(false);
+  const [savingScorecard, setSavingScorecard] = useState(false);
 
   const [activeTab, setActiveTab] = useState<"assessment" | "sanitization" | "revision" | "interview">("sanitization");
   const [loading, setLoading] = useState(true);
@@ -93,6 +98,11 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   const initialTab = useRef(false);
   const refreshing = useRef(false);
   const canManage = requisition?.my_role === "owner";
+  const canInterview = requisition?.my_role === "owner" || requisition?.my_role === "reviewer";
+  const currentScorecard = interviewScorecards.find((card) =>
+    card.interviewer_id === currentUser?.id && card.round_no === scorecardRoundNo
+    && card.rubric_version_id === requisition?.current_rubric_version_id
+  ) || null;
   const effectiveRevision = hrRevisions.find(r => r.status === "finalized" && !r.is_stale && r.application_generation === application?.generation && r.document_id === application?.current_document_id && r.sanitized_version_id === application?.current_sanitized_version_id && r.rubric_version_id === requisition?.current_rubric_version_id);
 
   function closeRawPreview(expired = false) {
@@ -130,15 +140,17 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         app.current_sanitized_version_id ? api.getSanitizedDetail(app.current_sanitized_version_id) : Promise.resolve(null),
         app.current_assessment_run_id ? api.getAssessmentRun(id, app.current_assessment_run_id) : Promise.resolve(null),
         api.listHRRevisions(id), api.listDecisions(id), api.getLatestInterviewDraft(id), api.getApplicationProgress(id),
+        api.getInterviewScorecards(id),
       ];
       const results = await Promise.allSettled(requests);
       const value = (index: number, fallback: any) => results[index].status === "fulfilled" ? (results[index] as PromiseFulfilledResult<any>).value : fallback;
-      const names = ["tiêu chí", "câu hỏi chuẩn", "CV đã che", "đánh giá AI", "bản điều chỉnh HR", "quyết định", "gợi ý phỏng vấn", "trạng thái xử lý"];
+      const names = ["tiêu chí", "câu hỏi chuẩn", "CV đã che", "đánh giá AI", "bản điều chỉnh HR", "quyết định", "gợi ý phỏng vấn", "trạng thái xử lý", "phiếu phỏng vấn"];
       const warnings = results.flatMap((result, index) => result.status === "rejected" && !(index === 2 && String(result.reason.message).includes("403")) ? [`Không tải được ${names[index]}: ${result.reason.message}`] : []);
       setLoadWarnings(warnings);
       setRubric(value(0, null)); setQuestionBanks(value(1, [])); setSanitizedVersion(value(2, null));
       const run = value(3, null); setAssessmentRun(run?.status === "succeeded" && !run.is_stale && value(7, null)?.assessment_status === "succeeded" ? run : null);
       setHrRevisions(value(4, [])); setDecisions(value(5, [])); setInterviewDraft(value(6, null)); setProgress(value(7, null));
+      setInterviewScorecards(value(8, []));
       if (!initialTab.current) {
         setActiveTab(value(2, null)?.status !== "approved" ? "sanitization" : value(5, []).length ? "interview" : "assessment");
         initialTab.current = true;
@@ -157,8 +169,25 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
   useEffect(() => {
     initialTab.current = false;
+    setScorecardRoundNo(1);
+    setScorecardDirty(false);
     void loadData();
   }, [id]);
+
+  useEffect(() => {
+    if (scorecardDirty || !rubric?.criteria?.length) return;
+    const saved = interviewScorecards.find((card) =>
+      card.interviewer_id === currentUser?.id && card.round_no === scorecardRoundNo
+      && card.rubric_version_id === requisition?.current_rubric_version_id
+    );
+    setScorecardCriteria(saved?.criteria || rubric.criteria.map((criterion: any) => ({
+      criterion_id: criterion.id,
+      outcome: "not_observed",
+      score: null,
+      answer_summary: "",
+      interviewer_note: "",
+    })));
+  }, [rubric?.id, interviewScorecards, currentUser?.id, requisition?.current_rubric_version_id, scorecardRoundNo, scorecardDirty]);
 
   useEffect(() => {
     if (!interviewDraft?.id || !["queued", "running"].includes(interviewDraft.status)) return;
@@ -330,10 +359,6 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
   async function handleTriggerInterview() {
     const activeBank = questionBanks.find((bank) => bank.status === "approved");
-    if (!activeBank) {
-      warning("Chưa có ngân hàng câu hỏi đã duyệt cho bộ tiêu chí này.");
-      return;
-    }
     setTriggeringInterview(true);
     try {
       let effectiveKind = "assessment_run";
@@ -346,14 +371,95 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       const draft = await api.triggerInterviewDraft(
         id,
         { kind: effectiveKind, id: effectiveId },
-        activeBank.id
+        activeBank?.id ?? null
       );
       setInterviewDraft(draft);
-      info("Đã xếp hàng tạo câu hỏi. Kết quả sẽ hiện khi xử lý xong.");
+      info(activeBank
+        ? "Đã xếp hàng tạo câu hỏi theo hồ sơ và câu hỏi chuẩn đã duyệt."
+        : "Đã xếp hàng tạo câu hỏi làm rõ theo hồ sơ.");
     } catch (err: any) {
       toastError(err.message || "Lỗi tạo câu hỏi phỏng vấn");
     } finally {
       setTriggeringInterview(false);
+    }
+  }
+
+  function updateScorecardCriterion(criterionId: string, patch: Record<string, unknown>) {
+    setScorecardDirty(true);
+    setScorecardCriteria((current) => current.map((row) =>
+      row.criterion_id === criterionId ? { ...row, ...patch } : row
+    ));
+  }
+
+  function validateScorecardRows(rows: any[], requireObserved: boolean) {
+    const assessed = rows.filter((row) => row.outcome === "assessed");
+    const invalidAssessed = assessed.find((row) => !Number.isInteger(row.score)
+      || row.score < 0 || row.score > 4 || (row.answer_summary || "").trim().length < 20);
+    if (invalidAssessed) {
+      const label = rubric?.criteria?.find((item: any) => item.id === invalidAssessed.criterion_id)?.label || invalidAssessed.criterion_id;
+      warning(`Tiêu chí “${label}” cần chọn điểm 0–4 và ghi căn cứ câu trả lời tối thiểu 20 ký tự.`);
+      return false;
+    }
+    if (requireObserved && assessed.length === 0) {
+      warning("Cần đánh giá ít nhất một tiêu chí trước khi nộp phiếu.");
+      return false;
+    }
+    const unresolvedConflict = requireObserved && rows.find((row) => row.outcome === "conflicting_evidence"
+      && (row.answer_summary || "").trim().length < 20);
+    if (unresolvedConflict) {
+      const label = rubric?.criteria?.find((item: any) => item.id === unresolvedConflict.criterion_id)?.label || unresolvedConflict.criterion_id;
+      warning(`Tiêu chí “${label}” cần ghi rõ nội dung mâu thuẫn tối thiểu 20 ký tự trước khi nộp.`);
+      return false;
+    }
+    return true;
+  }
+
+  async function handleSaveInterviewScorecard() {
+    if (!canInterview || !rubric || !scorecardCriteria.length) return;
+    if (!validateScorecardRows(scorecardCriteria, false)) return;
+    if (currentScorecard?.status === "finalized" || currentScorecard?.is_stale) {
+      warning("Phiếu này đã khóa hoặc đã cũ. Hãy mở lượt phỏng vấn mới theo rubric hiện hành.");
+      return;
+    }
+    setSavingScorecard(true);
+    try {
+      const saved = await api.saveInterviewScorecard(id, {
+        round_no: scorecardRoundNo,
+        expected_version: currentScorecard?.row_version ?? 0,
+        interview_draft_id: interviewDraft?.status === "succeeded" && !interviewDraft?.is_stale ? interviewDraft.id : null,
+        criteria: scorecardCriteria,
+      });
+      setInterviewScorecards((cards) => [
+        ...cards.filter((card) => !(card.interviewer_id === saved.interviewer_id
+          && card.round_no === saved.round_no && card.rubric_version_id === saved.rubric_version_id)),
+        saved,
+      ]);
+      setScorecardDirty(false);
+      success("Đã lưu phiếu phỏng vấn nháp của bạn.");
+    } catch (err: any) {
+      toastError(err.message || "Không thể lưu phiếu phỏng vấn.");
+    } finally {
+      setSavingScorecard(false);
+    }
+  }
+
+  async function handleFinalizeInterviewScorecard() {
+    if (!currentScorecard || currentScorecard.status !== "draft" || currentScorecard.is_stale) return;
+    if (!validateScorecardRows(currentScorecard.criteria, true)) return;
+    if (scorecardDirty) {
+      warning("Hãy lưu thay đổi trước khi nộp và khóa phiếu.");
+      return;
+    }
+    if (!window.confirm("Nộp và khóa phiếu chấm của bạn? Phiếu đã nộp không thể sửa; hãy kiểm tra điểm và ghi chú trước khi tiếp tục.")) return;
+    setSavingScorecard(true);
+    try {
+      const finalized = await api.finalizeInterviewScorecard(currentScorecard.id, currentScorecard.row_version);
+      setInterviewScorecards((cards) => cards.map((card) => card.id === finalized.id ? finalized : card));
+      success("Đã nộp và khóa phiếu phỏng vấn.");
+    } catch (err: any) {
+      toastError(err.message || "Không thể nộp phiếu phỏng vấn.");
+    } finally {
+      setSavingScorecard(false);
     }
   }
 
@@ -856,6 +962,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               </p>
             )}
           </div>
+
+
         </div>
       )}
 
@@ -1014,23 +1122,29 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       {/* Tab 4: Interview Guide */}
       {activeTab === "interview" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-          <div className="card"><h2>Câu hỏi chuẩn của đợt tuyển dụng</h2><p>{questionBanks.some(bank => bank.status === "approved") ? "Đã có bộ câu hỏi được duyệt. Bạn có thể tạo gợi ý phỏng vấn theo hồ sơ." : "Cần chuẩn bị và duyệt câu hỏi chuẩn một lần trong thiết lập đợt tuyển dụng."}</p><Link href={`/requisitions/${application.requisition_id}?setup=1`}>Mở thiết lập JD, tiêu chí và câu hỏi →</Link></div>
+          <div className="card">
+            <h2>Câu hỏi phỏng vấn</h2>
+            <p>{questionBanks.some(bank => bank.status === "approved")
+              ? "Có thể kết hợp câu hỏi chuẩn đã duyệt với câu hỏi làm rõ theo bằng chứng của hồ sơ."
+              : "Có thể tạo câu hỏi làm rõ theo hồ sơ ngay. Ngân hàng câu hỏi chuẩn là tùy chọn, dùng để hỏi cùng một số câu hỏi cho mọi ứng viên."}</p>
+            <Link href={`/requisitions/${application.requisition_id}?setup=1`}>Thiết lập JD, rubric và câu hỏi chuẩn →</Link>
+          </div>
           <div className="card">
             <div className="card-header" style={{ flexWrap: "wrap", gap: "0.85rem" }}>
               <div>
                 <h2 className="card-title">Hướng dẫn phỏng vấn theo hồ sơ</h2>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
-                  Bao gồm câu hỏi chuẩn từ ngân hàng Rubric và tối đa 3 câu hỏi đào sâu do AI gợi ý dựa trên lỗ hổng bằng chứng
+                  AI gợi ý tối đa 3 câu hỏi làm rõ dựa trên bằng chứng hiện có; câu hỏi chuẩn đã duyệt sẽ được thêm nếu có.
                 </p>
               </div>
 
               <button
                 className="btn btn-primary btn-sm"
                 onClick={handleTriggerInterview}
-                disabled={!canManage || !!loadWarnings.length || triggeringInterview || !assessmentRun || !questionBanks.some((bank) => bank.status === "approved")}
+                disabled={!canManage || !!loadWarnings.length || triggeringInterview || !assessmentRun}
               >
                 <IconSparkles size={14} />
-                <span>{triggeringInterview ? "Đang tạo câu hỏi…" : "Tạo gợi ý phỏng vấn"}</span>
+                <span>{triggeringInterview ? "Đang tạo câu hỏi…" : "Tạo câu hỏi gợi ý"}</span>
               </button>
             </div>
 
@@ -1077,6 +1191,151 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               </div>
             )}
           </div>
+          <section className="card" aria-labelledby="interview-scorecard-title">
+            <div className="card-header" style={{ alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
+              <div>
+                <h2 className="card-title" id="interview-scorecard-title">Phiếu đánh giá sau phỏng vấn</h2>
+                <p className="muted" style={{ maxWidth: 720, marginTop: "0.4rem" }}>
+                  Điểm này do phỏng vấn viên ghi từ câu trả lời trong buổi phỏng vấn. Phiếu tách biệt với điểm AI trên CV và không tự động quyết định tuyển dụng.
+                </p>
+              </div>
+              <label style={{ display: "grid", gap: "0.3rem", minWidth: 160 }}>
+                <span className="form-label">Lượt phỏng vấn</span>
+                <select
+                  aria-label="Lượt phỏng vấn"
+                  value={scorecardRoundNo}
+                  disabled={scorecardDirty || savingScorecard}
+                  onChange={(event) => setScorecardRoundNo(Number(event.target.value))}
+                >
+                  {[1, 2, 3, 4, 5].map((round) => <option key={round} value={round}>Lượt {round}</option>)}
+                </select>
+              </label>
+            </div>
+
+            {!rubric?.criteria?.length ? (
+              <p role="status" className="notice">Chưa có rubric hiện hành để tạo phiếu đánh giá.</p>
+            ) : !canInterview ? (
+              <p role="status" className="notice">Tài khoản của bạn chỉ có quyền xem hồ sơ, không được ghi phiếu phỏng vấn.</p>
+            ) : (
+              <>
+                {currentScorecard?.is_stale && <p role="alert" className="notice notice-error">Rubric hoặc CV đã đổi sau khi tạo phiếu. Phiếu này được giữ để kiểm toán nhưng không thể sửa hoặc nộp; hãy chọn lượt mới.</p>}
+                {currentScorecard?.status === "finalized" && !currentScorecard?.is_stale && <p role="status" className="notice">Phiếu lượt {scorecardRoundNo} đã nộp và khóa lúc {currentScorecard.finalized_at ? new Date(currentScorecard.finalized_at).toLocaleString("vi-VN") : ""}.</p>}
+
+                <div style={{ display: "grid", gap: "1rem", marginTop: "1rem" }}>
+                  {rubric.criteria.map((criterion: any) => {
+                    const row = scorecardCriteria.find((entry) => entry.criterion_id === criterion.id);
+                    const readOnly = currentScorecard?.status === "finalized" || !!currentScorecard?.is_stale;
+                    return (
+                      <article key={criterion.id} className="surface" style={{ padding: "1rem", display: "grid", gap: "0.75rem" }}>
+                        <div>
+                          <strong>{criterion.label || criterion.id}</strong>
+                          {criterion.description && <p className="muted" style={{ margin: "0.25rem 0 0" }}>{criterion.description}</p>}
+                          {criterion.scoring_anchors?.length > 0 && <details style={{ marginTop: "0.45rem" }}>
+                            <summary className="muted" style={{ cursor: "pointer", fontSize: "0.8rem" }}>Xem mô tả mức điểm rubric</summary>
+                            <ul className="muted" style={{ margin: "0.4rem 0 0", paddingLeft: "1.25rem", fontSize: "0.8rem" }}>
+                              {criterion.scoring_anchors.map((anchor: any) => <li key={anchor.score}><strong>{anchor.score}/4:</strong> {anchor.description}</li>)}
+                            </ul>
+                          </details>}
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.75rem" }}>
+                          <label style={{ display: "grid", gap: "0.3rem" }}>
+                            <span className="form-label">Kết quả quan sát</span>
+                            <select
+                              aria-label={`${criterion.label || criterion.id}: kết quả quan sát`}
+                              value={row?.outcome || "not_observed"}
+                              disabled={readOnly}
+                              onChange={(event) => updateScorecardCriterion(criterion.id, {
+                                outcome: event.target.value,
+                                score: null,
+                              })}
+                            >
+                              <option value="assessed">Đã đánh giá</option>
+                              <option value="not_observed">Chưa quan sát / chưa đủ bằng chứng</option>
+                              <option value="conflicting_evidence">Câu trả lời cần đối chiếu</option>
+                            </select>
+                          </label>
+                          {row?.outcome === "assessed" && <label style={{ display: "grid", gap: "0.3rem" }}>
+                            <span className="form-label">Điểm phỏng vấn (0–4)</span>
+                            <select
+                              aria-label={`${criterion.label || criterion.id}: điểm phỏng vấn`}
+                              value={row.score ?? ""}
+                              disabled={readOnly}
+                              onChange={(event) => updateScorecardCriterion(criterion.id, { score: event.target.value === "" ? null : Number(event.target.value) })}
+                            >
+                              <option value="" disabled>Chọn điểm</option>
+                              {[0, 1, 2, 3, 4].map((score) => <option key={score} value={score}>{score}/4</option>)}
+                            </select>
+                          </label>}
+                        </div>
+                        {row?.outcome !== "not_observed" && <label style={{ display: "grid", gap: "0.3rem" }}>
+                          <span className="form-label">Tóm tắt câu trả lời / căn cứ quan sát {row?.outcome === "assessed" ? "(bắt buộc, ít nhất 20 ký tự)" : "(nếu có mâu thuẫn, ghi nội dung cần đối chiếu)"}</span>
+                          <textarea
+                            rows={3}
+                            maxLength={2000}
+                            value={row?.answer_summary || ""}
+                            disabled={readOnly}
+                            onChange={(event) => updateScorecardCriterion(criterion.id, { answer_summary: event.target.value })}
+                          />
+                        </label>}
+                        <label style={{ display: "grid", gap: "0.3rem" }}>
+                          <span className="form-label">Ghi chú nội bộ theo năng lực</span>
+                          <textarea
+                            rows={2}
+                            maxLength={2000}
+                            value={row?.interviewer_note || ""}
+                            disabled={readOnly}
+                            onChange={(event) => updateScorecardCriterion(criterion.id, { interviewer_note: event.target.value })}
+                          />
+                        </label>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="notice" style={{ marginTop: "1rem" }}>
+                  Chưa có bằng chứng nghĩa là để trống điểm, không ghi 0. Ghi nhận theo năng lực và nội dung câu trả lời; không đưa thông tin cá nhân nhạy cảm vào phiếu.
+                </div>
+                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "1rem" }}>
+                  <button className="btn btn-secondary" onClick={handleSaveInterviewScorecard}
+                    disabled={savingScorecard || !scorecardDirty || currentScorecard?.status === "finalized" || !!currentScorecard?.is_stale}>
+                    {savingScorecard ? "Đang lưu…" : "Lưu nháp phiếu"}
+                  </button>
+                  <button className="btn btn-primary" onClick={handleFinalizeInterviewScorecard}
+                    disabled={savingScorecard || !currentScorecard || currentScorecard.status !== "draft" || scorecardDirty || !!currentScorecard.is_stale}>
+                    Nộp và khóa phiếu
+                  </button>
+                  {scorecardDirty && <span role="status" className="muted" style={{ alignSelf: "center" }}>Có thay đổi chưa lưu.</span>}
+                </div>
+              </>
+            )}
+
+            {interviewScorecards.filter((card) => card.status === "finalized" && card.id !== currentScorecard?.id).length > 0 && (
+              <div style={{ marginTop: "1.5rem" }}>
+                <h3>Phiếu đã nộp của hội đồng</h3>
+                <p className="muted">Các phiếu được xem độc lập với đánh giá AI. Phiếu nháp của người khác không hiển thị trước khi họ nộp.</p>
+                <div style={{ display: "grid", gap: "0.75rem", marginTop: "0.75rem" }}>
+                  {interviewScorecards.filter((card) => card.status === "finalized" && card.id !== currentScorecard?.id).map((card) => (
+                    <details key={card.id} className="surface" style={{ padding: "0.85rem 1rem" }}>
+                      <summary style={{ cursor: "pointer", fontWeight: 650 }}>
+                        {card.interviewer_name || "Phỏng vấn viên"} · Lượt {card.round_no}{card.is_stale ? " · Phiếu cũ" : ""}
+                      </summary>
+                      <div style={{ display: "grid", gap: "0.6rem", marginTop: "0.85rem" }}>
+                        {card.criteria.map((entry: any) => {
+                          const criterion = rubric.criteria.find((item: any) => item.id === entry.criterion_id);
+                          return <div key={entry.criterion_id}>
+                            <strong>{criterion?.label || entry.criterion_id}</strong>
+                            <span className="muted"> · {entry.outcome === "assessed" ? `Điểm ${entry.score}/4` : entry.outcome === "not_observed" ? "Chưa quan sát" : "Cần đối chiếu"}</span>
+                            {entry.answer_summary && <p className="muted" style={{ margin: "0.2rem 0" }}>{entry.answer_summary}</p>}
+                            {entry.interviewer_note && <p style={{ margin: "0.2rem 0" }}>Ghi chú: {entry.interviewer_note}</p>}
+                          </div>;
+                        })}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
         </div>
       )}
 

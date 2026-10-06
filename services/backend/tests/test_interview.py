@@ -23,6 +23,7 @@ from app.db.models import (
     InterviewDraft,
     InterviewQuestionBank,
     InterviewRevision,
+    InterviewScorecard,
     JDVersion,
     Job,
     Requisition,
@@ -166,6 +167,7 @@ async def setup_interview_test_context(session, sample_docx_cv):
     )
     session.add(rubric)
     await session.flush()
+    req.current_rubric_version_id = rubric.id
 
     for cid in CriterionId:
         crit = RubricCriterion(
@@ -478,6 +480,141 @@ async def test_interview_draft_generation_and_worker_execution(test_session_fact
         assert latest_rev["followups"][0]["question_vi"] == edited_followups[0]["question_vi"]
         # Verify core questions STILL unaltered
         assert len(reload_res.json()["core_questions"]) == 6
+
+
+@pytest.mark.asyncio
+async def test_interview_followups_do_not_require_a_question_bank(test_session_factory, sample_docx_cv):
+    async with test_session_factory() as session:
+        ctx = await setup_interview_test_context(session, sample_docx_cv)
+
+    transport = ASGITransport(app=app)
+    cookies = {SESSION_COOKIE_NAME: ctx["o_token"]}
+    headers = {"X-CSRF-Token": ctx["o_csrf"]}
+    async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies, headers=headers) as client:
+        draft_res = await client.post(
+            f"/api/v1/applications/{ctx['app_id']}/interview-drafts",
+            json={"effective_result": {"kind": "assessment_run", "id": str(ctx["run_id"])}},
+        )
+        assert draft_res.status_code == 202
+        draft_id = draft_res.json()["id"]
+        job_id = draft_res.json()["job_id"]
+        assert draft_res.json()["question_bank_id"] is None
+        assert draft_res.json()["core_questions"] == []
+
+    mock_llm = MockLLMProvider(custom_content=json.dumps({
+        "followups": [{
+            "criterion_id": "python_backend",
+            "question_vi": "Bạn có thể mô tả một thay đổi backend do mình trực tiếp triển khai?",
+            "purpose_vi": "Làm rõ phạm vi đóng góp kỹ thuật của ứng viên.",
+            "source_span_ids": [ctx["span_id"]],
+            "answer_indicators": ["Nêu quyết định kỹ thuật", "Giải thích cách xác minh kết quả"],
+        }]
+    }))
+    async with test_session_factory() as session:
+        await execute_interview_job(session, job_id=uuid.UUID(job_id), provider_override=mock_llm)
+        await session.commit()
+
+    async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies, headers=headers) as client:
+        detail = await client.get(f"/api/v1/interview-drafts/{draft_id}")
+        assert detail.status_code == 200
+        assert detail.json()["question_bank_id"] is None
+        assert detail.json()["core_questions"] == []
+        assert len(detail.json()["ai_followups"]) == 1
+        assert detail.json()["is_stale"] is False
+
+
+@pytest.mark.asyncio
+async def test_interview_scorecard_saves_human_ratings_without_turning_missing_into_zero(test_session_factory, sample_docx_cv):
+    async with test_session_factory() as session:
+        ctx = await setup_interview_test_context(session, sample_docx_cv)
+
+    transport = ASGITransport(app=app)
+    owner_cookies = {SESSION_COOKIE_NAME: ctx["o_token"]}
+    owner_headers = {"X-CSRF-Token": ctx["o_csrf"]}
+    reviewer_cookies = {SESSION_COOKIE_NAME: ctx["r_token"]}
+    reviewer_headers = {"X-CSRF-Token": ctx["r_csrf"]}
+    criteria = [{
+        "criterion_id": criterion.value,
+        "outcome": "assessed" if criterion == CriterionId.PYTHON_BACKEND else "not_observed",
+        "score": 0 if criterion == CriterionId.PYTHON_BACKEND else None,
+        "answer_summary": "Không nêu được bước kiểm tra lỗi trong tình huống phỏng vấn." if criterion == CriterionId.PYTHON_BACKEND else "",
+        "interviewer_note": "",
+    } for criterion in CriterionId]
+
+    async with AsyncClient(transport=transport, base_url="http://test", cookies=owner_cookies, headers=owner_headers) as client:
+        invalid = [dict(row) for row in criteria]
+        invalid[1]["score"] = 0
+        invalid_res = await client.put(
+            f"/api/v1/applications/{ctx['app_id']}/interview-scorecards",
+            json={"round_no": 1, "expected_version": 0, "criteria": invalid},
+        )
+        assert invalid_res.status_code == 422
+
+        saved = await client.put(
+            f"/api/v1/applications/{ctx['app_id']}/interview-scorecards",
+            json={"round_no": 1, "expected_version": 0, "criteria": criteria},
+        )
+        assert saved.status_code == 200
+        card = saved.json()
+        assert card["status"] == "draft"
+        assert card["row_version"] == 1
+        assert card["is_stale"] is False
+        assert next(row for row in card["criteria"] if row["criterion_id"] == "python_backend")["score"] == 0
+        assert next(row for row in card["criteria"] if row["criterion_id"] == "api_design")["score"] is None
+
+        conflict = await client.put(
+            f"/api/v1/applications/{ctx['app_id']}/interview-scorecards",
+            json={"round_no": 1, "expected_version": 0, "criteria": criteria},
+        )
+        assert conflict.status_code == 409
+
+    # A panel member can save their own draft without exposing it to the owner
+    # before submission; the owner can still see their own private draft.
+    async with test_session_factory() as session:
+        session.add(InterviewScorecard(
+            application_id=ctx["app_id"],
+            interviewer_id=ctx["reviewer"].id,
+            rubric_version_id=ctx["rubric_id"],
+            round_no=1,
+            status="draft",
+            criteria_payload=criteria,
+            source_snapshot={
+                "application_generation": 1,
+                "document_id": str(ctx["doc_id"]),
+                "sanitized_version_id": str(ctx["sanitized_id"]),
+                "rubric_version_id": str(ctx["rubric_id"]),
+            },
+            snapshot_hash="9" * 64,
+            row_version=1,
+        ))
+        await session.commit()
+
+    async with AsyncClient(transport=transport, base_url="http://test", cookies=owner_cookies, headers=owner_headers) as client:
+        owner_list = await client.get(f"/api/v1/applications/{ctx['app_id']}/interview-scorecards")
+        assert owner_list.status_code == 200
+        assert [entry["id"] for entry in owner_list.json()] == [card["id"]]
+
+    async with AsyncClient(transport=transport, base_url="http://test", cookies=reviewer_cookies, headers=reviewer_headers) as client:
+        reviewer_list = await client.get(f"/api/v1/applications/{ctx['app_id']}/interview-scorecards")
+        assert reviewer_list.status_code == 200
+        assert len(reviewer_list.json()) == 1
+        assert reviewer_list.json()[0]["interviewer_id"] == str(ctx["reviewer"].id)
+        assert reviewer_list.json()[0]["id"] != card["id"]
+
+    async with AsyncClient(transport=transport, base_url="http://test", cookies=owner_cookies, headers=owner_headers) as client:
+        finalized = await client.post(
+            f"/api/v1/interview-scorecards/{card['id']}/finalize",
+            json={"expected_version": 1},
+        )
+        assert finalized.status_code == 200
+        assert finalized.json()["status"] == "finalized"
+        assert finalized.json()["row_version"] == 2
+
+        locked = await client.put(
+            f"/api/v1/applications/{ctx['app_id']}/interview-scorecards",
+            json={"round_no": 1, "expected_version": 2, "criteria": criteria},
+        )
+        assert locked.status_code == 409
 
 
 @pytest.mark.asyncio

@@ -26,6 +26,7 @@ from app.db.models import (
     HRRevision,
     InterviewDraft,
     InterviewRevision,
+    InterviewScorecard,
     Job,
     RawAccessGrant,
     RequisitionMembership,
@@ -395,7 +396,12 @@ async def execute_purge_job(
         )
 
     # Decisions, HR Revisions, Raw Grants, Documents
+    scorecards_purged = 0
     if target_app_ids:
+        purge_scorecards = await db.execute(
+            InterviewScorecard.__table__.delete().where(InterviewScorecard.application_id.in_(target_app_ids))
+        )
+        scorecards_purged = purge_scorecards.rowcount or 0
         await db.execute(
             ReviewAttestation.__table__.delete().where(ReviewAttestation.application_id.in_(target_app_ids))
         )
@@ -420,6 +426,7 @@ async def execute_purge_job(
         "assessment_runs_purged": len(run_ids),
         "sanitized_versions_purged": len(sanitized_ids),
         "interview_drafts_purged": len(draft_ids),
+        "interview_scorecards_purged": scorecards_purged,
         "files_unlinked": files_unlinked,
         "files_failed": files_failed,
         "failed_keys": failed_keys,

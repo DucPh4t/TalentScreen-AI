@@ -42,6 +42,7 @@ from app.db.models.interview import (
     InterviewQuestionBank,
     InterviewDraft,
     InterviewRevision,
+    InterviewScorecard,
 )
 from app.db.models.ops import (
     Job,
@@ -87,6 +88,7 @@ __all__ = [
     "InterviewQuestionBank",
     "InterviewDraft",
     "InterviewRevision",
+    "InterviewScorecard",
     "Job",
     "LLMInvocation",
     "BudgetPeriod",

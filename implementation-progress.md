@@ -12,7 +12,7 @@ Theo dõi mã đã triển khai của B00–B26 và các điều kiện nghiệm
 | **B01** | Data model, migration và domain enums | P0 | IMPLEMENTED; ACCEPTANCE PENDING | 35 tables created, Alembic migrations pass, 6 integration tests on real PostgreSQL pass |
 | **B02** | Authentication, session, CSRF và authorization | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Argon2id, HttpOnly session, CSRF check, RBAC & Requisition guards, 21 tests pass |
 | **B03** | Requisition và JD version | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Lifecycle, optimistic locking (409), JD immutability & egress approval, 28 tests pass |
-| **B04** | Rubric seed, editor, approval và policy | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Seed 6 criteria, sum=100, anchors 0..4, anti-bias policy, immutability, 32 tests pass |
+| **B04** | Rubric seed, editor, approval và policy | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Seed mẫu; rubric động 2–12 tiêu chí theo JD, sum=100, anchors 0..4, anti-bias policy, immutability |
 | **B05** | Intake upload và private storage | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Storage manager, path traversal guards, MIME/magic checks, idempotency, 38 tests pass |
 | **B06** | Parse PDF, normalization và provenance | P0 | IMPLEMENTED; ACCEPTANCE PENDING | PDF/DOCX parser, NFC/LF normalization, Source Span Registry, 43 tests pass |
 | **B07** | Durable PostgreSQL worker | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
@@ -22,7 +22,7 @@ Theo dõi mã đã triển khai của B00–B26 và các điều kiện nghiệm
 | **B11** | Deterministic scoring/recommendation engine | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
 | **B12** | Review workspace và danh sách ứng viên | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
 | **B13** | HR revision, attestation, decision và audit | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
-| **B14** | Rubric Agent và Interview Agent | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
+| **B14** | Rubric Agent và Interview Agent | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Rubric động theo JD; question bank tùy chọn; có gợi ý câu hỏi và phiếu chấm phỏng vấn của người |
 | **B15** | Local OCR và DOCX rendering | P1 | PARTIAL: RENDER VALIDATION | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
 | **B16** | Local multilingual embeddings & hybrid retrieval | P1 | PROTOTYPE: BENCHMARK PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
 | **B17** | Deletion, retention và data inventory | P0 | IMPLEMENTED; ACCEPTANCE PENDING | Xem mã, test và gate tương ứng; chưa nghiệm thu pilot |
@@ -42,6 +42,8 @@ Theo dõi mã đã triển khai của B00–B26 và các điều kiện nghiệm
 - B19/B20: Evaluation yêu cầu file dự đoán thực và nhãn độc lập; prompt có hash và bộ so sánh A/B cùng sample IDs. Chưa có báo cáo chất lượng DeepSeek/HR.
 - B15/B16: DOCX đếm trang từ bản render LibreOffice; thiếu renderer bị từ chối. Lexical retrieval dùng PostgreSQL full-text `simple`; benchmark hybrid so với full-text baseline còn chờ.
 - B25/B26: G1–G7 đều cần bằng chứng theo giai đoạn và HR/IT sign-off. Không dùng nhãn PASS trong runbook cũ làm chứng cứ nghiệm thu.
+- 2026-10-06: Đã bỏ yêu cầu phải tạo Question Bank trước khi sinh câu hỏi làm rõ; question bank vẫn dùng khi cần chuẩn hóa câu hỏi chung. Thêm Interview Scorecard theo từng người/lượt, điểm 0–4 tách biệt với điểm AI CV, chưa quan sát giữ điểm `null`, bắt buộc có căn cứ khi chấm, có khóa optimistic version, nộp xong bất biến, ẩn phiếu nháp khỏi người phụ trách và xóa cùng hồ sơ khi purge. Alembic migration chạy từ đầu đến `a6b9031d8f42`; regression backend và Next.js production build đã pass.
+- Rubric hiện hỗ trợ 2–12 năng lực tùy JD và không bắt buộc sáu ID Backend Python. Sáu tiêu chí trong ví dụ/seed chỉ là mẫu; chưa có AI tự sinh rubric từ JD, xuất dossier PDF/Excel hoặc email mời ứng viên.
 
 ---
 

@@ -83,7 +83,7 @@ class InterviewDraftCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     effective_result: EffectiveResultRef
-    expected_question_bank_id: uuid.UUID
+    expected_question_bank_id: Optional[uuid.UUID] = None
 
 
 class InterviewRevisionCreateRequest(BaseModel):
@@ -111,7 +111,7 @@ class InterviewDraftResponse(BaseModel):
 
     id: uuid.UUID
     application_id: uuid.UUID
-    question_bank_id: uuid.UUID
+    question_bank_id: Optional[uuid.UUID] = None
     job_id: uuid.UUID
     status: str  # queued | running | succeeded | failed
     core_questions: list[CoreQuestionSchema]
@@ -120,3 +120,48 @@ class InterviewDraftResponse(BaseModel):
     is_stale: bool = False
     stale_reasons: list[str] = Field(default_factory=list)
     created_at: datetime
+
+
+class InterviewScorecardCriterionSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    criterion_id: str = Field(min_length=1, max_length=80)
+    outcome: Literal["assessed", "not_observed", "conflicting_evidence"]
+    score: Optional[int] = Field(default=None, ge=0, le=4)
+    answer_summary: str = Field(default="", max_length=2000)
+    interviewer_note: str = Field(default="", max_length=2000)
+
+
+class InterviewScorecardUpsertRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    round_no: int = Field(ge=1, le=10)
+    expected_version: int = Field(ge=0)
+    interview_draft_id: Optional[uuid.UUID] = None
+    criteria: list[InterviewScorecardCriterionSchema] = Field(min_length=2, max_length=12)
+
+
+class InterviewScorecardFinalizeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version: int = Field(ge=1)
+
+
+class InterviewScorecardResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    application_id: uuid.UUID
+    interviewer_id: uuid.UUID
+    interviewer_name: Optional[str] = None
+    rubric_version_id: uuid.UUID
+    interview_draft_id: Optional[uuid.UUID] = None
+    round_no: int
+    status: Literal["draft", "finalized"]
+    criteria: list[InterviewScorecardCriterionSchema]
+    row_version: int
+    snapshot_hash: str
+    is_stale: bool
+    created_at: datetime
+    updated_at: datetime
+    finalized_at: Optional[datetime] = None

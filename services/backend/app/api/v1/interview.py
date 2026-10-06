@@ -12,6 +12,9 @@ from app.schemas.interview import (
     InterviewDraftResponse,
     InterviewRevisionCreateRequest,
     InterviewRevisionResponse,
+    InterviewScorecardFinalizeRequest,
+    InterviewScorecardResponse,
+    InterviewScorecardUpsertRequest,
     QuestionBankApproveRequest,
     QuestionBankCreateRequest,
     QuestionBankResponse,
@@ -26,6 +29,11 @@ from app.services.interview import (
     list_interview_revisions,
     list_question_banks,
     update_question_bank,
+)
+from app.services.interview_scorecard import (
+    finalize_interview_scorecard,
+    list_interview_scorecards,
+    upsert_interview_scorecard,
 )
 
 router = APIRouter(tags=["Interview Question Banks & Agent"])
@@ -120,6 +128,47 @@ async def get_latest_application_interview_draft(
     """Retrieve the latest interview job state and its questions for page reloads."""
     from app.services.interview import get_latest_interview_draft
     return await get_latest_interview_draft(db, id, ctx)
+
+
+@router.get(
+    "/applications/{id}/interview-scorecards",
+    response_model=list[InterviewScorecardResponse],
+)
+async def get_application_interview_scorecards(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """List scorecards visible to the caller; reviewers see their own, owners see the panel."""
+    return await list_interview_scorecards(db, id, ctx)
+
+
+@router.put(
+    "/applications/{id}/interview-scorecards",
+    response_model=InterviewScorecardResponse,
+)
+async def put_application_interview_scorecard(
+    id: uuid.UUID,
+    payload: InterviewScorecardUpsertRequest,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """Save the caller's private, versioned human interview scorecard draft."""
+    return await upsert_interview_scorecard(db, id, payload, ctx)
+
+
+@router.post(
+    "/interview-scorecards/{id}/finalize",
+    response_model=InterviewScorecardResponse,
+)
+async def post_finalize_interview_scorecard(
+    id: uuid.UUID,
+    payload: InterviewScorecardFinalizeRequest,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """Finalize and lock a human-authored scorecard after its interviewer review."""
+    return await finalize_interview_scorecard(db, id, payload, ctx)
 
 
 @router.get(

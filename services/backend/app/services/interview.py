@@ -406,29 +406,33 @@ async def create_interview_draft_job(
     from app.services.decision import _verify_application_and_membership
     app_obj, _ = await _verify_application_and_membership(db, application_id, ctx)
 
-    # Invariant: Active approved Question Bank
-    stmt_bank = select(InterviewQuestionBank).where(
-        InterviewQuestionBank.id == payload.expected_question_bank_id,
-        InterviewQuestionBank.status == "approved",
-    )
-    bank = (await db.execute(stmt_bank)).scalar_one_or_none()
-    if not bank:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="QUESTION_BANK_NOT_APPROVED: Ngân hàng câu hỏi chưa được duyệt hoặc không tồn tại.",
+    # A question bank is optional. When supplied, it must be approved and
+    # attached to this requisition's current approved rubric.
+    bank = None
+    if payload.expected_question_bank_id:
+        stmt_bank = select(InterviewQuestionBank).where(
+            InterviewQuestionBank.id == payload.expected_question_bank_id,
+            InterviewQuestionBank.status == "approved",
         )
+        bank = (await db.execute(stmt_bank)).scalar_one_or_none()
+        if not bank:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="QUESTION_BANK_NOT_APPROVED: Ngân hàng câu hỏi chưa được duyệt hoặc không tồn tại.",
+            )
 
-    # Invariant: Bank must match current approved rubric of requisition
+    requisition = await db.get(Requisition, app_obj.requisition_id)
+    rubric_id = bank.rubric_version_id if bank else (requisition.current_rubric_version_id if requisition else None)
     stmt_rubric = select(RubricVersion).where(
-        RubricVersion.id == bank.rubric_version_id,
+        RubricVersion.id == rubric_id,
         RubricVersion.requisition_id == app_obj.requisition_id,
         RubricVersion.status == RubricStatus.APPROVED,
     )
     rubric = (await db.execute(stmt_rubric)).scalar_one_or_none()
-    if not rubric:
+    if not rubric or (requisition and requisition.current_rubric_version_id != rubric.id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="RUBRIC_MISMATCH: Ngân hàng câu hỏi không gắn với Rubric đã duyệt hiện tại của vị trí tuyển dụng.",
+            detail="RUBRIC_MISMATCH: Cần có rubric hiện hành đã duyệt cho vị trí trước khi tạo câu hỏi phỏng vấn.",
         )
 
     # Invariant: Verify effective assessment / HR revision
@@ -462,7 +466,7 @@ async def create_interview_draft_job(
     source_snapshot = {
         "effective_result_kind": payload.effective_result.kind,
         "effective_result_id": str(payload.effective_result.id),
-        "question_bank_id": str(bank.id),
+        "question_bank_id": str(bank.id) if bank else None,
         "rubric_version_id": str(rubric.id),
         "document_id": str(app_obj.current_document_id),
         "sanitized_version_id": str(app_obj.current_sanitized_version_id),
@@ -489,7 +493,7 @@ async def create_interview_draft_job(
         job_id=job_id,
         source_snapshot=source_snapshot,
         source_hash=source_hash,
-        question_bank_id=bank.id,
+        question_bank_id=bank.id if bank else None,
         status="queued",
         created_by=ctx.user.id,
     )
@@ -503,10 +507,10 @@ async def create_interview_draft_job(
         entity_type="interview_draft",
         entity_id=draft.id,
         requisition_id=app_obj.requisition_id,
-        safe_metadata={"job_id": str(job_id), "question_bank_id": str(bank.id)},
+        safe_metadata={"job_id": str(job_id), "question_bank_id": str(bank.id) if bank else None},
     )
 
-    core_q_list = bank.questions_payload.get("questions", [])
+    core_q_list = bank.questions_payload.get("questions", []) if bank else []
     return InterviewDraftResponse(
         id=draft.id,
         application_id=draft.application_id,
@@ -571,7 +575,7 @@ async def execute_interview_job(
     # 2. Load core questions
     core_questions = [
         CoreQuestionSchema.model_validate(q)
-        for q in bank.questions_payload.get("questions", [])
+        for q in (bank.questions_payload.get("questions", []) if bank else [])
     ]
 
     # 3. Load assessment findings
@@ -708,7 +712,7 @@ async def get_interview_draft_detail(
             detail="INTERVIEW_QUARANTINED: Câu hỏi dùng CV đã che bị thu hồi.",
         )
 
-    core_q_list = draft.bank.questions_payload.get("questions", [])
+    core_q_list = draft.bank.questions_payload.get("questions", []) if draft.bank else []
     ai_followups_list = (draft.questions_payload or {}).get("followups", [])
 
     # Latest revision if any
@@ -740,7 +744,7 @@ async def get_interview_draft_detail(
         is_stale = True
         stale_reasons.append("SANITIZED_VERSION_CHANGED: Phiên bản sanitized mới đã được tạo.")
 
-    if draft.bank.status != "approved":
+    if draft.bank and draft.bank.status != "approved":
         is_stale = True
         stale_reasons.append("QUESTION_BANK_SUPERSEDED: Ngân hàng câu hỏi cốt lõi đã có phiên bản mới.")
 

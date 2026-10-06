@@ -9,7 +9,7 @@ from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, Uniqu
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, PrimaryKeyMixin, utc_now
+from app.db.base import Base, PrimaryKeyMixin, RowVersionMixin, TimestampMixin, utc_now
 
 
 class InterviewQuestionBank(Base, PrimaryKeyMixin):
@@ -56,10 +56,10 @@ class InterviewDraft(Base, PrimaryKeyMixin):
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True, index=True, nullable=False)
     source_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    question_bank_id: Mapped[uuid.UUID] = mapped_column(
+    question_bank_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("interview_question_banks.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(String(50), default="queued", nullable=False)
     questions_payload: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
@@ -101,3 +101,39 @@ class InterviewRevision(Base, PrimaryKeyMixin):
 
     draft = relationship("InterviewDraft", back_populates="revisions")
     author = relationship("User")
+
+
+class InterviewScorecard(Base, PrimaryKeyMixin, TimestampMixin, RowVersionMixin):
+    """Human interview ratings kept separate from CV assessment scores."""
+    __tablename__ = "interview_scorecards"
+    __table_args__ = (
+        UniqueConstraint(
+            "application_id", "interviewer_id", "round_no", "rubric_version_id",
+            name="uq_interview_scorecard_reviewer_round_rubric",
+        ),
+        Index("ix_interview_scorecards_application", "application_id", "created_at"),
+    )
+
+    application_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    interviewer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), index=True, nullable=False
+    )
+    rubric_version_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rubric_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    interview_draft_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("interview_drafts.id", ondelete="SET NULL"), nullable=True
+    )
+    round_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
+    criteria_payload: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    source_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    finalized_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    application = relationship("Application")
+    interviewer = relationship("User")
+    rubric_version = relationship("RubricVersion")
+    interview_draft = relationship("InterviewDraft")

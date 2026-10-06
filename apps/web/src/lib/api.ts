@@ -508,12 +508,12 @@ export const api = {
     });
   },
 
-  async triggerInterviewDraft(applicationId: string, effectiveResult: any, expectedBankId: string): Promise<any> {
+  async triggerInterviewDraft(applicationId: string, effectiveResult: any, expectedBankId?: string | null): Promise<any> {
     return apiRequest<any>(`/applications/${applicationId}/interview-drafts`, {
       method: "POST",
       body: JSON.stringify({
         effective_result: effectiveResult,
-        expected_question_bank_id: expectedBankId,
+        expected_question_bank_id: expectedBankId ?? null,
       }),
     });
   },
@@ -524,6 +524,22 @@ export const api = {
 
   async getLatestInterviewDraft(applicationId: string): Promise<any | null> {
     return apiRequest<any | null>(`/applications/${applicationId}/interview-drafts/latest`);
+  },
+
+  async getInterviewScorecards(applicationId: string): Promise<any[]> {
+    return apiRequest<any[]>(`/applications/${applicationId}/interview-scorecards`);
+  },
+
+  async saveInterviewScorecard(applicationId: string, payload: any): Promise<any> {
+    return apiRequest<any>(`/applications/${applicationId}/interview-scorecards`, {
+      method: "PUT", body: JSON.stringify(payload),
+    });
+  },
+
+  async finalizeInterviewScorecard(scorecardId: string, expected_version: number): Promise<any> {
+    return apiRequest<any>(`/interview-scorecards/${scorecardId}/finalize`, {
+      method: "POST", body: JSON.stringify({ expected_version }),
+    });
   },
 
   async saveInterviewRevision(draftId: string, payload: any): Promise<any> {
