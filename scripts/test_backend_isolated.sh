@@ -39,6 +39,10 @@ export APP_ENV=sandbox
 export PILOT_STAGE=
 export LLM_PROVIDER=mock
 export DEEPSEEK_API_KEY=
+# Keep a locally configured secondary provider or hybrid mode out of generic regression runs.
+export JEV_MODE=off
+export JEV_API_KEY=
+export RAG_MODE=full_text_baseline
 export DATABASE_URL="postgresql+asyncpg://postgres:postgres@127.0.0.1:${test_port}/talentscreen_test"
 export DATABASE_SYNC_URL="postgresql://postgres:postgres@127.0.0.1:${test_port}/talentscreen_test"
 export PYTHONPATH=services/backend

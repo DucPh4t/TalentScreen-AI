@@ -12,7 +12,7 @@ make test
   --output /tmp/talentscreen-rag-benchmark.json
 ```
 
-`make test` starts a disposable PostgreSQL/pgvector container, migrates an empty schema, runs the backend suite, and builds the frontend. It does not run against the application's configured database. Model/embedding behavior is mocked or deterministic in the suite; no live-provider key is needed.
+`make test` starts a disposable PostgreSQL/pgvector container, migrates an empty schema, runs the backend suite, and builds the frontend. It does not run against the application's configured database. The runner clears primary/secondary API keys, disables Jev, and selects the full-text baseline; targeted hybrid tests use deterministic embedding fixtures. Model/embedding behavior is mocked or deterministic in the suite; no live-provider key is needed.
 
 | Check | Local result | Scope |
 | --- | --- | --- |
