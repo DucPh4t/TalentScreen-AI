@@ -1,86 +1,78 @@
-'use client';
+"use client";
 
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
-import { IconShield, IconSparkles, IconFileText } from './Icons';
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { api } from "../lib/api";
+import { useToast } from "./Toast";
+import { IconBarChart, IconFileText, IconShield, IconX, IconChevronRight } from "./Icons";
+
+const navigation = [
+  { href: "/dashboard", label: "Tổng quan", icon: IconBarChart },
+  { href: "/requisitions", label: "Đợt tuyển dụng", icon: IconFileText },
+  { href: "/retention", label: "Dữ liệu & riêng tư", icon: IconShield },
+];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isRootLogin = pathname === '/';
+  const router = useRouter();
+  const { error } = useToast();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
 
-  if (isRootLogin) {
-    return <>{children}</>;
+  if (pathname === "/") return <>{children}</>;
+
+  const currentPage = pathname.startsWith("/applications") ? "Hồ sơ ứng viên"
+    : navigation.find(item => pathname.startsWith(item.href))?.label || "Không gian tuyển dụng";
+
+  async function logout() {
+    setLoggingOut(true);
+    try {
+      await api.logout();
+      router.replace("/");
+    } catch {
+      error("Chưa đăng xuất được. Vui lòng thử lại.");
+    } finally { setLoggingOut(false); }
   }
 
   return (
     <div className="workspace-shell">
-      {/* Global App Header for internal pages matching Travertine Liquid Glass Luxury */}
-      <header className="app-header">
-        <div className="header-inner">
-          <Link href="/dashboard" className="brand-logo" aria-label="TalentScreen AI — trang chủ">
-            <div className="brand-icon-box">
-              <span className="material-symbols-outlined">neurology</span>
-            </div>
-            <div className="brand-copy">
-              <span className="brand-name">TalentScreen AI</span>
-              <span className="brand-pill">MVP nội bộ</span>
-            </div>
+      <a className="skip-link" href="#main-content">Chuyển đến nội dung chính</a>
+      <aside className="workspace-sidebar" aria-label="Không gian tuyển dụng">
+        <div className="sidebar-brand-row">
+          <Link href="/dashboard" className="product-brand" aria-label="TalentScreen AI — tổng quan" onClick={() => setMenuOpen(false)}>
+            <span className="product-mark" aria-hidden="true">ts</span>
+            <span>TalentScreen<span className="brand-ai"> AI</span><small>Không gian tuyển dụng</small></span>
           </Link>
-
-          <nav className="nav-links" aria-label="Điều hướng chính">
-            <Link href="/dashboard" className={`nav-link ${pathname === '/dashboard' ? 'active' : ''}`}>
-              <IconFileText size={16} />
-              <span>Tổng quan</span>
-            </Link>
-            <Link href="/requisitions" className={`nav-link ${pathname.startsWith('/requisitions') ? 'active' : ''}`}>
-              <IconFileText size={16} />
-              <span>Đợt tuyển dụng</span>
-            </Link>
-            <Link href="/sandbox" className={`nav-link ${pathname.startsWith('/sandbox') ? 'active' : ''}`}>
-              <IconSparkles size={16} />
-              <span>Tập huấn</span>
-            </Link>
-            <Link href="/retention" className={`nav-link ${pathname.startsWith('/retention') ? 'active' : ''}`}>
-              <IconShield size={16} />
-              <span>Lưu giữ dữ liệu</span>
-            </Link>
-          </nav>
-
-          <div className="header-actions">
-            <div className="header-audit-badge">
-              <span className="audit-dot" />
-              <span>Đánh giá có HR kiểm duyệt</span>
-            </div>
-            <span className="header-context">Cổng nhân sự</span>
+          <button type="button" className="mobile-menu-toggle" aria-expanded={menuOpen} aria-controls="workspace-navigation"
+            onClick={() => setMenuOpen(!menuOpen)} onKeyDown={event => { if (event.key === "Escape") setMenuOpen(false); }}>
+            {menuOpen ? <IconX size={18} /> : <IconChevronRight size={18} />}<span>{menuOpen ? "Đóng" : "Menu"}</span>
+          </button>
+        </div>
+        <nav id="workspace-navigation" className={`workspace-navigation ${menuOpen ? "is-open" : ""}`} aria-label="Điều hướng chính"
+          onKeyDown={event => { if (event.key === "Escape") { setMenuOpen(false); document.querySelector<HTMLButtonElement>(".mobile-menu-toggle")?.focus(); } }}>
+          <p className="navigation-caption">Không gian làm việc</p>
+          {navigation.map(({ href, label, icon: Icon }) => {
+            const active = pathname.startsWith(href) || (href === "/requisitions" && pathname.startsWith("/applications"));
+            return <Link key={href} href={href} className={`workspace-nav-link ${active ? "active" : ""}`} aria-current={pathname.startsWith(href) ? "page" : undefined} onClick={() => setMenuOpen(false)}>
+              <Icon size={19} /><span>{label}</span>
+            </Link>;
+          })}
+        </nav>
+        <div className="sidebar-assurance"><IconShield size={18} /><div><strong>HR quyết định cuối cùng</strong><p>AI hỗ trợ bằng chứng và đánh giá.</p></div></div>
+        <div className="sidebar-product-meta"><span className="status-marker status-open" /> Không gian nội bộ</div>
+      </aside>
+      <div className="workspace-body">
+        <header className="workspace-topbar">
+          <span className="topbar-page">{currentPage}</span>
+          <div className="topbar-actions"><span className="topbar-assurance"><IconShield size={15} /> Đánh giá có bằng chứng</span>
+            <button type="button" className="btn btn-quiet btn-sm" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? "Đang đăng xuất…" : "Đăng xuất"}</button>
           </div>
-        </div>
-      </header>
-
-      <div className="env-banner" role="note">
-        <div className="env-banner-inner">
-          <span className="env-status-dot" aria-hidden="true" />
-          <span>AI đưa ra đánh giá tham khảo theo tiêu chí đã duyệt. HR kiểm tra bằng chứng và quyết định tuyển dụng cuối cùng.</span>
-        </div>
+        </header>
+        <main id="main-content" className="main-content" tabIndex={-1}>{children}</main>
+        <footer className="app-footer"><span>TalentScreen AI</span><span>Truy cập theo phân quyền · HR kiểm duyệt kết quả</span></footer>
       </div>
-
-      <main className="main-content">
-        {children}
-      </main>
-
-      <footer className="app-footer">
-        <div className="footer-inner">
-          <div className="footer-left">
-            <strong>TalentScreen AI</strong>
-            <span>•</span>
-            <span>Trợ lý sàng lọc CV nội bộ • Bản thử nghiệm</span>
-          </div>
-          <div className="footer-right">
-            <span>Dữ liệu truy cập theo phân quyền</span>
-            <span>•</span>
-            <span>HR quyết định cuối cùng</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

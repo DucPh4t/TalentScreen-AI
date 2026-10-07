@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, ApplicationItem, RequisitionItem, UserAccount } from '../lib/api';
-import { IconAlertTriangle, IconArrowRight, IconCheckCircle, IconFileText, IconPlus, IconShield, IconSparkles, IconUserCheck } from './Icons';
+import { api, RequisitionItem, UserAccount } from '../lib/api';
+import { IconAlertTriangle, IconArrowRight, IconCheckCircle, IconFileText, IconPlus, IconRefresh, IconUserCheck } from './Icons';
 import { stageLabels } from '../lib/workflow';
 import { Skeleton } from './Skeleton';
 
@@ -13,10 +13,9 @@ const statusLabel: Record<RequisitionItem['status'], string> = {
   draft: 'Bản nháp', open: 'Đang mở', paused: 'Tạm dừng', closed: 'Đã đóng',
 };
 
-export default function DashboardHome({ user, requisitions, onLogout, error, onReload }: {
+export default function DashboardHome({ user, requisitions, error, onReload }: {
   user: UserAccount;
   requisitions: RequisitionItem[];
-  onLogout: () => Promise<void>;
   error: string;
   onReload: () => Promise<void>;
 }) {
@@ -32,7 +31,7 @@ export default function DashboardHome({ user, requisitions, onLogout, error, onR
     async function loadReviewQueue() {
       const recentOpen = requisitions.filter((item) => ['open', 'paused'].includes(item.status));
       if (!recentOpen.length) {
-        if (active) { setReviewItems([]); setReviewLoading(false); }
+        if (active) { setReviewItems([]); setReviewLoadError(false); setReviewLoading(false); }
         return;
       }
       if (refreshTick === 0) setReviewLoading(true);
@@ -54,98 +53,37 @@ export default function DashboardHome({ user, requisitions, onLogout, error, onR
   const openCount = requisitions.filter((item) => item.status === 'open').length;
   const draftCount = requisitions.filter((item) => item.status === 'draft').length;
 
+  const visibleItems = reviewItems.filter(item => !queueFilter || item.stage === queueFilter);
+  const queueStages = reviewerOnly ? ["independent_ready", "independent_waiting"]
+    : Array.from(new Set(reviewItems.map(item => item.stage)));
+  const labelForStage = (stage: string) => stage === "independent_ready" ? "Chờ chấm độc lập"
+    : stage === "independent_waiting" ? "Chờ rà soát CV" : stageLabels[stage] || "Chưa xác định";
+
   return (
     <div className="dashboard-page">
-      <section className="dashboard-intro surface">
-        <div>
-          <div className="eyebrow"><span className="intro-dot" /> Không gian tuyển dụng</div>
-          <h1>Chào {user.display_name}</h1>
-          <p>Chọn một đợt tuyển dụng để kiểm tra JD, tiêu chí và hồ sơ. Mọi kết quả AI đều cần HR rà soát.</p>
-        </div>
-        <div className="intro-actions">
-          <span className="account-chip"><span className="account-avatar">{user.display_name?.slice(0, 1).toUpperCase() || 'H'}</span>{user.login_name}</span>
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => void onLogout()}>Đăng xuất</button>
-        </div>
+      <div className="page-header dashboard-heading">
+        <div><p className="eyebrow">Không gian nhân sự</p><h1 className="page-title">Tổng quan tuyển dụng</h1><p className="page-subtitle">Chào {user.display_name}. Đây là những công việc cần bạn chú ý.</p></div>
+        <Link className="btn btn-primary" href="/requisitions"><IconPlus size={17} />Mở đợt tuyển dụng</Link>
+      </div>
+      {error && <div className="notice notice-error" role="alert"><IconAlertTriangle size={17} /><span>{error}</span><button className="btn btn-sm btn-outline" onClick={() => void onReload()}>Thử lại</button></div>}
+      <section className="overview-metrics" aria-label="Tổng quan dữ liệu tuyển dụng">
+        <div className="overview-metric metric-priority"><div><span>{reviewerOnly ? "Chờ bạn chấm độc lập" : "Hồ sơ cần xử lý"}</span><IconUserCheck size={19} /></div><strong>{reviewLoading || reviewLoadError ? "—" : reviewItems.length}</strong><p>{reviewLoadError ? "Một số đợt chưa tải được" : "Trong các đợt đang mở và tạm dừng"}</p></div>
+        <div className="overview-metric"><div><span>Đợt đang mở</span><IconFileText size={19} /></div><strong>{openCount}</strong><p>Tiếp nhận và rà soát hồ sơ</p></div>
+        <div className="overview-metric"><div><span>Đợt ở bản nháp</span><IconFileText size={19} /></div><strong>{draftCount}</strong><p>Chờ hoàn tất JD và tiêu chí</p></div>
       </section>
-
-      {error && <div className="notice notice-error" role="alert"><IconAlertTriangle size={17} />{error}<button className="btn btn-sm btn-outline" onClick={() => void onReload()}>Thử lại</button></div>}
-
-      <div className="dashboard-grid">
-        <aside className="surface dashboard-sidebar" aria-label="Điều hướng công việc">
-          <div className="panel-heading"><div><p className="eyebrow">Điều hướng</p><h2>Trung tâm công việc</h2></div><span className="tiny-count">{requisitions.length} đợt</span></div>
-          <div className="sidebar-menu">
-            <Link className="sidebar-link active" href="/requisitions">
-              <IconFileText size={18} className="sidebar-link-icon" />
-              <div className="sidebar-link-text">
-                <strong>Đợt tuyển dụng</strong>
-                <small>JD, tiêu chí và hồ sơ</small>
-              </div>
-              <IconArrowRight size={15} className="sidebar-link-arrow" />
-            </Link>
-            <Link className="sidebar-link" href="/retention">
-              <IconShield size={18} className="sidebar-link-icon" />
-              <div className="sidebar-link-text">
-                <strong>Lưu giữ dữ liệu</strong>
-                <small>Thời hạn và yêu cầu xóa</small>
-              </div>
-              <IconArrowRight size={15} className="sidebar-link-arrow" />
-            </Link>
-          </div>
-          <div className="sidebar-divider" />
-          <p className="eyebrow sidebar-section-title">Thực hành &amp; Tập huấn</p>
-          <div className="sidebar-menu" style={{ marginBottom: "0.5rem" }}>
-            <Link className="sidebar-link" href="/sandbox">
-              <IconSparkles size={18} className="sidebar-link-icon" />
-              <div className="sidebar-link-text">
-                <strong>Tập huấn HR (Sandbox)</strong>
-                <small>Thực hành trên dữ liệu mẫu</small>
-              </div>
-              <IconArrowRight size={15} className="sidebar-link-arrow" />
-            </Link>
-          </div>
-          <div className="sidebar-divider" />
-          <p className="eyebrow sidebar-section-title">Đợt gần đây</p>
-          {requisitions.length === 0 ? <p className="muted sidebar-empty">Chưa có đợt tuyển dụng.</p> : requisitions.slice(0, 4).map((req) => (
-            <Link href={`/requisitions/${req.id}`} className="recent-requisition" key={req.id}>
-              <span className={`status-marker status-${req.status}`} />
-              <div className="recent-req-info">
-                <strong className="recent-req-title">{req.title}</strong>
-                <small className="recent-req-status">{statusLabel[req.status]}</small>
-              </div>
-              <IconArrowRight size={14} className="recent-req-arrow" />
-            </Link>
-          ))}
-          <Link className="sidebar-all" href="/requisitions">Xem tất cả đợt <IconArrowRight size={15} /></Link>
-        </aside>
-
-        <div className="dashboard-main">
-          <section className="metrics-row" aria-label="Tổng quan dữ liệu tuyển dụng">
-            <div className="surface metric-tile"><span>Đợt đang mở</span><strong>{openCount}</strong><small>Đang tiếp nhận hoặc rà soát hồ sơ</small></div>
-            <div className="surface metric-tile"><span>Bản nháp</span><strong>{draftCount}</strong><small>Cần hoàn tất JD và tiêu chí</small></div>
-            <div className="surface metric-tile"><span>{reviewerOnly ? "Hồ sơ chưa khóa nhãn của bạn" : "Hồ sơ cần xử lý"}</span><strong>{reviewLoading || reviewLoadError ? '—' : reviewItems.length}</strong><small>{reviewLoadError ? 'Một số đợt chưa tải được' : 'Tất cả đợt đang mở hoặc tạm dừng bạn được truy cập'}</small></div>
-          </section>
-
-          <section className="surface work-panel">
-            <div className="workflow-actions" aria-label="Lọc công việc"><button className="btn btn-secondary btn-sm" onClick={() => setQueueFilter("")}>Tất cả ({reviewItems.length})</button>{(reviewerOnly ? ["independent_ready", "independent_waiting"] : ["needs_review", "reading", "ready_for_ai", "analyzing", "awaiting_decision", "error", "independent_ready"]).map(stage => <button key={stage} aria-pressed={queueFilter === stage} className="btn btn-secondary btn-sm" onClick={() => setQueueFilter(stage)}>{(stage === "independent_ready" ? "Sẵn sàng chấm độc lập" : stage === "independent_waiting" ? "Chờ CV được rà soát" : stageLabels[stage])} ({reviewItems.filter(item => item.stage === stage).length})</button>)}<button className="btn btn-secondary btn-sm" onClick={() => setRefreshTick(previous => previous + 1)}>Làm mới</button></div>
-            <div className="panel-heading"><div><p className="eyebrow">Ưu tiên xử lý</p><h2>{reviewerOnly ? "Hồ sơ cần bạn chấm độc lập" : "Hồ sơ cần HR rà soát"}</h2><p className="muted">Sắp theo thời gian tiếp nhận. Số liệu gồm các đợt đang mở/tạm dừng tải được; hiển thị tối đa 5 hồ sơ theo bộ lọc.</p></div><span className="panel-icon"><IconUserCheck size={20} /></span></div>
-            {reviewLoadError && <div className="notice notice-warning" role="status"><IconAlertTriangle size={16} />Một số danh sách hồ sơ chưa tải được. Mở từng đợt để kiểm tra đầy đủ.</div>}
-            {reviewLoading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem 0' }} role="status">
-                <Skeleton height="54px" borderRadius="12px" />
-                <Skeleton height="54px" borderRadius="12px" />
-                <Skeleton height="54px" borderRadius="12px" />
-              </div>
-            ) : reviewItems.length === 0 ? (
-              <div className="empty-work"><span className="empty-icon"><IconCheckCircle size={24} /></span><h3>Chưa có hồ sơ trong danh sách ưu tiên</h3><p>Mở một đợt tuyển dụng để xem toàn bộ hồ sơ và tiến độ đánh giá.</p><Link href="/requisitions" className="btn btn-secondary">Xem đợt tuyển dụng <IconArrowRight size={15} /></Link></div>
-            ) : queueFilter && !reviewItems.some(item => item.stage === queueFilter) ? <p className="notice">Không có hồ sơ ở trạng thái đã chọn. Chọn “Tất cả” để xem công việc khác.</p> : <div className="review-list">{reviewItems.filter(item => !queueFilter || item.stage === queueFilter).slice(0, 5).map((item) => <Link key={item.id} href={`/applications/${item.id}${item.independent ? "/independent-review" : ""}`} className="review-row"><span className="candidate-avatar">{item.public_label.slice(-2)}</span><span className="review-copy"><strong>{item.public_label}</strong><small>{item.requisitionTitle} · Tiếp nhận {new Date(item.received_at).toLocaleDateString('vi-VN')}</small></span><span className="review-state">{(item.stage === "independent_ready" ? "Sẵn sàng chấm độc lập" : item.stage === "independent_waiting" ? "Chờ CV được rà soát" : stageLabels[item.stage]) || 'Chưa xác định'}</span><IconArrowRight size={16} /></Link>)}</div>}
-          </section>
-
-          <section className="human-note"><IconShield size={18} /><span><strong>Nguyên tắc quyết định</strong> — Điểm AI là quan sát theo bằng chứng hiện có, không phải điểm năng lực tuyệt đối. HR có thể yêu cầu làm rõ hoặc ghi đè kèm lý do.</span></section>
-        </div>
-
-        <aside className="dashboard-rail" aria-label="Các bước tiếp theo">
-          <section className="surface action-panel"><div className="panel-heading"><div><p className="eyebrow">Thao tác nhanh</p><h2>Bắt đầu từ đợt tuyển dụng</h2></div><span className="panel-icon"><IconPlus size={19} /></span></div><p className="muted">Tạo JD, chuẩn bị tiêu chí, rồi tiếp nhận CV trong cùng một không gian.</p><Link className="btn btn-primary action-main" href="/requisitions"><IconPlus size={16} />Tạo hoặc mở đợt</Link><div className="action-steps"><div><span>01</span><p><strong>Kiểm tra JD và tiêu chí</strong><small>HR và chuyên môn IT duyệt trước khi dùng.</small></p></div><div><span>02</span><p><strong>Tiếp nhận và khử định danh</strong><small>Kiểm tra bản đã che trước khi đánh giá.</small></p></div><div><span>03</span><p><strong>Rà soát bằng chứng</strong><small>HR ký quyết định cuối cùng.</small></p></div></div></section>
-          <section className="surface help-panel"><span className="help-icon"><IconSparkles size={19} /></span><div><h2>Mới sử dụng TalentScreen?</h2><p>Thử quy trình trên hồ sơ mẫu trước khi làm việc với dữ liệu thật.</p><Link href="/sandbox">Vào phần tập huấn <IconArrowRight size={15} /></Link></div></section>
+      <div className="overview-grid">
+        <section className="surface queue-panel" aria-labelledby="review-queue-title">
+          <div className="panel-heading"><div><h2 id="review-queue-title">{reviewerOnly ? "Hồ sơ được phân công" : "Hàng đợi công việc"}</h2><p>Ưu tiên theo thời gian tiếp nhận.</p></div><button type="button" className="btn btn-quiet btn-sm" aria-label="Làm mới hàng đợi" onClick={() => setRefreshTick(previous => previous + 1)}><IconRefresh size={16} /><span>Làm mới</span></button></div>
+          <div className="queue-toolbar"><label htmlFor="queue-filter">Trạng thái</label><select id="queue-filter" className="form-select" value={queueFilter} onChange={event => setQueueFilter(event.target.value)}><option value="">Tất cả trạng thái</option>{Array.from(new Set([...queueStages, ...(queueFilter ? [queueFilter] : [])])).map(stage => <option key={stage} value={stage}>{labelForStage(stage)} ({reviewItems.filter(item => item.stage === stage).length})</option>)}</select><span>{reviewLoading ? "Đang tải…" : `${visibleItems.length} hồ sơ`}</span></div>
+          {reviewLoadError && <div className="notice notice-warning" role="status"><IconAlertTriangle size={16} /><span>Chưa tải được một số đợt. Mở từng đợt để kiểm tra đầy đủ.</span></div>}
+          {reviewLoading ? <div className="queue-loading" role="status" aria-label="Đang tải hàng đợi"><Skeleton height="72px" /><Skeleton height="72px" /><Skeleton height="72px" /></div>
+            : visibleItems.length === 0 ? <div className="empty-work"><span className="empty-icon"><IconCheckCircle size={25} /></span><h3>{queueFilter ? "Không có hồ sơ ở trạng thái này" : "Chưa có hồ sơ cần xử lý"}</h3><p>{queueFilter ? "Chọn trạng thái khác để tiếp tục rà soát." : "Mở một đợt tuyển dụng để tiếp nhận và xem hồ sơ."}</p>{queueFilter ? <button className="btn btn-secondary" onClick={() => setQueueFilter("")}>Xem tất cả trạng thái</button> : <Link href="/requisitions" className="btn btn-secondary">Xem đợt tuyển dụng<IconArrowRight size={15} /></Link>}</div>
+            : <div className="review-list">{visibleItems.slice(0, 8).map(item => <Link key={item.id} href={`/applications/${item.id}${item.independent ? "/independent-review" : ""}`} className="review-row"><span className="candidate-avatar">{item.public_label.slice(-2)}</span><span className="review-copy"><strong>{item.public_label}</strong><small>{item.requisitionTitle}</small><time dateTime={item.received_at}>{new Date(item.received_at).toLocaleDateString("vi-VN")}</time></span><span className={`review-state review-state-${item.stage}`}>{labelForStage(item.stage)}</span><IconArrowRight size={16} /></Link>)}</div>}
+          {visibleItems.length > 8 && <p className="queue-footnote">Đang hiển thị 8 hồ sơ đầu. Mở từng đợt tuyển dụng để xem đầy đủ.</p>}
+        </section>
+        <aside className="surface recent-panel" aria-labelledby="recent-requisitions-title"><div className="panel-heading"><div><h2 id="recent-requisitions-title">Đợt tuyển dụng gần đây</h2><p>{requisitions.length} đợt bạn được truy cập</p></div></div>
+          {requisitions.length === 0 ? <div className="recent-empty"><IconFileText size={25} /><p>Chưa có đợt tuyển dụng.</p></div> : requisitions.slice(0, 5).map(req => <Link href={`/requisitions/${req.id}`} className="recent-requisition" key={req.id}><span className="recent-requisition-icon"><IconFileText size={19} /></span><div className="recent-req-info"><strong>{req.title}</strong><small><span className={`status-marker status-${req.status}`} />{statusLabel[req.status]}</small></div><IconArrowRight size={15} /></Link>)}
+          <Link className="recent-panel-all" href="/requisitions">Xem tất cả đợt<IconArrowRight size={15} /></Link>
         </aside>
       </div>
     </div>

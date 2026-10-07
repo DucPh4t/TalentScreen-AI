@@ -61,7 +61,9 @@ export default function AssessmentExecutionTrace({ strategy, trace, criterionLab
   );
 
   return (
-    <section className={`assessment-trace ${failed ? "assessment-trace-failed" : ""}`} aria-labelledby="assessment-trace-title">
+    <details className={`assessment-trace ${failed ? "assessment-trace-failed" : ""}`} open={failed || undefined}>
+      <summary className="assessment-trace-summary"><span>Chi tiết xử lý AI</span><span>{strategyLabel(trace?.retrieval_strategy || strategy)}</span></summary>
+      <div className="assessment-trace-content">
       <div className="assessment-trace-heading">
         <div>
           <h3 id="assessment-trace-title">Dấu vết xử lý AI</h3>
@@ -119,6 +121,7 @@ export default function AssessmentExecutionTrace({ strategy, trace, criterionLab
       ) : (
         <p className="assessment-trace-empty">Trace chi tiết chưa được lưu cho lượt chạy này.</p>
       )}
-    </section>
+      </div>
+    </details>
   );
 }

@@ -507,7 +507,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   }
 
   return (
-    <div>
+    <div className="candidate-workspace">
       {/* Top Header Bar — Strictly Spec 01: Evidence-first (NO hero score) */}
       <div className="page-header" style={{ marginBottom: "1.5rem" }}>
         <div>
@@ -610,7 +610,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                 disabled={!canManage || !!loadWarnings.length || progress?.pending || triggeringAssessment || sanitizedVersion?.status !== "approved" || !requisition?.current_rubric_version_id}
               >
                 <IconSparkles size={16} />
-                <span>{triggeringAssessment ? "Đang xử lý đánh giá AI…" : "Chạy Đánh Giá Bằng Chứng AI Ngay"}</span>
+                <span>{triggeringAssessment ? "Đang xử lý đánh giá AI…" : "Phân tích CV"}</span>
               </button>
               {sanitizedVersion?.status !== "approved" && (
                 <p style={{ color: "var(--amber-text)", fontSize: "0.8rem", marginTop: "0.75rem" }}>
@@ -689,7 +689,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                       </p>
                       <div className="table-wrapper" style={{ border: "none" }}>
                         <table className="data-table">
-                          <thead><tr><th>Tiêu chí</th><th>DeepSeek</th><th>Jev</th><th>Độ tin cậy Jev</th><th>Chênh lệch</th></tr></thead>
+                          <thead><tr><th scope="col">Tiêu chí</th><th scope="col">DeepSeek</th><th scope="col">Jev</th><th scope="col">Độ tin cậy Jev</th><th scope="col">Chênh lệch</th></tr></thead>
                           <tbody>
                             {Object.entries(assessmentRun.secondary_model_output.evaluations || {}).map(([criterionId, result]) => (
                               <tr key={criterionId}>
@@ -719,7 +719,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               <div className="card">
                 <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
                   <div>
-                    <h2 className="card-title">Bảng Tiêu Chí Năng Lực &amp; Chuỗi Bằng Chứng Minh Bạch</h2>
+                    <h2 className="card-title">Đánh giá theo tiêu chí</h2>
                     <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
                       Mở đoạn trích để đối chiếu với CV. Chưa đủ bằng chứng không đồng nghĩa ứng viên không có năng lực.
                     </p>
@@ -748,32 +748,32 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                 <div
                   className="table-wrapper assessment-criteria-scroll"
                   role="region"
-                  aria-label="Bảng tiêu chí năng lực; cuộn ngang để xem đủ các cột"
+                  aria-label="Đánh giá theo tiêu chí và bằng chứng"
                   tabIndex={0}
                   style={{ border: "none" }}
                 >
-                  <table className="data-table">
+                  <table className="data-table assessment-criteria-table">
                     <thead>
                       <tr>
-                        <th style={{ width: "22%" }}>Tiêu Chí</th>
-                        <th style={{ width: "12%" }}>Trạng Thái</th>
-                        <th style={{ width: "10%" }}>Điểm (0..4)</th>
-                        <th style={{ width: "32%" }}>Giải Trình Đánh Giá Của AI</th>
-                        <th>Bằng chứng và thao tác rà soát</th>
+                        <th scope="col" style={{ width: "22%" }}>Tiêu Chí</th>
+                        <th scope="col" style={{ width: "12%" }}>Trạng Thái</th>
+                        <th scope="col" style={{ width: "10%" }}>Điểm (0..4)</th>
+                        <th scope="col" style={{ width: "32%" }}>Giải Trình Đánh Giá Của AI</th>
+                        <th scope="col">Bằng chứng và thao tác rà soát</th>
                       </tr>
                     </thead>
                     <tbody>
                       {assessmentRun.criteria.map((c) => (
                         <tr key={c.criterion_id}>
-                          <td>
+                          <td className="criterion-heading-cell">
                             <strong style={{ fontSize: "0.88rem", color: "var(--text-primary)" }}>{rubric?.criteria?.find((criterion: any) => criterion.id === c.criterion_id)?.label || c.criterion_id}</strong>
                           </td>
-                          <td>
+                          <td data-label="Trạng thái">
                             <span className={`badge ${c.status === "assessed" ? "badge-open" : "badge-draft"}`}>
                               {c.status === "assessed" ? "Có bằng chứng" : c.status === "insufficient_evidence" ? "Cần làm rõ" : "Bằng chứng mâu thuẫn"}
                             </span>
                           </td>
-                          <td>
+                          <td data-label="Điểm quan sát">
                             <span style={{
                               fontSize: "1.25rem",
                               fontWeight: 800,
@@ -783,7 +783,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                               {c.score !== null ? `${c.score}/4` : "-"}
                             </span>
                           </td>
-                          <td style={{ fontSize: "0.825rem", lineHeight: 1.55 }}>
+                          <td data-label="Nhận định" style={{ fontSize: "0.825rem", lineHeight: 1.55 }}>
                             <div style={{ color: "var(--text-primary)" }}>{c.rationale}</div>
                             {c.missing_information && c.missing_information.length > 0 && (
                               <div style={{
@@ -799,7 +799,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                               </div>
                             )}
                           </td>
-                          <td>
+                          <td data-label="Bằng chứng & rà soát">
                             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                               {c.evidence.map((ev) => (
                                 <button type="button"
@@ -850,7 +850,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                   </table>
                 </div>
                 <p className="assessment-criteria-scroll-hint">
-                  Trên màn hình nhỏ, vuốt ngang trong bảng để xem đủ trạng thái, giải trình và thao tác.
+                  Mở trích dẫn để đối chiếu với CV, sau đó đánh dấu tiêu chí đã rà soát.
                 </p>
               </div>
             </div>
@@ -865,7 +865,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
           <div className="card">
             <div className="card-header" style={{ flexWrap: "wrap", gap: "0.85rem" }}>
               <div>
-                <h2 className="card-title">Hồ Sơ Đã Che Giấu Thông Tin Định Danh (Redacted CV)</h2>
+                <h2 className="card-title">CV đã che thông tin định danh</h2>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
                   Hệ thống tự động che thông tin định danh; Owner phải kiểm tra toàn văn và xử lý mọi dữ liệu còn sót trước khi phê duyệt.
                 </p>

@@ -33,11 +33,6 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleLogout() {
-    await api.logout();
-    router.push('/');
-  }
-
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '6rem 2rem' }}>
@@ -55,7 +50,6 @@ export default function DashboardPage() {
     <DashboardHome
       user={user}
       requisitions={requisitions}
-      onLogout={handleLogout}
       error={dashboardError}
       onReload={loadData}
     />

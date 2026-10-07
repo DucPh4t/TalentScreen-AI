@@ -746,14 +746,14 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                         <strong>Tiêu chí {criterionIndex + 1}</strong>
                         {rubricEditorCriteria.length > 2 && <button className="btn btn-outline btn-sm" type="button" aria-label={`Xóa tiêu chí ${criterionIndex + 1}`} onClick={() => setRubricEditorCriteria((items) => items.filter((_, index) => index !== criterionIndex))}><IconX size={14} /></button>}
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "0.75rem", marginTop: "0.75rem" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))", gap: "0.75rem", marginTop: "0.75rem" }}>
                         <label className="form-label">ID slug<input className="form-input" value={criterion.id} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, id: event.target.value } : item))} placeholder="frontend_react" /></label>
                         <label className="form-label">Trọng số %<input className="form-input" type="number" min={1} max={99} value={criterion.weight} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, weight: Number(event.target.value) } : item))} /></label>
                         <label className="form-label">Tên năng lực<input className="form-input" value={criterion.label} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, label: event.target.value } : item))} /></label>
                         <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><input type="checkbox" checked={criterion.core} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, core: event.target.checked } : item))} /> Cốt lõi (mức sàn 2/4)</label>
                       </div>
                       <label className="form-label" style={{ display: "block", marginTop: "0.75rem" }}>Mô tả tiêu chí<textarea className="form-textarea" rows={2} value={criterion.description} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, description: event.target.value } : item))} /></label>
-                      <div style={{ display: "grid", gridTemplateColumns: "minmax(130px, 1fr) minmax(240px, 3fr)", gap: "0.75rem", marginTop: "0.75rem" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: "0.75rem", marginTop: "0.75rem" }}>
                         <label className="form-label">Mã yêu cầu JD<input className="form-input" value={criterion.source_requirements[0]?.requirement_id || ""} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, source_requirements: [{ requirement_id: event.target.value, quote: item.source_requirements[0]?.quote || "" }] } : item))} /></label>
                         <label className="form-label">Trích dẫn nguyên văn từ JD<textarea className="form-textarea" rows={2} value={criterion.source_requirements[0]?.quote || ""} onChange={(event) => setRubricEditorCriteria((items) => items.map((item, index) => index === criterionIndex ? { ...item, source_requirements: [{ requirement_id: item.source_requirements[0]?.requirement_id || "", quote: event.target.value }] } : item))} /></label>
                       </div>
@@ -794,7 +794,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             )}
 
             {rubric && rubric.criteria && rubric.criteria.length > 0 ? (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: "1rem" }}>
                 {rubric.criteria.map((c: any) => (
                   <div
                     key={c.id}

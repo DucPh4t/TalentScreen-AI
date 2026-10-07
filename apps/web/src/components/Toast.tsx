@@ -1,5 +1,6 @@
 'use client';
 
+import { IconCheckCircle, IconAlertTriangle, IconShield, IconX } from './Icons';
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -155,7 +156,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
     switch (item.type) {
       case 'success':
         return {
-          icon: 'check_circle',
+          icon: IconCheckCircle,
           border: 'rgba(16, 185, 129, 0.45)',
           glow: 'rgba(16, 185, 129, 0.15)',
           badgeColor: '#047857',
@@ -164,7 +165,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
         };
       case 'error':
         return {
-          icon: 'error',
+          icon: IconAlertTriangle,
           border: 'rgba(244, 63, 94, 0.45)',
           glow: 'rgba(244, 63, 94, 0.15)',
           badgeColor: '#be123c',
@@ -173,7 +174,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
         };
       case 'warning':
         return {
-          icon: 'warning',
+          icon: IconAlertTriangle,
           border: 'rgba(245, 158, 11, 0.45)',
           glow: 'rgba(245, 158, 11, 0.15)',
           badgeColor: '#b45309',
@@ -183,7 +184,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
       case 'info':
       default:
         return {
-          icon: 'info',
+          icon: IconShield,
           border: 'rgba(13, 148, 136, 0.45)',
           glow: 'rgba(13, 148, 136, 0.15)',
           badgeColor: '#0f766e',
@@ -194,6 +195,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
   };
 
   const theme = getTheme();
+  const TypeIcon = theme.icon;
 
   return (
     <div
@@ -201,9 +203,9 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
       className="toast-card"
       style={{
         pointerEvents: 'auto',
-        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 252, 248, 0.92) 50%, rgba(245, 253, 251, 0.95) 100%)',
-        backdropFilter: 'blur(24px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        background: '#ffffff',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
         border: `1px solid ${theme.border}`,
         borderRadius: '16px',
         padding: '0.9rem 1rem',
@@ -234,9 +236,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
             marginTop: '1px'
           }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
-            {theme.icon}
-          </span>
+          <TypeIcon size={19} />
         </div>
 
         {/* Content */}
@@ -271,7 +271,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = '#18181b')}
           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = '#71717a')}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>close</span>
+          <IconX size={17} />
         </button>
       </div>
 

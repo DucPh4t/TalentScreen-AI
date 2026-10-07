@@ -73,7 +73,7 @@ export default function RetentionPage() {
       <div className="page-header">
         <div>
           <div className="breadcrumbs">
-            <Link href="/">Trang chủ</Link>
+            <Link href="/dashboard">Tổng quan</Link>
             <span>/</span>
             <span style={{ color: "var(--text-primary)" }}>Lưu giữ dữ liệu</span>
           </div>
@@ -85,20 +85,7 @@ export default function RetentionPage() {
       </div>
 
       {/* KPI Policy Cards Grid */}
-      <div className="kpi-grid">
-        <div className="kpi-card">
-          <div className="kpi-header">
-            <span className="kpi-label">Dữ liệu tập huấn</span>
-            <div className="kpi-icon-pill">
-              <IconLock size={18} />
-            </div>
-          </div>
-          <div className="kpi-val">{policy ? `${policy.sandbox_ttl_days} ngày` : "—"}</div>
-          <div className="kpi-subtext">
-            <span>Thời hạn của dữ liệu sandbox; không áp dụng cho CV thật.</span>
-          </div>
-        </div>
-
+      <div className="kpi-grid retention-policy-grid">
         <div className="kpi-card">
           <div className="kpi-header">
             <span className="kpi-label">Tệp tạm</span>

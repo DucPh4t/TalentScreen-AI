@@ -1,399 +1,64 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { api, UserAccount, RequisitionItem } from '../lib/api';
-import DashboardHome from '../components/DashboardHome';
-import { IconArrowRight, IconAlertTriangle } from '../components/Icons';
-import { useToast } from '../components/Toast';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { api } from "../lib/api";
+import { IconArrowRight, IconAlertTriangle, IconShield, IconFileText, IconCheckCircle } from "../components/Icons";
 
 export default function HomePage() {
   const router = useRouter();
-  const { success, error } = useToast();
-  const [user, setUser] = useState<UserAccount | null>(null);
-  const [loginName, setLoginName] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
+  const [loginName, setLoginName] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [requisitions, setRequisitions] = useState<RequisitionItem[]>([]);
-  const [dashboardError, setDashboardError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
+    let active = true;
+    api.getMe().then(() => { if (active) router.replace("/dashboard"); })
+      .catch(() => { if (active) setCheckingAuth(false); });
+    return () => { active = false; };
+  }, [router]);
 
-  async function checkAuth() {
-    try {
-      const u = await api.getMe();
-      setUser(u);
-      router.push('/dashboard');
-    } catch {
-      setUser(null);
-    }
-  }
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setLoginError('');
+  async function handleLogin(event: React.FormEvent) {
+    event.preventDefault();
+    setLoginError("");
     setSubmitting(true);
     try {
       await api.login(loginName, password);
-      router.push('/dashboard');
-    } catch (err: any) {
-      setLoginError(err.message || 'Thông tin đăng nhập không hợp lệ.');
-    } finally {
-      setSubmitting(false);
-    }
+      router.replace("/dashboard");
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : "Thông tin đăng nhập không hợp lệ.");
+    } finally { setSubmitting(false); }
   }
 
-  async function handleLogout() {
-    await api.logout();
-    setUser(null);
-    setRequisitions([]);
-  }
-
-  async function loadRequisitions() {
-    try {
-      const list = await api.listRequisitions();
-      setRequisitions(list);
-    } catch (err: any) {
-      setDashboardError(err.message || 'Không tải được danh sách tuyển dụng.');
-    }
-  }
-
-  if (!user) {
-    return (
-      <div className="talent-portal-container">
-        {/* ================= UNIFIED CONTINUOUS FULL VIEWPORT BACKGROUND ================= */}
-        <div className="talent-portal-bg" aria-hidden="true">
-          <img
-            alt="Travertine stone desk"
-            src="/bgAItalent.png"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBEHVEE457qKGHUjySbsszz3Yx9aLFmTS3BBb853JKV7VmLOqSy_F2hnyC_nfJwVNgDsckPl4NKzUmwzYluGmWhkuJh_opZxLQnXT0okPFeFw_Ds8x7sMY3oqGHsNH3KixeBkzJSypzBoXqzz_LzrZKLFDIB5Kf6D7aNyEedIfY-munLbNnJzyAIl5wEBs2_EwiNVu-JDSpNFwumYCEx9pHgQaklg0rMXtDsqkfPzLCIhJCIOxNExwFYkgeDTZtqUkIjA';
-            }}
-          />
-          <div className="talent-portal-tint-1" />
-          <div className="talent-portal-tint-2" />
+  return (
+    <main className="auth-layout">
+      <section className="auth-story" aria-label="TalentScreen AI">
+        <a href="/" className="product-brand auth-brand"><span className="product-mark" aria-hidden="true">ts</span><span>TalentScreen<span className="brand-ai"> AI</span></span></a>
+        <div className="auth-story-content"><span className="auth-eyebrow">Tuyển dụng, có cơ sở.</span><h1>Hiểu hồ sơ.<br /><span>Chọn đúng bước tiếp.</span></h1><p>Đối chiếu CV với yêu cầu vị trí. Tập trung vào năng lực, kiểm tra từng bằng chứng và giữ quyền quyết định trong tay HR.</p>
+          <div className="auth-evidence-visual" aria-label="CV và JD được đối chiếu thành bằng chứng để HR rà soát">
+            <div className="auth-source-row"><div><IconFileText size={20} /><strong>CV ứng viên</strong><span>Kỹ năng & kinh nghiệm</span></div><span className="auth-source-plus">+</span><div><IconFileText size={20} /><strong>Yêu cầu vị trí</strong><span>JD & tiêu chí đã duyệt</span></div></div>
+            <div className="auth-evidence-result"><span className="auth-result-icon"><IconCheckCircle size={21} /></span><div><strong>Đánh giá đi cùng bằng chứng</strong><span>Trích dẫn rõ nguồn · HR kiểm chứng</span></div><IconArrowRight size={18} /></div>
+          </div>
         </div>
-
-        {/* ================= TOP MINIMAL GALLERY HEADER ================= */}
-        <header className="talent-portal-header">
-          <a className="talent-portal-brand" href="/">
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '12px',
-              backgroundColor: '#18181b',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.4)'
-            }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>neurology</span>
-            </div>
-            <div className="talent-portal-brand-copy">
-              <span style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.025em', color: '#18181b' }}>
-                TalentScreen AI
-              </span>
-              <span className="talent-glass-pill" style={{
-                fontSize: '10px',
-                fontFamily: 'var(--font-mono, monospace)',
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                color: '#0d9488',
-                fontWeight: 600,
-                padding: '2px 8px',
-                borderRadius: '9999px',
-                border: '1px solid rgba(13, 148, 136, 0.3)'
-              }}>
-                MVP nội bộ
-              </span>
-            </div>
-          </a>
-
-          {/* Minimal right badge & language selector */}
-          <div className="talent-portal-meta">
-            <div className="talent-glass-pill" style={{
-              padding: '6px 14px',
-              borderRadius: '9999px',
-              color: '#52525b',
-              fontWeight: 500
-            }}>
-              <span style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: '#0d9488',
-                boxShadow: '0 0 8px rgba(13, 148, 136, 0.8)'
-              }} />
-              <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '11px', color: '#18181b', letterSpacing: '0.05em' }}>
-                BẢN THỬ NGHIỆM NỘI BỘ
-              </span>
-            </div>
-            <div className="talent-glass-pill" style={{
-              padding: '4px 12px',
-              borderRadius: '12px',
-              color: '#18181b',
-              fontWeight: 600,
-              fontSize: '11px',
-              fontFamily: 'var(--font-mono, monospace)'
-            }}>
-              Giao diện tiếng Việt
-            </div>
-          </div>
-        </header>
-
-        {/* ================= UNIFIED MAIN WORKSPACE (NO SPLIT) ================= */}
-        <main className="talent-portal-main">
-          {/* LEFT COLUMN: Elegant Typography & 3 Golden Metrics */}
-          <div className="talent-portal-copy">
-            {/* Architectural Tag */}
-            <div className="talent-glass-pill" style={{
-              padding: '4px 14px',
-              borderRadius: '9999px',
-              color: '#52525b',
-              fontSize: '11px',
-              fontFamily: 'var(--font-mono, monospace)',
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase'
-            }}>
-              <span style={{ color: '#0d9488', fontWeight: 700, textShadow: '0 0 6px rgba(13, 148, 136, 0.6)' }}>●</span>
-              <span style={{ color: '#18181b', fontWeight: 500 }}>Trợ lý tuyển dụng có HR kiểm duyệt</span>
-            </div>
-
-            {/* Refined Editorial Headline */}
-            <div className="talent-portal-intro">
-              <h1 className="talent-portal-headline">
-                TalentScreen<br />
-                <span className="italic">Đối chiếu hồ sơ</span> bằng chứng.
-              </h1>
-              <p style={{ fontSize: '15px', color: 'rgba(24, 24, 27, 0.8)', maxWidth: '28rem', lineHeight: 1.62 }}>
-                Đối chiếu CV với JD theo rubric đã duyệt. Mỗi gợi ý có bằng chứng để HR kiểm tra và quyết định.
-              </p>
-            </div>
-
-            {/* 3 Golden Metrics (Liquid Glass Prism Cards) */}
-            <div className="talent-portal-metrics">
-              {/* Metric 1 */}
-              <div className="talent-glass-card talent-portal-metric" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', overflow: 'hidden' }}>
-                <div className="talent-glass-caustic" />
-                <div className="talent-portal-metric-content" style={{ position: 'relative', zIndex: 10 }}>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#18181b', letterSpacing: '-0.025em', lineHeight: 1 }}>06</div>
-                  <div className="talent-portal-metric-copy">
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b' }}>Tiêu chí</div>
-                    <div style={{ fontSize: '10px', color: '#52525b', fontFamily: 'var(--font-mono, monospace)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rubric Backend Python</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Metric 2 */}
-              <div className="talent-glass-card talent-portal-metric" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', overflow: 'hidden' }}>
-                <div className="talent-glass-caustic" />
-                <div className="talent-portal-metric-content" style={{ position: 'relative', zIndex: 10 }}>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0d9488', letterSpacing: '-0.025em', lineHeight: 1 }}>HITL</div>
-                  <div className="talent-portal-metric-copy">
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b' }}>HR duyệt</div>
-                    <div style={{ fontSize: '10px', color: '#52525b', fontFamily: 'var(--font-mono, monospace)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Quyết định cuối cùng</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Metric 3 */}
-              <div className="talent-glass-card talent-portal-metric" style={{ borderRadius: '1rem', padding: '1.15rem 1rem', overflow: 'hidden' }}>
-                <div className="talent-glass-caustic" />
-                <div className="talent-portal-metric-content" style={{ position: 'relative', zIndex: 10 }}>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#18181b', letterSpacing: '-0.025em', lineHeight: 1 }}>CV</div>
-                  <div className="talent-portal-metric-copy">
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#18181b' }}>Bằng chứng</div>
-                    <div style={{ fontSize: '10px', color: '#52525b', fontFamily: 'var(--font-mono, monospace)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trích dẫn kiểm tra được</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Micro Trust Citation */}
-            <div className="talent-portal-trust-note">
-              <span className="material-symbols-outlined" style={{ fontSize: '17px', color: '#0d9488' }}>verified</span>
-              <span>Điểm phản ánh bằng chứng trong CV, không đo năng lực tuyệt đối.</span>
-            </div>
-          </div>
-
-          {/* RIGHT COLUMN: Fluid Refraction Prism Liquid Glass Authentication Card */}
-          <div style={{ width: '100%', maxWidth: '450px', flexShrink: 0 }}>
-            <div className="talent-glass-card" style={{
-              borderRadius: '2rem',
-              padding: '2rem',
-              width: '100%',
-              overflow: 'hidden',
-              boxShadow: '0 20px 60px -15px rgba(24, 24, 27, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.7)'
-            }}>
-              <div className="talent-glass-caustic" />
-              <div style={{ position: 'relative', zIndex: 10 }}>
-                {/* Portal Identity Header */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingBottom: '1.25rem',
-                  marginBottom: '1.25rem',
-                  borderBottom: '1px solid rgba(0, 0, 0, 0.08)'
-                }}>
-                  <div>
-                    <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono, monospace)', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#0d9488', fontWeight: 700, display: 'block' }}>
-                      Đăng nhập nội bộ
-                    </span>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#18181b', letterSpacing: '-0.02em', marginTop: '2px' }}>
-                      Đăng nhập Không gian
-                    </h2>
-                  </div>
-                  <div className="talent-glass-pill" style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#18181b',
-                    padding: 0,
-                    border: '1px solid rgba(255, 255, 255, 0.8)'
-                  }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>lock_open</span>
-                  </div>
-                </div>
-
-                {loginError && (
-                  <div style={{
-                    backgroundColor: '#fff1f2',
-                    border: '1px solid #fecdd3',
-                    color: '#be123c',
-                    padding: '0.65rem 0.85rem',
-                    borderRadius: '0.75rem',
-                    marginBottom: '0.85rem',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem'
-                  }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>error</span>
-                    <span>{loginError}</span>
-                  </div>
-                )}
-
-                {/* Form */}
-                <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: '#18181b', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Tên đăng nhập nội bộ</span>
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <span className="material-symbols-outlined" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '17px', color: '#52525b', pointerEvents: 'none' }}>alternate_email</span>
-                      <input
-                        style={{
-                          width: '100%',
-                          paddingLeft: '38px',
-                          paddingRight: '14px',
-                          paddingTop: '10px',
-                          paddingBottom: '10px',
-                          borderRadius: '1rem',
-                          border: '1px solid rgba(255, 255, 255, 0.85)',
-                          backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                          backdropFilter: 'blur(12px)',
-                          color: '#18181b',
-                          fontSize: '13px',
-                          outline: 'none',
-                          boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.05)'
-                        }}
-                        placeholder="Tên tài khoản do quản trị viên cấp"
-                        value={loginName}
-                        onChange={(e) => setLoginName(e.target.value)}
-                        required
-                        type="text"
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
-                      <label style={{ fontWeight: 600, color: '#18181b' }}>Mật khẩu</label>
-                    </div>
-                    <div style={{ position: 'relative' }}>
-                      <span className="material-symbols-outlined" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '17px', color: '#52525b', pointerEvents: 'none' }}>key</span>
-                      <input
-                        style={{
-                          width: '100%',
-                          paddingLeft: '38px',
-                          paddingRight: '38px',
-                          paddingTop: '10px',
-                          paddingBottom: '10px',
-                          borderRadius: '1rem',
-                          border: '1px solid rgba(255, 255, 255, 0.85)',
-                          backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                          backdropFilter: 'blur(12px)',
-                          color: '#18181b',
-                          fontSize: '13px',
-                          outline: 'none',
-                          boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.05)'
-                        }}
-                        id="passwordInput"
-                        placeholder="••••••••••••"
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#52525b', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>{showPassword ? 'visibility_off' : 'visibility'}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Submit Button with Viscous Liquid Gloss */}
-                  <button
-                    className="talent-glass-btn"
-                    type="submit"
-                    disabled={submitting}
-                  >
-                    <span>{submitting ? 'Đang xác thực thông tin...' : 'Đăng nhập vào Hệ thống'}</span>
-                    <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>arrow_forward</span>
-                  </button>
-                </form>
-
-                {/* Account support */}
-                <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(0, 0, 0, 0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
-                  <span style={{ color: '#52525b' }}>Cần tài khoản hoặc đặt lại mật khẩu? Liên hệ quản trị viên nội bộ.</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-
-        {/* ================= MINIMAL EDITORIAL FOOTER ================= */}
-        <footer className="talent-portal-footer">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontWeight: 700, color: '#18181b' }}>TalentScreen AI</span>
-            <span>•</span>
-            <span>Trợ lý sàng lọc CV nội bộ • Bản thử nghiệm</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <a href="/retention" style={{ color: '#52525b', textDecoration: 'none' }}>Chính sách Bảo mật</a>
-            <span style={{ color: '#d4d4d8' }}>•</span>
-            <a href="/sandbox" style={{ color: '#52525b', textDecoration: 'none' }}>Hướng dẫn sử dụng</a>
-            <span style={{ color: '#d4d4d8' }}>•</span>
-            <span>HR quyết định cuối cùng</span>
-          </div>
-        </footer>
-
-      </div>
-    );
-  }
-
-  return <DashboardHome user={user} requisitions={requisitions} onLogout={handleLogout} error={dashboardError} onReload={loadRequisitions} />;
+        <p className="auth-story-footer"><IconShield size={16} /> Đánh giá tham khảo. Con người quyết định.</p>
+      </section>
+      <section className="auth-form-panel" aria-labelledby="login-title">
+        <div className="auth-panel-meta">Cổng nhân sự <span>Tiếng Việt</span></div>
+        <div className="auth-form-wrap">
+          <span className="eyebrow">Không gian làm việc</span><h2 id="login-title">Chào mừng trở lại</h2><p className="auth-form-subtitle">Đăng nhập để tiếp tục công việc tuyển dụng.</p>
+          {checkingAuth ? <p className="notice" role="status">Đang kiểm tra phiên đăng nhập…</p> : <form onSubmit={handleLogin}>
+            {loginError && <div className="notice notice-error" role="alert"><IconAlertTriangle size={17} /><span>{loginError}</span></div>}
+            <div className="form-group"><label className="form-label" htmlFor="login-name">Tên đăng nhập</label><input id="login-name" name="username" className="form-input" autoComplete="username" placeholder="Tên đăng nhập nội bộ" value={loginName} onChange={event => setLoginName(event.target.value)} required disabled={submitting} /></div>
+            <div className="form-group"><label className="form-label" htmlFor="login-password">Mật khẩu</label><div className="auth-password"><input id="login-password" name="password" className="form-input" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Nhập mật khẩu" value={password} onChange={event => setPassword(event.target.value)} required disabled={submitting} /><button type="button" aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Ẩn" : "Hiện"}</button></div></div>
+            <button className="btn btn-primary auth-submit" type="submit" disabled={submitting || !loginName.trim() || !password}>{submitting ? "Đang đăng nhập…" : "Đăng nhập"}<IconArrowRight size={18} /></button>
+            <p className="auth-account-help">Cần cấp tài khoản hoặc đặt lại mật khẩu?<br />Liên hệ quản trị viên nội bộ.</p>
+          </form>}
+        </div>
+        <p className="auth-form-footer"><IconShield size={15} /> Dữ liệu ứng viên được truy cập theo phân quyền.</p>
+      </section>
+    </main>
+  );
 }

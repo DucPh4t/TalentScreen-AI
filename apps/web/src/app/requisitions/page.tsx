@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, RequisitionItem } from '../../lib/api';
 import {
@@ -21,6 +21,16 @@ export default function RequisitionsPage() {
   const [requisitions, setRequisitions] = useState<RequisitionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const createDialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = createDialogRef.current;
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (showModal && dialog && !dialog.open) dialog.showModal();
+    return () => {
+      if (dialog?.open) dialog.close();
+      if (showModal && returnFocus?.isConnected) returnFocus.focus();
+    };
+  }, [showModal]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'draft' | 'paused'>('all');
 
@@ -92,15 +102,15 @@ export default function RequisitionsPage() {
             <span>/</span>
             <span style={{ color: 'var(--text-primary)' }}>Đợt tuyển dụng</span>
           </div>
-          <h1 className="page-title">Quản Lý Đợt Tuyển Dụng</h1>
+          <h1 className="page-title">Đợt tuyển dụng</h1>
           <p className="page-subtitle">
-            Cấu hình vị trí kỹ thuật, bản mô tả công việc (JD), và bộ tiêu chí Rubric 6 chuẩn mực độc lập
+            Quản lý JD, tiêu chí đánh giá và hồ sơ ứng viên theo từng vị trí.
           </p>
         </div>
 
         <button onClick={() => setShowModal(true)} className="btn btn-primary">
           <IconPlus size={16} />
-          <span>Tạo Đợt Tuyển Dụng Mới</span>
+          <span>Tạo đợt tuyển dụng</span>
         </button>
       </div>
 
@@ -167,7 +177,8 @@ export default function RequisitionsPage() {
             type="text"
             className="form-input"
             style={{ paddingLeft: '2.4rem' }}
-            placeholder="Tìm theo vị trí tuyển dụng…"
+            aria-label="Tìm vị trí tuyển dụng"
+            placeholder="Tìm vị trí tuyển dụng…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -183,7 +194,7 @@ export default function RequisitionsPage() {
         ) : filteredRequisitions.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '4rem 1.5rem' }}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(56, 189, 248, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem auto' }}>
-              <IconFileText size={24} color="#38bdf8" />
+              <IconFileText size={24} color="var(--accent-teal)" />
             </div>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.4rem' }}>Không tìm thấy đợt tuyển dụng nào</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
@@ -191,19 +202,19 @@ export default function RequisitionsPage() {
             </p>
             <button onClick={() => setShowModal(true)} className="btn btn-primary">
               <IconPlus size={16} />
-              <span>Tạo Đợt Mới</span>
+              <span>Tạo đợt đầu tiên</span>
             </button>
           </div>
         ) : (
           <div className="table-wrapper" style={{ border: 'none' }}>
-            <table className="data-table">
+            <table className="data-table requisitions-table">
               <thead>
                 <tr>
-                  <th>Vị Trí Tuyển Dụng</th>
-                  <th>Trạng Thái</th>
-                  <th>Tiêu Chuẩn Rubric</th>
-                  <th>Cập Nhật Lúc</th>
-                  <th style={{ textAlign: 'right' }}>Thao Tác</th>
+                  <th scope="col">Vị Trí Tuyển Dụng</th>
+                  <th scope="col">Trạng Thái</th>
+                  <th scope="col">Tiêu Chuẩn Rubric</th>
+                  <th scope="col">Cập Nhật Lúc</th>
+                  <th scope="col" style={{ textAlign: 'right' }}>Thao Tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -215,7 +226,7 @@ export default function RequisitionsPage() {
                         UUID: {req.id}
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Trạng thái">
                       <span className={`badge badge-${req.status}`}>
                         {req.status === 'open' && 'ĐANG MỞ'}
                         {req.status === 'draft' && 'BẢN NHÁP'}
@@ -223,20 +234,20 @@ export default function RequisitionsPage() {
                         {req.status === 'closed' && 'ĐÃ ĐÓNG'}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Tiêu chí">
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.825rem' }}>
-                        <IconSparkles size={14} color="#38bdf8" />
+                        <IconSparkles size={14} color="var(--accent-teal)" />
                         <span style={{ color: req.current_rubric_version_id ? 'var(--emerald-text)' : 'var(--text-muted)' }}>
                           {req.current_rubric_version_id ? 'Rubric đã gắn' : 'Chưa có rubric được duyệt'}
                         </span>
                       </div>
                     </td>
-                    <td style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
+                    <td data-label="Cập nhật" style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
                       {new Date(req.updated_at).toLocaleString('vi-VN')}
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <Link href={`/requisitions/${req.id}`} className="btn btn-secondary btn-sm">
-                        <span>Workspace Hồ Sơ</span>
+                        <span>Mở đợt</span>
                         <IconArrowRight size={14} />
                       </Link>
                     </td>
@@ -248,22 +259,22 @@ export default function RequisitionsPage() {
         )}
       </div>
 
-      {/* Modal: Tạo Đợt Tuyển Dụng Mới */}
+      {/* Modal: Tạo đợt tuyển dụng */}
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-card">
+        <dialog ref={createDialogRef} className="modal-card requisition-dialog" aria-labelledby="create-requisition-title" onCancel={() => setShowModal(false)}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <div style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <IconPlus size={18} color="#fff" />
                 </div>
                 <div>
-                  <h2 className="modal-title">Tạo Đợt Tuyển Dụng Mới</h2>
+                  <h2 className="modal-title" id="create-requisition-title">Tạo đợt tuyển dụng</h2>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Khởi tạo bản mô tả công việc (JD) và bộ tiêu chí Rubric</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowModal(false)}
+                aria-label="Đóng tạo đợt tuyển dụng"
                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
               >
                 <IconX size={20} />
@@ -347,12 +358,11 @@ export default function RequisitionsPage() {
                   className="btn btn-primary"
                   disabled={submitting}
                 >
-                  {submitting ? 'Đang tạo…' : 'Xác Nhận Tạo Đợt Tuyển Dụng'}
+                  {submitting ? 'Đang tạo…' : 'Tạo đợt tuyển dụng'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </dialog>
       )}
     </div>
   );

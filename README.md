@@ -6,9 +6,9 @@ TalentScreen AI is a portfolio MVP that helps an HR team organize applications, 
 
 > **Status: sandbox / portfolio prototype.** The workflow and software tests are implemented, but representative hiring data, independent HR/IT evaluation, model-quality and fairness validation, and production operations have not been signed off. Do not use its scores to make decisions about real applicants.
 
-![HR reviews a redacted synthetic candidate CV](docs/reviews/app-cv-demo-2026-10-05.png)
+![TalentScreen AI HR workspace with synthetic recruitment data](docs/reviews/hr-redesign-desktop-2026-10-07.jpg)
 
-<p align="center"><sub>Demo screenshot uses fictional synthetic CV content; it does not show a real applicant.</sub></p>
+<p align="center"><sub>The redesigned HR workspace uses fictional synthetic recruitment data in this screenshot; it does not show real applicants.</sub></p>
 
 ## Why this project
 
@@ -41,7 +41,7 @@ flowchart LR
 - **Evidence-based assessment:** evaluate each approved rubric criterion, cite exact source spans from the reviewed CV, and flag missing or conflicting evidence. Missing evidence remains unscored rather than being treated as zero. Backend code validates the response and calculates weighted scores and advisory recommendations.
 - **Human review and decisions:** HR can review the evidence, record a justified score revision, compare candidates in a requisition matrix, and record the final outcome. The AI output is advisory; the app does not automatically advance or reject an applicant.
 - **Interview support:** create role question banks, generate candidate-specific follow-up questions from evidence gaps, and record interviewer scorecards separately from the AI CV assessment.
-- **Training and operations:** use synthetic sandbox scenarios and onboarding guidance; inspect retention and deletion-request workflows, job status, provider usage, and operational readiness.
+- **Operations:** inspect retention and deletion-request workflows, job status, provider usage, and operational readiness. The HR workspace focuses on recruitment queues, applications, evidence, and decisions; legacy `/sandbox` bookmarks redirect to the dashboard.
 
 ## AI providers and retrieval
 
