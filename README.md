@@ -36,27 +36,18 @@ TalentScreen AI makes those requirements explicit: each assessment records the a
 ## Architecture
 
 ```mermaid
-flowchart TD
-    HR[HR reviewer] --> WEB[Next.js workspace]
-    WEB --> API[FastAPI API]
-    API --> DB[(PostgreSQL + pgvector)]
-    API --> FILES[Private document storage]
-    API --> QUEUE[Database-backed job queue]
-    QUEUE --> WORKER[CV and assessment worker]
-    WORKER --> PARSE[Extract text and redact identifiers]
-    PARSE --> APPROVAL[HR approves redacted CV]
-    APPROVAL --> RAG[Criterion-scoped evidence retrieval]
-    RAG --> AGENT[Bounded LangGraph assessment]
-    AGENT <--> PRIMARY[DeepSeek or local mock]
-    AGENT --> VALIDATE[Schema and exact citation validation]
-    VALIDATE --> SCORE[Deterministic scoring policy]
-    SCORE --> REVIEW[Evidence review and HR decision]
-    REVIEW --> WEB
-    WORKER -. optional shadow scoring .-> JEV[Jev structured scorer]
-    RAG --> DB
+flowchart LR
+    WEB["Next.js<br/>HR workspace"] <--> API["FastAPI<br/>Workflow API"]
+    API --> DB[("PostgreSQL + pgvector<br/>Jobs, versions, spans, audit")]
+    API --> FILES["Private<br/>document storage"]
+    DB <--> WORKER["Background worker<br/>CV + hybrid RAG + agent"]
+    WORKER <--> PRIMARY["DeepSeek<br/>or local mock"]
+    WORKER -. optional .-> JEV["Jev<br/>shadow scorer"]
 ```
 
 The backend is a **modular monolith** with a separate worker process. PostgreSQL stores workflow state, document provenance, vectors, invocation ledgers, and audit events. This keeps local setup manageable while separating slow document/model work from HTTP requests.
+
+The worker validates schemas and source citations before applying deterministic scoring; final HR decisions stay in the authenticated workflow.
 
 Read the [architecture walkthrough](docs/architecture.md) for data boundaries, state transitions, and implementation trade-offs.
 
