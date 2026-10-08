@@ -184,6 +184,8 @@ Restart the backend and worker after changing configuration. See [`.env.example`
 
 Compare **full text / dense / hybrid / hybrid + bounded agent**, using common immutable prompt/schema, frozen input versions, local E5 on Apple MPS, explicit status/numeric denominators, paired cluster bootstrap, and metadata-only LangSmith correlation. All reference labels are synthetic design expectations, not independent HR agreement.
 
+**Long-context stress collection v2:** 60 additional synthetic fixtures are frozen, with exact inherited reference citations and Git source provenance. A predeclared six-case E5 diagnostic completed 24/24 mock service runs using the conservative context bound; initial sufficient-group coverage was 0% dense, 6.7% hybrid and 40% truncated full-text. The earlier verified-byte-bound attempt stopped before a dense model call because its reconstructed JSON request exceeded 65 KB. These failures identify ranking and serialized-packing work still needed; neither experiment measures live agent recovery or real hiring accuracy. [V2 results and full limits](docs/evaluation/ai-benchmark-v2-results-2026-10-09.md).
+
 [Measured results and limitations](docs/evaluation/ai-benchmark-results-2026-10-09.md) · [Reproduce the experiments](docs/evaluation/ai-benchmark-reproducibility.md) · [Aggregate JSON](docs/evaluation/ai-benchmark-results-2026-10-09.json)
 
 ```bash

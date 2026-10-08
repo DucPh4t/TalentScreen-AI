@@ -135,4 +135,4 @@ Manual LangSmith spans export fixed enums/counters, experiment UUID, hashed case
 - Setup/model device is separate from per-run timing; indexing is reused for the same approved snapshot. One shuffled run cannot establish stable latency differences or model variance. Queue time/invoice are unmeasured.
 - Mock validates pipeline contracts; model accuracy, human agreement and live tool-recovery remain unmeasured. Real E5 retrieval can be measured independently of the mock LLM.
 
-See [measured results](ai-benchmark-results-2026-10-09.md) for the exact observed scope and limits.
+See [v1 measured results](ai-benchmark-results-2026-10-09.md) and [v2 long-context stress results](ai-benchmark-v2-results-2026-10-09.md) for exact observed scopes and limits.
