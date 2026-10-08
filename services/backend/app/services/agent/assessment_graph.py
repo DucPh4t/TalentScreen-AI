@@ -32,6 +32,7 @@ from app.services.llm.orchestrator import execute_bounded_llm_call
 from app.services.llm.provider import BaseLLMProvider
 from app.services.llm.types import CompletionRequest, ToolCall
 
+from app.services.assessment.diagnostics import AssessmentDiagnostics, safe_record, measured, measure_stage, inspect_raw_output
 from app.services.assessment.policy import AssessmentExecutionPolicy, load_execution_policy
 
 MAX_AGENT_TOOL_EXECUTIONS = 2
@@ -166,6 +167,7 @@ def _null_unretrieved_criteria(
     "agent_prompt_version": args["run"].snapshot.get("agent_prompt_version"),
     "assessment_prompt_version": args["run"].snapshot.get("assessment_prompt_version"),
 }, result_metadata=lambda result: result.trace)
+@measured("graph")
 async def run_assessment_agent(
     *,
     db: AsyncSession,
@@ -175,6 +177,7 @@ async def run_assessment_agent(
     provider_override: BaseLLMProvider | None = None,
     focus_criterion_ids: list[str] | None = None,
     execution_policy: AssessmentExecutionPolicy | None = None,
+    diagnostics: AssessmentDiagnostics | None = None,
 ) -> AgentExecutionResult:
     """Run a transient, no-checkpointer graph with at most two validated tool executions."""
     expected_criterion_ids = {criterion.criterion_id for criterion in rubric_criteria}
@@ -530,7 +533,10 @@ async def run_assessment_agent(
             "trace": trace,
         }
 
-    async def validate_node(current: _AgentState) -> dict[str, Any]:
+    async def _validate_node(current: _AgentState) -> dict[str, Any]:
+        safe_record(diagnostics, "record_validation", **inspect_raw_output(
+            current.get("current_content") or "", current["source_spans"],
+            current["allowed_span_ids_by_criterion"], expected_criterion_ids))
         raw_content = _null_unretrieved_criteria(
             current.get("current_content") or "",
             rubric_criteria,
@@ -555,6 +561,10 @@ async def run_assessment_agent(
                 "messages": messages,
                 "validation_errors": [str(error)[:240] for error in exc.errors[:5]],
             }
+
+    async def validate_node(current: _AgentState) -> dict[str, Any]:
+        with measure_stage(diagnostics, "validation_scoring"):
+            return await _validate_node(current)
 
     async def prepare_repair_node(current: _AgentState) -> dict[str, Any]:
         errors = "; ".join(current["validation_errors"][:5])
@@ -610,6 +620,8 @@ async def run_assessment_agent(
     workflow.add_edge("repair", "model")
     compiled = workflow.compile()
     final_state = await compiled.ainvoke(state, config={"recursion_limit": 12})
+    safe_record(diagnostics, "record_final_evidence", {
+        criterion_id: sorted(ids) for criterion_id, ids in final_state["allowed_span_ids_by_criterion"].items()})
     trace = final_state["trace"]
     if final_state.get("error_code"):
         raise AgentExecutionError(final_state["error_code"], trace)

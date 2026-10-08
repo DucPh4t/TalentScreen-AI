@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.observability import observed
+from app.services.assessment.diagnostics import AssessmentDiagnostics, safe_record
 
 from app.db.models.document import RetrievalChunk, SourceSpan
 from app.services.embedding import EMBEDDING_CONFIG_ID, embed_texts
@@ -237,6 +238,7 @@ async def build_hybrid_assessment_pack(
     max_evidence_chars: int = 24000,
     *,
     channels: frozenset[str] = frozenset({"dense", "lexical"}),
+    diagnostics: AssessmentDiagnostics | None = None,
 ) -> dict[str, Any]:
     """Build a bounded, section-diverse evidence pack for the approved rubric."""
     if max_evidence_chars < 0:
@@ -313,6 +315,9 @@ async def build_hybrid_assessment_pack(
                 "rrf_score": round(match.rrf_score, 5),
             })
         criterion_retrievals[criterion_id] = criterion_results
+        safe_record(diagnostics, "record_retrieval", criterion_id,
+                    [match.span_ids for match in candidates],
+                    [span_id for match in criterion_results for span_id in match["span_ids"]])
 
     ordered_selected = sorted(
         selected_matches_by_id.values(),

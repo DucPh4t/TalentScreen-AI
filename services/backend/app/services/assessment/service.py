@@ -60,6 +60,7 @@ from app.services.jev import JevDecisionResponse, JevQuestion, get_jev_provider
 from app.services.embedding import index_sanitized_version
 from app.services.retrieval import build_hybrid_assessment_pack
 
+from app.services.assessment.diagnostics import AssessmentDiagnostics, safe_record, measured, measure_stage
 from app.services.assessment.policy import AssessmentExecutionPolicy, load_execution_policy
 
 logger = logging.getLogger(__name__)
@@ -371,10 +372,13 @@ async def create_assessment_run(
 
 
 @observed("assessment", input_metadata=lambda args: {"job_id": str(args["job_id"])})
+@measured("total")
 async def execute_assessment_job(
     db: AsyncSession,
     job_id: uuid.UUID,
     provider_override: Optional[BaseLLMProvider] = None,
+    *,
+    diagnostics: AssessmentDiagnostics | None = None,
 ) -> None:
     """Execute an assessment against the prompt and retrieval strategy frozen at enqueue."""
     now = datetime.now(timezone.utc)
@@ -468,28 +472,31 @@ async def execute_assessment_job(
         try:
             # The sanitized version is immutable after approval; indexing is
             # keyed by its pinned embedding config and safe to retry.
-            await index_sanitized_version(db, run.sanitized_version_id)
+            with measure_stage(diagnostics, "indexing"):
+                await index_sanitized_version(db, run.sanitized_version_id)
             focus_ids = set(run.snapshot.get("focus_criterion_ids") or [])
             ordered_criteria = sorted(
                 rubric_criteria,
                 key=lambda criterion: (criterion.criterion_id not in focus_ids, criterion.criterion_id),
             )
-            pack = await build_hybrid_assessment_pack(
-                db,
-                run.sanitized_version_id,
-                [
-                    {
-                        "id": criterion.criterion_id,
-                        "name": criterion.label_vi,
-                        "description": criterion.description_vi,
-                        "anchors": criterion.anchors,
-                        "bilingual_terms": criterion.bilingual_terms,
-                    }
-                    for criterion in ordered_criteria
-                ],
-                **({"channels": execution_policy.channels, "max_evidence_chars": execution_policy.max_evidence_chars}
-                   if execution_policy else {}),
-            )
+            with measure_stage(diagnostics, "retrieval"):
+                pack = await build_hybrid_assessment_pack(
+                    db,
+                    run.sanitized_version_id,
+                    [
+                        {
+                            "id": criterion.criterion_id,
+                            "name": criterion.label_vi,
+                            "description": criterion.description_vi,
+                            "anchors": criterion.anchors,
+                            "bilingual_terms": criterion.bilingual_terms,
+                        }
+                        for criterion in ordered_criteria
+                    ],
+                    **({"diagnostics": diagnostics} if diagnostics else {}),
+                    **({"channels": execution_policy.channels, "max_evidence_chars": execution_policy.max_evidence_chars}
+                       if execution_policy else {}),
+                )
         except Exception as exc:
             # Model or retrieval errors never silently widen context to the full
             # CV. HR gets a failed run and can use the baseline/manual path.
@@ -566,6 +573,10 @@ async def execute_assessment_job(
             criterion.criterion_id: set(source_span_ids)
             for criterion in rubric_criteria
         }
+    safe_record(diagnostics, "record_initial_evidence", {
+        criterion_id: sorted(ids) for criterion_id, ids in evidence_ids_by_criterion.items()})
+    safe_record(diagnostics, "record_final_evidence", {
+        criterion_id: sorted(ids) for criterion_id, ids in evidence_ids_by_criterion.items()})
     agent_pack = {
         "strategy": retrieval_strategy,
         "criteria_retrieval_map": {
@@ -598,6 +609,7 @@ async def execute_assessment_job(
                 provider_override=provider_override,
                 focus_criterion_ids=run.snapshot.get("focus_criterion_ids"),
                 **({"execution_policy": execution_policy} if execution_policy else {}),
+                **({"diagnostics": diagnostics} if diagnostics else {}),
             )
             validated_output = agent_result.output
             span_registry = agent_result.source_spans
@@ -747,12 +759,13 @@ async def execute_assessment_job(
         if "core_minimum_scores" in cfg and isinstance(cfg["core_minimum_scores"], dict):
             core_mins = cfg["core_minimum_scores"]
 
-    obs_score, coverage, comp_score, rec, reasons = calculate_deterministic_scores(
-        evaluations=validated_output.criteria,
-        rubric_weights=weights_by_id,
-        threshold=threshold_val,
-        core_minimum_scores=core_mins,
-    )
+    with measure_stage(diagnostics, "validation_scoring"):
+        obs_score, coverage, comp_score, rec, reasons = calculate_deterministic_scores(
+            evaluations=validated_output.criteria,
+            rubric_weights=weights_by_id,
+            threshold=threshold_val,
+            core_minimum_scores=core_mins,
+        )
 
     run.observed_score = float(obs_score) if obs_score is not None else None
     run.coverage = float(coverage)
