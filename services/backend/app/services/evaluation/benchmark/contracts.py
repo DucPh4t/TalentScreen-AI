@@ -182,3 +182,24 @@ class RunManifest(Contract):
     financial: dict = Field(default_factory=dict)
     counts: dict = Field(default_factory=dict)
     stop_code: str | None = None
+
+class MetricsReport(Contract):
+    schema_version: Literal['ai-benchmark-metrics.v1'] = 'ai-benchmark-metrics.v1'
+    experiment_id: uuid.UUID
+    status: str
+    origin: Literal['synthetic_design_expected'] = 'synthetic_design_expected'
+    model_quality: str
+    profiles: dict[str,dict]
+    paired: tuple[dict,...]
+    slices: dict
+    case_metrics: tuple[dict,...]
+    failures: tuple[dict,...]
+    provenance: dict
+    financial: dict
+    journal: dict = Field(default_factory=dict)
+    limitations: tuple[str,...] = (
+        'Synthetic design expectations are not independent HR labels or protected holdout.',
+        'Template overlap and single repetitions limit generalization; all comparisons are exploratory.',
+        'Unmeasured values are null; provider invoice and queue latency are unavailable.',
+        'Mock validates contracts only; it cannot measure model quality.',
+        'No global winner or autonomous hiring readiness is inferred.')

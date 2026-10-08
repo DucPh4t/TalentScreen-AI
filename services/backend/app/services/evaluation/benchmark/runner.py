@@ -207,7 +207,7 @@ def main(argv=None):
         args=parser().parse_args(argv)
         if args.command=='report':
             if not (args.input/'manifest.json').is_file():raise ValueError('REPORT_INPUT_MISSING')
-            from .reports import generate_reports
+            from .reporting import generate_reports
             generate_reports(args.input,args.output,args.dataset)
             return 0
         inputs=load_inputs(args.dataset)
