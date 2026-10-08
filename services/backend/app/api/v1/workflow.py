@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.db.models import (
     Application, AssessmentRun, Candidate, CriterionAssessment, Document,
-    Requisition, RequisitionMembership, RubricCriterion, SanitizedVersion, Job,
+    Requisition, RequisitionMembership, RubricCriterion, SanitizedVersion, Job, Decision, InterviewRound, InterviewScorecard, RubricVersion,
 )
 from app.domain.authorization import AuthenticatedContext, get_current_context
 from app.domain.enums import AccountRole, MembershipRole, SanitizedVersionStatus, JobStatus, JobType
@@ -63,7 +63,16 @@ async def review_queue(
     reading_ids = {job.target_id for job in jobs if job.type == JobType.INGEST_DOCUMENT}
     analyzing_ids = {job.target_id for job in jobs if job.type == JobType.ASSESS_APPLICATION}
     duplicates = await duplicate_signals(db, requisition, ctx)
+    decision_ids = [a.current_decision_id for a, _, _, _ in rows if a.current_decision_id]
+    decisions = {d.id: d for d in (await db.execute(select(Decision).where(Decision.id.in_(decision_ids)))).scalars()} if decision_ids else {}
 
+    current_rubric = await db.get(RubricVersion,requisition.current_rubric_version_id) if requisition.current_rubric_version_id else None
+    rubric_current = bool(current_rubric and current_rubric.jd_version_id == requisition.current_jd_version_id)
+    application_ids = [a.id for a, _, _, _ in rows]
+    rounds = (await db.execute(select(InterviewRound).where(InterviewRound.application_id.in_(application_ids)).order_by(InterviewRound.round_no))).scalars().all() if application_ids else []
+    latest_rounds = {row.application_id: row for row in rounds if row.conclusions}
+    cards = (await db.execute(select(InterviewScorecard.id,InterviewScorecard.row_version).where(InterviewScorecard.application_id.in_(application_ids),InterviewScorecard.status == "finalized"))).all() if application_ids else []
+    card_versions = dict(cards)
     now = datetime.now(timezone.utc)
     result = []
     for application, label, document, version in rows:
@@ -86,7 +95,10 @@ async def review_queue(
             requisition.current_rubric_version_id,
             bool(document and document.id in reading_ids),
             application.id in analyzing_ids,
+            decisions.get(application.current_decision_id),
+            rubric_current,
         )
+        current_stage = _interview_stage(current_stage,application,requisition,latest_rounds.get(application.id),card_versions)
 
         # SLA Alert (QW4): Check if application is awaiting HR decision for more than 72 hours
         hours_in_stage = 0.0
@@ -190,8 +202,11 @@ def _fresh(application, run, rubric_id):
     return bool(run and run.application_generation == application.generation and run.document_id == application.current_document_id
                 and run.sanitized_version_id == application.current_sanitized_version_id and run.rubric_version_id == rubric_id)
 
-def _stage(application, document, version, run, rubric_id, reading=False, analyzing=False):
-    if application.current_decision_id: return "completed"
+def _stage(application, document, version, run, rubric_id, reading=False, analyzing=False, decision=None, rubric_current=True):
+    if not rubric_current and document: return "needs_rubric"
+    if decision and decision.document_id == application.current_document_id and decision.source_snapshot.get("application_generation") == application.generation and decision.rubric_version_id == rubric_id:
+        outcome = decision.outcome.value
+        return {"request_information": "waiting_information", "advance": "awaiting_interview", "not_advance": "not_advanced"}[outcome]
     if not document: return "awaiting_upload"
     if reading: return "reading"
     if document.ingestion_status == "failed": return "error"
@@ -203,6 +218,14 @@ def _stage(application, document, version, run, rubric_id, reading=False, analyz
         if run.status == "succeeded": return "awaiting_decision"
         if run.status == "failed": return "error"
     return "ready_for_ai"
+
+def _interview_stage(stage, application, requisition, plan, card_versions):
+    if stage != "awaiting_interview" or not plan or not plan.conclusions: return stage
+    from app.services.hr_workflow import interview_source_hash
+    conclusion = plan.conclusions[-1]
+    if plan.source_hash != interview_source_hash(application,requisition) or conclusion.get("decision_id") != str(application.current_decision_id): return stage
+    if any(card_versions.get(uuid.UUID(ref["id"])) != ref["row_version"] for ref in conclusion["scorecards"]): return "interview_review"
+    return {"advance":"awaiting_interview","request_information":"waiting_information","not_advance":"not_advanced","propose_hire":"interview_completed"}[conclusion["outcome"]]
 
 @router.get("/applications/{id}/progress")
 async def application_progress(id: uuid.UUID, db: AsyncSession = Depends(get_db), ctx: AuthenticatedContext = Depends(get_current_context)):
@@ -216,8 +239,14 @@ async def application_progress(id: uuid.UUID, db: AsyncSession = Depends(get_db)
     pending = (await db.execute(select(Job).where(Job.target_id.in_([application.id] + ([document.id] if document else [])),
         Job.status.in_([JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.RETRY_WAIT]), Job.type.in_([JobType.INGEST_DOCUMENT, JobType.ASSESS_APPLICATION])))).scalars().all()
     analyzing = any(job.type == JobType.ASSESS_APPLICATION for job in pending)
+    decision = await db.get(Decision, application.current_decision_id) if application.current_decision_id else None
+    rubric = await db.get(RubricVersion,requisition.current_rubric_version_id) if requisition.current_rubric_version_id else None
     stage = _stage(application, document, version, run, requisition.current_rubric_version_id,
-                   any(job.type == JobType.INGEST_DOCUMENT for job in pending), analyzing)
+                   any(job.type == JobType.INGEST_DOCUMENT for job in pending), analyzing, decision,
+                   bool(rubric and rubric.jd_version_id == requisition.current_jd_version_id))
+    plan = (await db.execute(select(InterviewRound).where(InterviewRound.application_id == application.id, InterviewRound.conclusions != []).order_by(InterviewRound.round_no.desc()).limit(1))).scalar_one_or_none()
+    card_versions = dict((await db.execute(select(InterviewScorecard.id,InterviewScorecard.row_version).where(InterviewScorecard.application_id == application.id,InterviewScorecard.status == "finalized"))).all()) if plan and plan.conclusions else {}
+    stage = _interview_stage(stage,application,requisition,plan,card_versions)
 
     history_count, duplicate_reasons = (await duplicate_signals(db, requisition, ctx)).get(application.id, (1, []))
 

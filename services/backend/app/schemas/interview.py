@@ -137,6 +137,7 @@ class InterviewScorecardUpsertRequest(BaseModel):
 
     round_no: int = Field(ge=1, le=10)
     expected_version: int = Field(ge=0)
+    submit: bool = False
     interview_draft_id: Optional[uuid.UUID] = None
     criteria: list[InterviewScorecardCriterionSchema] = Field(min_length=2, max_length=12)
 
@@ -165,3 +166,11 @@ class InterviewScorecardResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     finalized_at: Optional[datetime] = None
+    amendment_history: list[dict] = Field(default_factory=list)
+
+
+class InterviewScorecardAmendRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=1)
+    criteria: list[InterviewScorecardCriterionSchema] = Field(min_length=2, max_length=12)
+    change_reason: str = Field(min_length=20, max_length=1000)

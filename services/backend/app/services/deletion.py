@@ -366,6 +366,11 @@ async def execute_purge_job(
             pass
 
     # 5. Database Records Purge
+    # Application tombstones are retained; CASCADE on application deletion alone
+    # cannot erase the new review/interview records.
+    from app.db.models import InterviewRound, ReviewProgress
+    for model in (InterviewRound, ReviewProgress):
+        await db.execute(model.__table__.delete().where(model.application_id.in_(target_app_ids)))
     # Delete child records explicitly to guarantee zero orphaned data
     if run_ids:
         # Delete Evidence and Criteria
@@ -389,7 +394,7 @@ async def execute_purge_job(
 
     if draft_ids:
         await db.execute(
-            InterviewRevision.__table__.delete().where(InterviewRevision.draft_id.in_(draft_ids))
+            InterviewRevision.__table__.delete().where(InterviewRevision.interview_draft_id.in_(draft_ids))
         )
         await db.execute(
             InterviewDraft.__table__.delete().where(InterviewDraft.id.in_(draft_ids))
@@ -407,10 +412,10 @@ async def execute_purge_job(
         )
         scorecards_purged = purge_scorecards.rowcount or 0
         await db.execute(
-            ReviewAttestation.__table__.delete().where(ReviewAttestation.application_id.in_(target_app_ids))
+            Decision.__table__.delete().where(Decision.application_id.in_(target_app_ids))
         )
         await db.execute(
-            Decision.__table__.delete().where(Decision.application_id.in_(target_app_ids))
+            ReviewAttestation.__table__.delete().where(ReviewAttestation.application_id.in_(target_app_ids))
         )
         await db.execute(
             HRRevision.__table__.delete().where(HRRevision.application_id.in_(target_app_ids))

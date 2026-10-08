@@ -599,6 +599,14 @@ export const api = {
     });
   },
 
+  async getReviewProgress(applicationId:string):Promise<any> { return apiRequest(`/applications/${applicationId}/review-progress`); },
+  async saveReviewProgress(applicationId:string,payload:any):Promise<any> { return apiRequest(`/applications/${applicationId}/review-progress`,{method:"PUT",body:JSON.stringify(payload)}); },
+  async recordScreeningDecision(applicationId:string,payload:any):Promise<any> { return apiRequest(`/applications/${applicationId}/screening-decision`,{method:"POST",body:JSON.stringify(payload)}); },
+  async getInterviewRound(applicationId:string,round:number):Promise<any> { return apiRequest(`/applications/${applicationId}/interview-rounds/${round}`); },
+  async saveInterviewRound(applicationId:string,round:number,payload:any):Promise<any> { return apiRequest(`/applications/${applicationId}/interview-rounds/${round}`,{method:"PUT",body:JSON.stringify(payload)}); },
+  async concludeInterviewRound(applicationId:string,round:number,payload:any):Promise<any> { return apiRequest(`/applications/${applicationId}/interview-rounds/${round}/conclusions`,{method:"POST",body:JSON.stringify(payload)}); },
+  async amendInterviewScorecard(cardId:string,payload:any):Promise<any> { return apiRequest(`/interview-scorecards/${cardId}/amend`,{method:"POST",body:JSON.stringify(payload)}); },
+
   async createReviewAttestation(applicationId: string, payload: any): Promise<any> {
     return apiRequest<any>(`/applications/${applicationId}/review-attestations`, {
       method: "POST",

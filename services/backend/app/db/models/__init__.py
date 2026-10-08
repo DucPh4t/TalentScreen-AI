@@ -99,3 +99,5 @@ __all__ = [
     "AuditEvent",
     "DeletionRequest",
 ]
+
+from app.db.models.hr_workflow import ReviewProgress, InterviewRound

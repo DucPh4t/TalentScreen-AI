@@ -210,3 +210,12 @@ async def get_interview_draft_revisions(
 ):
     """List historical follow-up revisions for an interview draft."""
     return await list_interview_revisions(db, id, ctx)
+
+
+from app.schemas.interview import InterviewScorecardAmendRequest
+from app.services.interview_scorecard import amend_interview_scorecard
+
+@router.post("/interview-scorecards/{id}/amend", response_model=InterviewScorecardResponse)
+async def post_amend_scorecard(id: uuid.UUID, payload: InterviewScorecardAmendRequest,
+    db: AsyncSession = Depends(get_db), ctx: AuthenticatedContext = Depends(get_current_context)):
+    return await amend_interview_scorecard(db, id, payload, ctx)

@@ -29,38 +29,60 @@ from app.services.sanitizer import residual_contact_types
 logger = logging.getLogger(__name__)
 
 
-def _compose_invitation_email(requisition_title: str, candidate_label: str) -> tuple[str, str]:
-    subject = f"[TalentScreen] Thư mời tham gia phỏng vấn chuyên môn — Vị trí {requisition_title} ({candidate_label})"
-    body = f"""Kính gửi Ứng viên {candidate_label},
+def _compose_invitation_email(requisition_title: str, candidate_label: str, preparation=None) -> tuple[str, str]:
+    from zoneinfo import ZoneInfo
+    schedule = "[Lịch chưa được xác nhận]"
+    if preparation and preparation.get("starts_at"):
+        start = datetime.fromisoformat(preparation["starts_at"]).astimezone(ZoneInfo("Asia/Ho_Chi_Minh"))
+        channel = {"online": "Trực tuyến", "onsite": "Trực tiếp", "phone": "Điện thoại"}[preparation["channel"]]
+        schedule = f"Thời gian: {start:%H:%M, %d/%m/%Y} (giờ Việt Nam)\nThời lượng: {preparation['duration_minutes']} phút\nHình thức: {channel}\nĐịa điểm / cách tham gia: {preparation.get('meeting_location', '')}"
+    return f"[TalentScreen] Mời phỏng vấn — {requisition_title}", f"""Chào bạn,
 
-Bộ phận Tuyển dụng trân trọng cảm ơn bạn đã quan tâm và ứng tuyển cho vị trí {requisition_title}.
+Cảm ơn bạn đã ứng tuyển vị trí {requisition_title}.
+Chúng tôi trân trọng mời bạn tham gia buổi trao đổi để tìm hiểu thêm về kinh nghiệm và mức độ phù hợp với vị trí.
 
-Qua vòng rà soát hồ sơ năng lực chuyên môn và đối chiếu tiêu chuẩn kỹ thuật của vị trí, chúng tôi đánh giá cao kinh nghiệm thực tế cùng nền tảng chuyên môn của bạn. Ban tuyển dụng trân trọng kính mời bạn tham gia Vòng phỏng vấn chuyên môn (Technical Interview).
+{schedule}
 
-Thông tin chi tiết về buổi trao đổi:
-• Hình thức: Phỏng vấn trực tuyến (Google Meet / MS Teams) hoặc trực tiếp tại văn phòng
-• Thời lượng dự kiến: 45 – 60 phút
-• Thành phần tham dự: Tech Lead / Hiring Manager và Chuyên viên Tuyển dụng
-• Nội dung chính:
-  - Trao đổi sâu về các dự án thực tế và các giải pháp kiến trúc bạn đã triển khai
-  - Thảo luận về phương pháp giải quyết vấn đề kỹ thuật và môi trường làm việc
-  - Lắng nghe những kỳ vọng và định hướng phát triển của bạn
-
-Khung giờ đề xuất (vui lòng chọn 1 khung giờ thuận tiện nhất):
-  [ ] Lựa chọn 1: 09:30 - 10:30, [Ngày làm việc tới]
-  [ ] Lựa chọn 2: 14:30 - 15:30, [Ngày làm việc tới]
-  [ ] Khung giờ khác phù hợp với lịch của bạn: [Vui lòng phản hồi]
-
-Bạn vui lòng phản hồi lại email này trước 17:00 ngày [Ngày xác nhận] để chúng tôi hoàn tất lịch hẹn và gửi thư mời lịch kèm đường dẫn phỏng vấn.
-
-Nếu có bất kỳ câu hỏi nào cần giải đáp thêm, bạn đừng ngần ngại phản hồi trực tiếp qua email này.
-
-Chúc bạn một ngày làm việc hiệu quả và nhiều niềm vui!
+Bạn vui lòng phản hồi để xác nhận tham gia hoặc đề xuất thời gian thuận tiện khác.
 
 Trân trọng,
-Bộ phận Tuyển dụng & Đội ngũ Kỹ thuật
-TalentScreen AI"""
-    return subject, body
+Bộ phận Tuyển dụng"""
+
+async def _invitation_plan(db, application):
+    from app.db.models import InterviewRound
+    from app.services.hr_workflow import source
+    rows = list((await db.execute(select(InterviewRound).where(InterviewRound.application_id == application.id)
+        .order_by(InterviewRound.round_no.desc()))).scalars())
+    source_hash, _ = await source(db, application)
+    # A completed round is never a new invitation. A next-round invitation
+    # also requires the previous human conclusion to authorize continuation.
+    current = [row for row in rows if row.source_hash == source_hash]
+    if not current or current[0].conclusions:
+        return None
+    prior = next((row.conclusions[-1] for row in current if row.conclusions), None)
+    if prior:
+        from app.db.models import InterviewScorecard
+        refs = prior["scorecards"]
+        versions = dict((await db.execute(select(InterviewScorecard.id, InterviewScorecard.row_version).where(
+            InterviewScorecard.id.in_([uuid.UUID(ref["id"]) for ref in refs]), InterviewScorecard.status == "finalized"))).all())
+        if (prior.get("decision_id") != str(application.current_decision_id) or prior["outcome"] != "advance"
+            or any(versions.get(uuid.UUID(ref["id"])) != ref["row_version"] for ref in refs)):
+            return None
+    return current[0]
+
+
+def usable_participation_details(preparation):
+    from urllib.parse import urlsplit
+    text = preparation.get("meeting_location", "").strip()
+    if not text or re.search(r"\b(?:tbd|tba|pending|placeholder)\b|sẽ gửi|gửi.*sau|chưa.*(?:có|xác nhận)|đang cập nhật|\[[^\]]+\]", text, re.I):
+        return False
+    channel = preparation.get("channel")
+    if channel == "online":
+        url = urlsplit(text)
+        return url.scheme in {"http", "https"} and bool(url.hostname and "." in url.hostname) and not url.username and not url.password
+    if channel == "phone":
+        return bool(re.fullmatch(r"\+?[\d ()-]{8,25}", text)) and len(re.sub(r"\D", "", text)) >= 8
+    return channel == "onsite" and len(text) >= 6
 
 
 def _compose_clarification_email(
@@ -232,7 +254,11 @@ async def get_or_generate_email_draft(db: AsyncSession, application_id: uuid.UUI
                     if label and (criterion.missing_information or criterion.score is None):
                         clarification_points.append(f"Bạn có thể chia sẻ một ví dụ thực tế thể hiện năng lực {label} không?")
     composer = {"interview_invitation": _compose_invitation_email, "rejection_polite": _compose_rejection_email}.get(template)
-    subject, body = composer(requisition.title, candidate.public_label) if composer else _compose_clarification_email(
+    invitation = await _invitation_plan(db, application) if template == "interview_invitation" else None
+    if template == "interview_invitation":
+        subject, body = _compose_invitation_email(requisition.title, candidate.public_label, invitation.preparation if invitation else None)
+    else:
+        subject, body = composer(requisition.title, candidate.public_label) if composer else _compose_clarification_email(
         requisition.title, candidate.public_label, clarification_points)
     _validate_content(subject, body)
     latest = await _latest(db, application_id)
@@ -241,7 +267,7 @@ async def get_or_generate_email_draft(db: AsyncSession, application_id: uuid.UUI
     draft = EmailDraft(id=uuid.uuid4(), application_id=application_id, decision_id=decision.id if decision else None,
         version_no=(latest.version_no + 1 if latest else 1), source_snapshot_hash=_snapshot(application, requisition),
         created_by=ctx.user.id, template_type=template, subject=subject, body=body, status="draft",
-        variables={"generator": "template-v2", "clarification_count": len(clarification_points)}, created_at=now, updated_at=now)
+        variables={"generator": "template-v2", "clarification_count": len(clarification_points), "round_id": str(invitation.id) if invitation else None, "round_version": invitation.row_version if invitation else None}, created_at=now, updated_at=now)
     db.add(draft)
     await db.flush()
     await record_audit_event(db, actor_id=ctx.user.id, action="email_draft.created", entity_type="email_draft", entity_id=draft.id,
@@ -280,6 +306,13 @@ async def update_email_draft(db: AsyncSession, application_id: uuid.UUID, subjec
             version = await db.get(SanitizedVersion, application.current_sanitized_version_id) if application.current_sanitized_version_id else None
             if not version or version.status != SanitizedVersionStatus.APPROVED:
                 raise HTTPException(409, "EMAIL_DECISION_STALE: Nguồn đánh giá đã bị thu hồi hoặc chưa duyệt.")
+        if previous.template_type == "interview_invitation":
+            invitation = await _invitation_plan(db, application)
+            prep = invitation.preparation if invitation else {}
+            if not prep.get("starts_at") or not usable_participation_details(prep) or re.search(r"\[[^\]\n]+\]", body_text):
+                raise HTTPException(409, "EMAIL_SCHEDULE_REQUIRED: Cần lịch và địa điểm/link thực tế; xóa placeholder trước khi duyệt thư mời.")
+            if previous.variables.get("round_id") != str(invitation.id) or previous.variables.get("round_version") != invitation.row_version:
+                raise HTTPException(409, "EMAIL_SCHEDULE_STALE: Kế hoạch phỏng vấn đã đổi; tạo lại thư theo lịch hiện hành.")
     now = datetime.now(timezone.utc)
     await invalidate_email_drafts(db, [application_id])
     draft = EmailDraft(id=uuid.uuid4(), application_id=application_id, decision_id=previous.decision_id,

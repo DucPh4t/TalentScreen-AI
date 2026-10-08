@@ -273,6 +273,7 @@ async def setup_interview_test_context(session, sample_docx_cv):
     )
     session.add(run)
     await session.flush()
+    app_obj.current_assessment_run_id = run.id
 
     for cid in CriterionId:
         ca = CriterionAssessment(

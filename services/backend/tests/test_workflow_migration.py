@@ -31,4 +31,4 @@ async def test_workflow_migration_round_trip_preserves_content_but_retires_legac
         assert [draft.version_no for draft in drafts] == [1, 2]
         assert drafts[-1].body == body
         assert all(draft.status == "invalidated" and draft.approved_by is None and draft.source_snapshot_hash is None for draft in drafts)
-        assert (await session.execute(text("SELECT version_num FROM alembic_version"))).scalar_one() == "b8c2d41a9e06"
+        assert (await session.execute(text("SELECT version_num FROM alembic_version"))).scalar_one() == "0c84e9d57a62"

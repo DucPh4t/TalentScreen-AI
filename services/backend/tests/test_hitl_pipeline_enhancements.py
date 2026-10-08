@@ -166,7 +166,8 @@ async def test_email_draft_lifecycle_and_privacy_safety(test_session_factory, sa
         assert res.status_code == 200, res.text
         data = res.json()
         assert data["template_type"] == "interview_invitation"
-        assert "Thư mời tham gia phỏng vấn chuyên môn" in data["subject"]
+        assert "Mời phỏng vấn" in data["subject"]
+        assert "[Lịch chưa được xác nhận]" in data["body"]
         assert "85.0" not in data["body"], "Internal score must NOT leak into candidate email!"
         assert "3/4" not in data["body"], "Internal anchor score must NOT leak into candidate email!"
 

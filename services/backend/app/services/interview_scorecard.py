@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.db.models import (
     Application,
     InterviewDraft,
+    InterviewRound,
     InterviewScorecard,
     Requisition,
     RubricCriterion,
@@ -57,6 +58,7 @@ def _scorecard_response(
         or snapshot.get("document_id") != str(application.current_document_id)
         or snapshot.get("sanitized_version_id") != str(application.current_sanitized_version_id)
         or snapshot.get("rubric_version_id") != str(requisition.current_rubric_version_id)
+        or snapshot.get("jd_version_id") != str(requisition.current_jd_version_id)
     )
     return InterviewScorecardResponse(
         id=card.id,
@@ -74,6 +76,7 @@ def _scorecard_response(
         created_at=card.created_at,
         updated_at=card.updated_at,
         finalized_at=card.finalized_at,
+        amendment_history=card.amendment_history or [],
     )
 
 
@@ -91,10 +94,13 @@ async def list_interview_scorecards(
     # draft. The owner can review their own draft and other interviewers'
     # finalized scorecards, preserving independent scoring during the round.
     if membership.membership_role == MembershipRole.OWNER:
-        stmt = stmt.where(or_(
-            InterviewScorecard.interviewer_id == ctx.user.id,
-            InterviewScorecard.status == "finalized",
-        ))
+        own_rounds = set((await db.execute(select(InterviewScorecard.round_no).where(
+            InterviewScorecard.application_id == application_id, InterviewScorecard.interviewer_id == ctx.user.id,
+            InterviewScorecard.status == "finalized"))).scalars())
+        plans = (await db.execute(select(InterviewRound).where(InterviewRound.application_id == application_id))).scalars().all()
+        hidden_rounds = {plan.round_no for plan in plans if str(ctx.user.id) in plan.preparation.get("interviewer_ids", []) and plan.round_no not in own_rounds}
+        stmt = stmt.where(or_(InterviewScorecard.interviewer_id == ctx.user.id,
+            (InterviewScorecard.status == "finalized") & ~InterviewScorecard.round_no.in_(hidden_rounds)))
     else:
         stmt = stmt.where(InterviewScorecard.interviewer_id == ctx.user.id)
     cards = (await db.execute(stmt.order_by(InterviewScorecard.round_no, InterviewScorecard.created_at))).scalars().all()
@@ -110,7 +116,7 @@ async def _validate_current_sources(
     if not requisition or not requisition.current_rubric_version_id:
         raise HTTPException(409, "Cần có rubric hiện hành đã duyệt trước khi ghi nhận phỏng vấn.")
     rubric = await db.get(RubricVersion, requisition.current_rubric_version_id)
-    if not rubric or rubric.status != RubricStatus.APPROVED:
+    if not rubric or rubric.status != RubricStatus.APPROVED or rubric.jd_version_id != requisition.current_jd_version_id:
         raise HTTPException(409, "Rubric hiện hành chưa được duyệt.")
     sanitized = await db.get(SanitizedVersion, application.current_sanitized_version_id) if application.current_sanitized_version_id else None
     if (
@@ -182,15 +188,15 @@ async def upsert_interview_scorecard(
     payload: InterviewScorecardUpsertRequest,
     ctx: AuthenticatedContext,
 ) -> InterviewScorecardResponse:
-    application, _ = await _membership_and_application(db, application_id, ctx, require_open=True)
-    await db.execute(select(Application.id).where(Application.id == application_id).with_for_update())
-    await db.refresh(application)
+    from app.services.hr_workflow import access, validate_focus
+    application, _ = await access(db, application_id, ctx, write=True)
     requisition, rubric, sanitized, criteria, interview_draft = await _validate_current_sources(
         db, application, payload.interview_draft_id
     )
     if len(criteria) < 2:
         raise HTTPException(409, "Rubric cần ít nhất hai tiêu chí để mở scorecard.")
     entries = _validate_entries(payload.criteria, {criterion.criterion_id for criterion in criteria}, require_complete=False)
+    await validate_focus(db, application, payload.round_no, ctx.user.id, entries, require_complete=False)
     stmt = select(InterviewScorecard).where(
         InterviewScorecard.application_id == application_id,
         InterviewScorecard.interviewer_id == ctx.user.id,
@@ -218,6 +224,7 @@ async def upsert_interview_scorecard(
         "document_id": str(application.current_document_id),
         "sanitized_version_id": str(sanitized.id),
         "rubric_version_id": str(rubric.id),
+        "jd_version_id": str(requisition.current_jd_version_id),
         "interview_draft_id": str(interview_draft.id) if interview_draft else None,
         "round_no": payload.round_no,
         "interviewer_id": str(ctx.user.id),
@@ -248,9 +255,17 @@ async def upsert_interview_scorecard(
         card.snapshot_hash = snapshot_hash
         card.row_version += 1
         card.updated_at = now
+    if payload.submit:
+        _validate_entries(payload.criteria, {criterion.criterion_id for criterion in criteria}, require_complete=True)
+        if not any(entry["outcome"] == "assessed" for entry in entries):
+            raise HTTPException(422, "Cần đánh giá ít nhất một tiêu chí trước khi nộp phiếu.")
+        from app.services.hr_workflow import validate_focus
+        await validate_focus(db, application, payload.round_no, ctx.user.id, entries)
+        card.status = "finalized"
+        card.finalized_at = now
     await db.flush()
     await record_audit_event(
-        db, actor_id=ctx.user.id, action="interview_scorecard.saved",
+        db, actor_id=ctx.user.id, action="interview_scorecard.submitted" if payload.submit else "interview_scorecard.saved",
         entity_type="interview_scorecard", entity_id=card.id,
         requisition_id=application.requisition_id,
         before_version=before, after_version=card.row_version,
@@ -266,14 +281,15 @@ async def finalize_interview_scorecard(
     payload: InterviewScorecardFinalizeRequest,
     ctx: AuthenticatedContext,
 ) -> InterviewScorecardResponse:
-    card = (await db.execute(
-        select(InterviewScorecard).where(InterviewScorecard.id == scorecard_id).with_for_update()
-    )).scalar_one_or_none()
-    if card is None:
+    initial = await db.get(InterviewScorecard, scorecard_id)
+    if initial is None:
         raise HTTPException(404, "Không tìm thấy phiếu phỏng vấn.")
+    from app.services.hr_workflow import access
+    application, _ = await access(db, initial.application_id, ctx, write=True)
+    card = (await db.execute(select(InterviewScorecard).where(InterviewScorecard.id == scorecard_id)
+        .with_for_update().execution_options(populate_existing=True))).scalar_one()
     if card.interviewer_id != ctx.user.id:
         raise HTTPException(403, "Chỉ người phỏng vấn tạo phiếu mới được nộp và khóa phiếu.")
-    application, _ = await _membership_and_application(db, card.application_id, ctx, require_open=True)
     requisition, rubric, _, criteria, _ = await _validate_current_sources(db, application, card.interview_draft_id)
     if card.status != "draft":
         raise HTTPException(409, "Phiếu phỏng vấn đã được nộp và khóa.")
@@ -288,6 +304,8 @@ async def finalize_interview_scorecard(
     _validate_entries(complete_entries, {criterion.criterion_id for criterion in criteria}, require_complete=True)
     if not any(entry.outcome == "assessed" for entry in complete_entries):
         raise HTTPException(422, "Cần đánh giá ít nhất một tiêu chí trước khi nộp phiếu.")
+    from app.services.hr_workflow import validate_focus
+    await validate_focus(db, application, card.round_no, ctx.user.id, [entry.model_dump() for entry in complete_entries])
     before = card.row_version
     card.status = "finalized"
     card.finalized_at = datetime.now(timezone.utc)
@@ -303,3 +321,31 @@ async def finalize_interview_scorecard(
                        "scored_count": sum(entry.outcome == "assessed" for entry in complete_entries)},
     )
     return _scorecard_response(card, application, requisition, ctx.user.display_name)
+
+
+async def amend_interview_scorecard(db, scorecard_id, payload, ctx):
+    initial = await db.get(InterviewScorecard, scorecard_id)
+    if not initial: raise HTTPException(404, "Không tìm thấy phiếu.")
+    from app.services.hr_workflow import access, validate_focus
+    application, _ = await access(db, initial.application_id, ctx, write=True)
+    card = (await db.execute(select(InterviewScorecard).where(InterviewScorecard.id == scorecard_id).with_for_update().execution_options(populate_existing=True))).scalar_one()
+    if card.interviewer_id != ctx.user.id: raise HTTPException(403, "Chỉ tác giả được điều chỉnh phiếu.")
+    if card.status != "finalized" or card.row_version != payload.expected_version or _scorecard_response(card, application, application.requisition).is_stale:
+        raise HTTPException(409, "SCORECARD_VERSION_CONFLICT: Phiếu đã đổi hoặc dùng nguồn cũ.")
+    _, _, _, criteria, _ = await _validate_current_sources(db, application, card.interview_draft_id)
+    entries = _validate_entries(payload.criteria, {c.criterion_id for c in criteria}, require_complete=True)
+    if not any(e["outcome"] == "assessed" for e in entries): raise HTTPException(422, "Cần ít nhất một tiêu chí đã đánh giá.")
+    await validate_focus(db, application, card.round_no, ctx.user.id, entries)
+    if scan_forbidden_criteria(payload.change_reason): raise HTTPException(422, "Lý do sửa phải theo năng lực.")
+    now = datetime.now(timezone.utc)
+    card.amendment_history = [*(card.amendment_history or []), {"row_version": card.row_version, "criteria": card.criteria_payload,
+        "changed_by": str(ctx.user.id), "changed_at": now.isoformat(), "change_reason": payload.change_reason.strip()}]
+    card.criteria_payload = entries
+    card.row_version += 1
+    card.updated_at = now
+    await db.flush()
+    from app.services.email_draft import invalidate_email_drafts
+    await invalidate_email_drafts(db, [application.id])
+    await record_audit_event(db, actor_id=ctx.user.id, action="interview_scorecard.amended", entity_type="interview_scorecard", entity_id=card.id,
+        requisition_id=application.requisition_id, safe_metadata={"round_no": card.round_no, "row_version": card.row_version})
+    return _scorecard_response(card, application, application.requisition, ctx.user.display_name)

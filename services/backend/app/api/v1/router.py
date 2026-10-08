@@ -61,3 +61,6 @@ async def diagnostic_config():
         "status": "ok",
         "config": settings.safe_dict(),
     }
+
+from app.api.v1.hr_workflow import router as hr_workflow_router
+router.include_router(hr_workflow_router)

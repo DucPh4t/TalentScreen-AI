@@ -396,6 +396,19 @@ async def approve_question_bank(
 # ---------------- Interview Draft Domain Methods ---------------- #
 
 
+async def _current_effective_result(db, application, requisition):
+    revision_id = (await db.execute(select(HRRevision.id).where(
+        HRRevision.application_id == application.id, HRRevision.status == "finalized",
+        HRRevision.application_generation == application.generation,
+        HRRevision.document_id == application.current_document_id,
+        HRRevision.sanitized_version_id == application.current_sanitized_version_id,
+        HRRevision.rubric_version_id == requisition.current_rubric_version_id)
+        .order_by(HRRevision.revision_no.desc()).limit(1))).scalar_one_or_none()
+    if revision_id:
+        return ("hr_revision", str(revision_id))
+    return ("assessment_run", str(application.current_assessment_run_id))
+
+
 async def create_interview_draft_job(
     db: AsyncSession,
     application_id: uuid.UUID,
@@ -429,11 +442,14 @@ async def create_interview_draft_job(
         RubricVersion.status == RubricStatus.APPROVED,
     )
     rubric = (await db.execute(stmt_rubric)).scalar_one_or_none()
-    if not rubric or (requisition and requisition.current_rubric_version_id != rubric.id):
+    if not rubric or (requisition and (requisition.current_rubric_version_id != rubric.id or rubric.jd_version_id != requisition.current_jd_version_id)):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="RUBRIC_MISMATCH: Cần có rubric hiện hành đã duyệt cho vị trí trước khi tạo câu hỏi phỏng vấn.",
         )
+
+    if await _current_effective_result(db, app_obj, requisition) != (payload.effective_result.kind, str(payload.effective_result.id)):
+        raise HTTPException(409, "EFFECTIVE_RESULT_CHANGED: Chọn đánh giá hiện hành để tạo câu hỏi.")
 
     # Invariant: Verify effective assessment / HR revision
     if payload.effective_result.kind == "assessment_run":
@@ -445,7 +461,7 @@ async def create_interview_draft_job(
         run = (await db.execute(stmt_run)).scalar_one_or_none()
         if not run:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Kết quả đánh giá không hợp lệ.")
-        if run.document_id != app_obj.current_document_id or run.sanitized_version_id != app_obj.current_sanitized_version_id:
+        if run.document_id != app_obj.current_document_id or run.sanitized_version_id != app_obj.current_sanitized_version_id or run.rubric_version_id != rubric.id or run.application_generation != app_obj.generation:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="RUN_STALE: Đánh giá này dựa trên tài liệu cũ.")
     else:
         stmt_rev = select(HRRevision).where(
@@ -456,7 +472,7 @@ async def create_interview_draft_job(
         rev = (await db.execute(stmt_rev)).scalar_one_or_none()
         if not rev:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bản đánh giá HR chưa được hoàn tất.")
-        if rev.document_id != app_obj.current_document_id or rev.sanitized_version_id != app_obj.current_sanitized_version_id:
+        if rev.document_id != app_obj.current_document_id or rev.sanitized_version_id != app_obj.current_sanitized_version_id or rev.rubric_version_id != rubric.id or rev.application_generation != app_obj.generation:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="REVISION_STALE: Bản đánh giá dựa trên tài liệu cũ.")
 
     now = datetime.now(timezone.utc)
@@ -467,12 +483,18 @@ async def create_interview_draft_job(
         "effective_result_kind": payload.effective_result.kind,
         "effective_result_id": str(payload.effective_result.id),
         "question_bank_id": str(bank.id) if bank else None,
+        "jd_version_id": str(rubric.jd_version_id),
         "rubric_version_id": str(rubric.id),
         "document_id": str(app_obj.current_document_id),
         "sanitized_version_id": str(app_obj.current_sanitized_version_id),
         "application_generation": app_obj.generation,
     }
     source_hash = hashlib.sha256(json.dumps(source_snapshot, sort_keys=True).encode("utf-8")).hexdigest()
+    existing = (await db.execute(select(InterviewDraft.id).where(InterviewDraft.application_id == application_id,
+        InterviewDraft.source_hash == source_hash, InterviewDraft.status.in_(["queued", "running", "succeeded"]))
+        .order_by(InterviewDraft.created_at.desc()).limit(1))).scalar_one_or_none()
+    if existing:
+        return await get_interview_draft_detail(db, existing, ctx)
 
     job = Job(
         id=job_id,
@@ -748,6 +770,18 @@ async def get_interview_draft_detail(
         is_stale = True
         stale_reasons.append("QUESTION_BANK_SUPERSEDED: Ngân hàng câu hỏi cốt lõi đã có phiên bản mới.")
 
+    requisition = await db.get(Requisition, app_obj.requisition_id)
+    rubric = await db.get(RubricVersion, uuid.UUID(snapshot["rubric_version_id"])) if snapshot.get("rubric_version_id") else None
+    if not requisition or not rubric or requisition.current_rubric_version_id != rubric.id or rubric.jd_version_id != requisition.current_jd_version_id:
+        is_stale = True
+        stale_reasons.append("RUBRIC_OR_JD_CHANGED: JD hoặc tiêu chí đã đổi.")
+    if requisition and await _current_effective_result(db, app_obj, requisition) != (snapshot.get("effective_result_kind"), snapshot.get("effective_result_id")):
+        is_stale = True
+        stale_reasons.append("EFFECTIVE_RESULT_CHANGED: Đánh giá AI hoặc bản điều chỉnh HR đã đổi.")
+    if snapshot.get("application_generation") != app_obj.generation:
+        is_stale = True
+        stale_reasons.append("GENERATION_CHANGED: Phiên bản hồ sơ đã đổi.")
+
     return InterviewDraftResponse(
         id=draft.id,
         application_id=draft.application_id,
@@ -800,7 +834,14 @@ async def create_interview_revision(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bộ câu hỏi phỏng vấn không tồn tại.")
 
     from app.services.decision import _verify_application_and_membership
-    await _verify_application_and_membership(db, draft.application_id, ctx)
+    await _verify_application_and_membership(db, draft.application_id, ctx, require_owner=True)
+    detail = await get_interview_draft_detail(db, draft.id, ctx)
+    if detail.is_stale or detail.status != "succeeded":
+        raise HTTPException(409, "INTERVIEW_STALE: Chỉ sửa câu hỏi hiện hành đã tạo thành công.")
+    valid_ids = set((await db.execute(select(RubricCriterion.criterion_id).where(RubricCriterion.rubric_version_id == uuid.UUID(draft.source_snapshot["rubric_version_id"])))).scalars())
+    valid_spans = set((await db.execute(select(SourceSpan.span_id).where(SourceSpan.sanitized_version_id == uuid.UUID(draft.source_snapshot["sanitized_version_id"])))).scalars())
+    if any(q.criterion_id not in valid_ids or not set(q.source_span_ids).issubset(valid_spans) for q in payload.followups):
+        raise HTTPException(422, "INVALID_EVIDENCE: Câu hỏi phải tham chiếu tiêu chí và đoạn CV hợp lệ.")
 
     # Optimistic concurrency check
     if payload.expected_previous_revision_id != draft.current_revision_id:

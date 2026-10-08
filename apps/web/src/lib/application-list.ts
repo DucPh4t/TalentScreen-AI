@@ -31,6 +31,12 @@ export function applicationNextTask(application: ApplicationItem, queue: ReviewQ
     ready_for_ai: { label: 'Chuẩn bị phân tích', hint: 'Đối chiếu CV với rubric hiện hành.', tone: 'neutral' },
     analyzing: { label: 'Đang phân tích', hint: 'Kết quả sẽ cập nhật khi xử lý xong.', tone: 'neutral' },
     awaiting_decision: { label: 'HR cần quyết định', hint: 'Đọc bằng chứng và thông tin cần làm rõ.', tone: 'accent' },
+    needs_rubric:{label:'Cập nhật tiêu chí theo JD',hint:'JD đã đổi; cần duyệt lại rubric trước khi đánh giá.',tone:'warning'},
+    interview_review:{label:'Rà soát lại phỏng vấn',hint:'Phiếu đã được điều chỉnh sau kết luận.',tone:'warning'},
+    interview_completed:{label:'Đã có kết luận phỏng vấn',hint:'Xem đề xuất của người phụ trách; chưa phải offer.',tone:'neutral'},
+    waiting_information: {label:'Chờ ứng viên bổ sung',hint:'Theo dõi phản hồi và rà soát lại khi có thông tin mới.',tone:'warning'},
+    awaiting_interview: {label:'Chuẩn bị phỏng vấn',hint:'Chọn trọng tâm, người phỏng vấn và lịch trao đổi.',tone:'accent'},
+    not_advanced: {label:'Không tiếp tục',hint:'Xem kết luận của HR và phản hồi ứng viên.',tone:'neutral'},
     completed: { label: 'Đã ghi nhận quyết định', hint: 'Mở hồ sơ để xem quyết định của HR.', tone: 'neutral' },
     error: { label: 'Kiểm tra lỗi xử lý', hint: 'Mở hồ sơ để xem lỗi và bước khắc phục.', tone: 'danger' },
   };

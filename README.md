@@ -89,10 +89,12 @@ Tools cannot browse the web, send messages, modify records, or record a hiring d
 | Receive applications | Upload PDF/DOCX files individually or in batches; monitor extraction/OCR and scoped duplicate hints from file hashes or local contact fingerprints. Duplicate hints never change capability scores. |
 | Review privacy | Inspect and approve redacted text. Original-document access is role-gated, time-limited, and audited. |
 | Assess evidence | Inspect per-criterion observations, citations, gaps, coverage, and provider status. Approving a CV or replacement rubric queues eligible assessments with snapshot deduplication. |
-| Compare and decide | Compare applications, record justified revisions, and submit the final human decision after required review. |
-| Prepare interviews | Generate candidate-specific follow-ups and record interviewer scorecards separately from CV assessment. |
-| Prepare correspondence | Generate invitation, clarification, or rejection templates; edit and explicitly approve a version attributed to the reviewer. Changed decisions/sources invalidate drafts. No LLM agent or automatic email delivery is used. |
+| Screen applications | Compare applications, persist each reviewer’s criterion checks, and record one justified screening outcome: invite, request information, or do not continue. Superseding a decision keeps its history. |
+| Conduct interviews | Prepare versioned rounds, focus criteria, assigned interviewers and a schedule; edit cited questions, save/submit independent human scorecards, and record a source-bound human conclusion after all assigned cards are submitted. |
+| Prepare correspondence | Edit and explicitly approve screening response templates. Invitations require usable schedule/join details; changed decisions, plans, conclusions or scorecards invalidate drafts. No automatic delivery or offer creation is used. |
 | Manage data | Track retention settings and deletion requests through their processing states. |
+
+See the [HR screening and interview workflow](docs/hr-workflow.md) for the exact sequence, permissions and freshness rules.
 
 The Vietnamese interface uses warm neutral surfaces, black navigation and muted olive accents, with desktop, tablet, and phone layouts. The candidate queue uses a concise desktop table and mobile cards; see [UI verification and screenshots](docs/reviews/2026-10-08-candidate-list-ux.md). Navigation focuses on **Overview / Requisitions / Data & privacy**. Technical execution details are collapsed by default; the old training page redirects to the dashboard.
 
@@ -188,6 +190,8 @@ make test
   --output /tmp/talentscreen-rag-benchmark.json
 ```
 
+**Screening/interview workflow verification, 2026-10-08:** 338 backend tests and 22 frontend tests passed; the production frontend build and isolated migration upgrade/downgrade passed. Browser QA exercised the synthetic screening-to-interview flow, two-window scorecard conflicts, saved scheduling, and 390/820/1440 px layouts. Model calls were mocked; this is workflow evidence rather than proof of hiring accuracy. See the [review and verification ledger](docs/reviews/2026-10-08-hr-interview-workflow-b.md).
+
 **Workflow repair verification, 2026-10-08:** 275 backend tests passed, migration upgrade/downgrade roundtrip passed, and the production frontend build passed. This run uses synthetic fixtures and mocked model calls; see [scope, evidence and remaining issues](docs/reviews/2026-10-08-workflow-repairs.md).
 
 **Local verification, 2026-10-07:** 242 backend tests passed, migrations from an empty database passed, and the production frontend build passed. UI verification covered 320, 390, 820, and 1440 px layouts, authentication, keyboard dialog behavior, the recruitment queue, JD/rubric views, and the candidate workspace. See [verification evidence](docs/verification.md).
@@ -201,7 +205,7 @@ The benchmark reports criterion-scoped Recall@5/10, sufficient-evidence coverage
 | Retrieval/scoring quality against independent HR/IT labels | Not established; representative, protected holdout data is still required. |
 | Live-provider quality, fairness, production SLOs and deletion/restore drills | Not established by the automated suite or synthetic benchmark. |
 
-The committed benchmark is **synthetic harness data**, including visible holdout-shaped fixtures; it is not a protected hiring holdout and its metric values are not production-quality claims. Redaction rules can miss identifiers. Public deployment and use of AI scores for real applicants require the [G1–G7 readiness gates](docs/runbooks/rag-agent-readiness.md). ATS integration, email delivery, scheduling, and dossier export are future work. Correspondence templates are implemented with versioned human approval.
+The committed benchmark is **synthetic harness data**, including visible holdout-shaped fixtures; it is not a protected hiring holdout and its metric values are not production-quality claims. Redaction rules can miss identifiers. Public deployment and use of AI scores for real applicants require the [G1–G7 readiness gates](docs/runbooks/rag-agent-readiness.md). ATS integration, email delivery, calendar synchronization, and dossier export are future work. Local interview scheduling and human interview conclusions are implemented; a proposed hire does not create an offer. Correspondence templates are implemented with versioned human approval.
 
 ## Code walkthrough
 

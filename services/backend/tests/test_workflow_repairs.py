@@ -67,19 +67,19 @@ async def test_duplicate_file_across_new_candidates_is_flagged(test_session_fact
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("stage", ["completed", "ready_for_ai"])
+@pytest.mark.parametrize("stage", ["dangling_decision", "ready_for_ai"])
 async def test_hr_decision_sla_does_not_cover_other_stages(test_session_factory, sample_docx_cv, stage):
     async with test_session_factory() as session:
         ctx = await setup_test_context(session, sample_docx_cv)
         application = await session.get(Application, ctx["app_id"])
         application.received_at = datetime.now(timezone.utc) - timedelta(hours=150)
-        if stage == "completed":
+        if stage == "dangling_decision":
             application.current_decision_id = uuid.uuid4()
         await session.commit()
     async with client_for(ctx) as client:
         response = await client.get(f"/api/v1/requisitions/{ctx['req_id']}/review-queue")
         own = next(item for item in response.json() if item["application_id"] == str(ctx["app_id"]))
-        assert own["workflow_stage"] == stage
+        assert own["workflow_stage"] == "ready_for_ai"
         assert own["sla_breached"] is False
         assert own["hours_in_stage"] == 0
 
@@ -232,6 +232,17 @@ async def manual_decision(client, ctx, outcome="advance", previous=None):
     return decision.json()
 
 
+async def prepare_invitation(client, ctx):
+    from app.domain.enums import CriterionId
+    route = f"/api/v1/applications/{ctx['app_id']}/interview-rounds/1"
+    state = (await client.get(route)).json()
+    result = await client.put(route, json={"source_hash": state["source_hash"], "expected_version": state["row_version"],
+        "label": "Trao đổi chuyên môn", "focus_criterion_ids": [cid.value for cid in CriterionId],
+        "interviewer_ids": [str(ctx["owner"].id)], "starts_at": "2026-10-22T03:00:00+00:00", "duration_minutes": 45,
+        "channel": "online", "meeting_location": "https://meet.example.com/synthetic"})
+    assert result.status_code == 200, result.text
+
+
 @pytest.mark.asyncio
 async def test_email_approval_is_versioned_attributed_and_invalidated_by_actual_decision_api(test_session_factory, sample_docx_cv):
     from app.db.models.email_draft import EmailDraft
@@ -239,6 +250,7 @@ async def test_email_approval_is_versioned_attributed_and_invalidated_by_actual_
         ctx = await setup_test_context(session, sample_docx_cv)
     async with client_for(ctx) as client:
         decision = await manual_decision(client, ctx)
+        await prepare_invitation(client, ctx)
         draft = (await client.post(f"/api/v1/applications/{ctx['app_id']}/email-draft/generate")).json()
         assert draft["template_type"] == "interview_invitation"
         payload = {"draft_id": draft["id"], "expected_version": draft["version_no"], "subject": draft["subject"],
