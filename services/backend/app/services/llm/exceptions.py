@@ -74,3 +74,13 @@ class LLMMalformedJSONError(LLMProviderError):
 class BudgetExceededError(Exception):
     """Raised when request cost exceeds available budget period limit."""
     pass
+
+
+class LLMUsageUnavailableError(LLMProviderError):
+    def __init__(self):super().__init__("Usage unavailable after admission.",error_code="USAGE_UNAVAILABLE")
+
+class LLMModelChangedError(LLMProviderError):
+    def __init__(self):super().__init__("Provider model differs from verified model.",error_code="MODEL_CHANGED")
+
+class LLMUsageBoundError(LLMProviderError):
+    def __init__(self):super().__init__("Reported usage exceeds the admitted bound.",error_code="USAGE_BOUND_EXCEEDED")

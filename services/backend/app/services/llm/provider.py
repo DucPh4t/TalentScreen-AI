@@ -326,6 +326,7 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
             raise LLMMalformedJSONError("DeepSeek response usage is malformed.")
         input_tokens = usage.get("prompt_tokens")
         output_tokens = usage.get("completion_tokens")
+        cached_input_tokens = usage.get("prompt_cache_hit_tokens")
         if any(
             token_count is not None
             and (
@@ -333,9 +334,11 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
                 or isinstance(token_count, bool)
                 or token_count < 0
             )
-            for token_count in (input_tokens, output_tokens)
+            for token_count in (input_tokens, output_tokens, cached_input_tokens)
         ):
             raise LLMMalformedJSONError("DeepSeek response usage is malformed.")
+        if cached_input_tokens is not None and (input_tokens is None or cached_input_tokens > input_tokens):
+            raise LLMMalformedJSONError("DeepSeek cache usage is malformed.")
         provider_req_id = body.get("id")
         reported_model = body.get("model")
 
@@ -376,6 +379,7 @@ class DeepSeekHTTPXProvider(BaseLLMProvider):
             finish_reason=finish_reason,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            cached_input_tokens=cached_input_tokens,
             provider_request_id=provider_req_id,
             latency_ms=elapsed_ms,
             raw_response=body,

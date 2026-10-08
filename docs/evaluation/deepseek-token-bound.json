@@ -1,0 +1,42 @@
+{
+  "schema_version": "deepseek-byte-bound.v1",
+  "verified_at": "2026-10-08",
+  "requested_model": "deepseek-flash",
+  "served_version_documented": "DeepSeek-V4.1-Flash",
+  "context_ceiling_tokens": 1048576,
+  "rate_card_version": "deepseek-2026-09-26-peak",
+  "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+  "usage_source": "https://api-docs.deepseek.com/quick_start/token_usage/",
+  "peak_usd_per_million": {
+    "input_cache_miss": "0.30",
+    "input_cache_hit": "0.006",
+    "output": "1.20"
+  },
+  "tokenizer_repository": "deepseek-ai/DeepSeek-V4.1-Flash",
+  "revision": "2cba9e42aa026125f3ed06c6d98c1db82f7ca027",
+  "artifacts": {
+    "tokenizer.json": "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
+    "encoding.py": "502bdaec8a3fd88ebc24c4721a7038fbe42f2063c664638127056107920035c1",
+    "tokenizer-config.json": "6ac8c8dc065ed118161d02dd532749ae3f52c243deac27872134fae2f50d8547",
+    "pricing.html": "210f102275ccf1a6542f08a3bc9e4b4c7c83278cb74b35217bffa112df6363b2",
+    "usage.html": "08bf766935b9ff92aee592c70bdac0908e3f44f1e3e52e93dd7aeafc9925fd1a"
+  },
+  "byte_bound_proof": "No-op normalizer, isolated splits preserve text, ByteLevel without prefix space maps each input UTF-8 byte to one symbol, BPE merges cannot increase symbol count. Added special tokens have nonempty content; the ByteLevel postprocessor changes offsets only.",
+  "framing_proof": {
+    "official_tools_template_bytes": 983,
+    "schema_separator_allowance_bytes": 512,
+    "message_allowance_bytes": 768,
+    "parameter_allowance_bytes": 480,
+    "call_allowance_bytes": 240,
+    "call_block_allowance_bytes": 192,
+    "tool_result_allowance_bytes": 64,
+    "json_response_format_allowance_bytes": 256,
+    "bos_allowance_bytes": 64,
+    "sum_bytes": 3559,
+    "reserved_tokens": 4096
+  },
+  "request_grammar": "Text-only; at most eight messages, two historical allowlisted tool calls, four total allowed parameters, two tool schemas and 512 schema separators. Enforced before every outbound call.",
+  "maximum_serialized_utf8_bytes": 65536,
+  "maximum_input_tokens_reserved": 69632,
+  "limitations": "Peak-rate token estimates are not provider invoices. The direct API alias is not a pinned weight revision; fresh official model/pricing verification and reported-model consistency are required. If artifacts or bounded grammar are unavailable, use verified context ceiling and reject unaffordable scope."
+}

@@ -55,7 +55,7 @@ from app.services.agent.assessment_graph import AgentExecutionError, run_assessm
 from app.services.audit import record_audit_event
 from app.services.llm.orchestrator import execute_bounded_llm_call
 from app.services.llm.provider import BaseLLMProvider
-from app.services.llm.types import CompletionRequest
+from app.services.llm.types import CompletionRequest, StrictReservationPolicy
 from app.services.jev import JevDecisionResponse, JevQuestion, get_jev_provider
 from app.services.embedding import index_sanitized_version
 from app.services.retrieval import build_hybrid_assessment_pack
@@ -379,6 +379,7 @@ async def execute_assessment_job(
     provider_override: Optional[BaseLLMProvider] = None,
     *,
     diagnostics: AssessmentDiagnostics | None = None,
+    strict_reservation_policy: StrictReservationPolicy | None = None,
 ) -> None:
     """Execute an assessment against the prompt and retrieval strategy frozen at enqueue."""
     now = datetime.now(timezone.utc)
@@ -610,6 +611,7 @@ async def execute_assessment_job(
                 focus_criterion_ids=run.snapshot.get("focus_criterion_ids"),
                 **({"execution_policy": execution_policy} if execution_policy else {}),
                 **({"diagnostics": diagnostics} if diagnostics else {}),
+                **({"strict_reservation_policy": strict_reservation_policy} if strict_reservation_policy else {}),
             )
             validated_output = agent_result.output
             span_registry = agent_result.source_spans

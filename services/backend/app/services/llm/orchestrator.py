@@ -15,15 +15,19 @@ from app.config import get_settings
 from app.services.observability import observed, record_trace_metadata
 from app.db.models import Application, AssessmentRun
 from app.db.models.document import SanitizedVersion
-from app.db.models.ops import LLMInvocation
+from app.db.models.ops import LLMInvocation, BudgetReservation
 from app.domain.enums import BudgetScope, LLMInvocationStatus, SanitizedVersionStatus
 from app.services.llm.cost import (
+    RATE_CARD_VERSION,
     calculate_actual_cost,
     calculate_jev_actual_cost,
     estimate_jev_request_cost,
     estimate_request_cost,
 )
 from app.services.llm.exceptions import (
+    LLMUsageUnavailableError,
+    LLMModelChangedError,
+    LLMUsageBoundError,
     LLMAuthenticationError,
     LLMEmptyResponseError,
     LLMMalformedJSONError,
@@ -34,7 +38,7 @@ from app.services.llm.exceptions import (
     LLMTruncatedError,
     LLMTimeoutError,
 )
-from app.services.llm.ledger import reserve_budget, settle_budget
+from app.services.llm.ledger import reserve_budget, settle_budget, get_or_create_active_budget_period
 from app.services.llm.provider import BaseLLMProvider, get_llm_provider
 from app.services.llm.types import CompletionRequest, CompletionResult
 from app.services.sanitizer import residual_contact_types
@@ -163,7 +167,19 @@ async def execute_bounded_llm_call(
     # Estimate the complete serialized request, including conversation history
     # and JSON tool schemas, rather than only the legacy system/user strings.
     serialized_request = _serialized_request_payload(request)
-    estimated_input_tokens = _estimate_input_tokens(request)
+    strict_policy = request.strict_reservation_policy
+    estimated_input_tokens = strict_policy.input_reservation_tokens(request) if strict_policy else _estimate_input_tokens(request)
+    if strict_policy:
+        if get_settings().APP_ENV != "sandbox":
+            raise PreconditionViolationError("BENCHMARK_REQUIRES_SANDBOX")
+        period = await get_or_create_active_budget_period(db, BudgetScope.DEVELOPMENT, for_update=True)
+        if period.id != strict_policy.budget_period_id or period.limit_usd != strict_policy.cap_usd:
+            raise PreconditionViolationError("BENCHMARK_BUDGET_PERIOD_MISMATCH")
+        pending = await db.scalar(select(BudgetReservation.id).where(
+            BudgetReservation.budget_period_id == period.id,
+            BudgetReservation.status.in_(("reserved", "outcome_unknown"))).limit(1))
+        if pending is not None:
+            raise PreconditionViolationError("BENCHMARK_OUTCOME_PENDING")
     if request.provider == "jev":
         settings = get_settings()
         if settings.JEV_MODE != "shadow" or not settings.JEV_DATA_PROCESSING_APPROVED:
@@ -205,6 +221,7 @@ async def execute_bounded_llm_call(
         model_resolved=request.model,
         request_hash=req_hash,
         cost_reserved=float(estimated_cost),
+        rate_card_version=RATE_CARD_VERSION if request.provider != "jev" else None,
         admitted_at=now,
         created_at=now,
     )
@@ -219,6 +236,13 @@ async def execute_bounded_llm_call(
     try:
         record_trace_metadata({"external_call_count": 1})
         result = await llm.complete(request)
+        if strict_policy:
+            if result.input_tokens is None or result.output_tokens is None:
+                raise LLMUsageUnavailableError()
+            if result.reported_model not in strict_policy.accepted_reported_models:
+                raise LLMModelChangedError()
+            if result.input_tokens > strict_policy.bound.max_input_tokens or result.output_tokens > request.max_output_tokens:
+                raise LLMUsageBoundError()
     except (LLMAuthenticationError, LLMQuotaExhaustedError, LLMModelUnavailableError) as e:
         # Non-retryable configuration errors: zero actual cost if network call was not made/rejected
         call_error = e
@@ -230,7 +254,7 @@ async def execute_bounded_llm_call(
         outcome_unknown = True
     except Exception as e:
         call_error = e
-        outcome_unknown = False
+        outcome_unknown = strict_policy is not None
 
     # 5. Settle cost and persist invocation record in fresh transaction
     finished_now = datetime.now(timezone.utc)
@@ -239,6 +263,10 @@ async def execute_bounded_llm_call(
         stmt_inv = select(LLMInvocation).where(LLMInvocation.id == invocation.id).with_for_update()
         inv_record = (await db.execute(stmt_inv)).scalar_one()
 
+        if result is not None:
+            inv_record.input_tokens = result.input_tokens
+            inv_record.output_tokens = result.output_tokens
+            inv_record.model_resolved = result.reported_model or request.model
         if outcome_unknown:
             inv_record.status = LLMInvocationStatus.OUTCOME_UNKNOWN
             inv_record.finished_at = finished_now
@@ -259,8 +287,9 @@ async def execute_bounded_llm_call(
                 )
             else:
                 actual_cost = calculate_actual_cost(
-                    input_tokens=result.input_tokens or estimated_input_tokens,
-                    output_tokens=result.output_tokens or 0,
+                    input_tokens=result.input_tokens if result.input_tokens is not None else estimated_input_tokens,
+                    output_tokens=result.output_tokens if result.output_tokens is not None else 0,
+                    cached_input_tokens=result.cached_input_tokens or 0,
                     model=request.model,
                 )
 

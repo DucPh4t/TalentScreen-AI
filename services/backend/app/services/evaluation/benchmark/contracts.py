@@ -84,3 +84,39 @@ class RunSelection(Contract):
     seed: int
     concurrency: Literal[1] = 1
     repetitions: Literal[1] = 1
+
+from decimal import Decimal
+
+class InputBound(Contract):
+    strategy: Literal['verified_utf8','model_context']
+    max_input_tokens: StrictInt = Field(gt=0)
+    max_serialized_bytes: StrictInt | None = None
+    framing_allowance: StrictInt | None = None
+    tokenizer_artifact_sha256: str | None = Field(default=None,pattern=r'^[0-9a-f]{64}$')
+    proof_reference: str = Field(min_length=1)
+    rate_card_version: str
+
+    @model_validator(mode='after')
+    def valid_bound(self):
+        if self.strategy=='verified_utf8':
+            if (self.max_serialized_bytes!=65536 or self.framing_allowance!=4096
+                or self.max_input_tokens!=69632 or self.tokenizer_artifact_sha256 is None):
+                raise ValueError('INPUT_BOUND_INVALID')
+        elif any(v is not None for v in (self.max_serialized_bytes,self.framing_allowance,self.tokenizer_artifact_sha256)):
+            raise ValueError('INPUT_BOUND_INVALID')
+        return self
+
+class BudgetCombination(Contract):
+    case_id: str
+    profile: ProfileName
+    max_calls: Literal[4] = 4
+    max_output_tokens: Literal[4096] = 4096
+    upper_usd: Decimal = Field(ge=0)
+
+class BudgetPlan(Contract):
+    model: str
+    bound: InputBound
+    combinations: tuple[BudgetCombination,...]
+    total_upper_usd: Decimal = Field(ge=0)
+    cap_usd: Decimal = Field(gt=0,le=5)
+    admitted: bool

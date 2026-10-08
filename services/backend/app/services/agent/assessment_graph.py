@@ -30,7 +30,7 @@ from app.services.assessment.prompt import (
 from app.services.assessment.validator import AssessmentValidationError, validate_assessment_output
 from app.services.llm.orchestrator import execute_bounded_llm_call
 from app.services.llm.provider import BaseLLMProvider
-from app.services.llm.types import CompletionRequest, ToolCall
+from app.services.llm.types import CompletionRequest, ToolCall, StrictReservationPolicy
 
 from app.services.assessment.diagnostics import AssessmentDiagnostics, safe_record, measured, measure_stage, inspect_raw_output
 from app.services.assessment.policy import AssessmentExecutionPolicy, load_execution_policy
@@ -178,6 +178,7 @@ async def run_assessment_agent(
     focus_criterion_ids: list[str] | None = None,
     execution_policy: AssessmentExecutionPolicy | None = None,
     diagnostics: AssessmentDiagnostics | None = None,
+    strict_reservation_policy: StrictReservationPolicy | None = None,
 ) -> AgentExecutionResult:
     """Run a transient, no-checkpointer graph with at most two validated tool executions."""
     expected_criterion_ids = {criterion.criterion_id for criterion in rubric_criteria}
@@ -318,6 +319,7 @@ async def run_assessment_agent(
         )
         request = CompletionRequest(
             task_kind="assessment",
+            strict_reservation_policy=strict_reservation_policy,
             system_prompt="",
             user_prompt="",
             model=get_settings().DEEPSEEK_MODEL,
