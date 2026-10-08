@@ -2,7 +2,7 @@
 
 import React, { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { api, AssessmentRunData, UserAccount } from "@/lib/api";
+import { api, AssessmentRunData, UserAccount, ExecutiveSummaryData, EmailDraftData } from "@/lib/api";
 import {
   IconShield,
   IconSparkles,
@@ -17,7 +17,9 @@ import {
   IconFileText,
   IconMessageSquare,
   IconSliders,
-  IconRefresh
+  IconRefresh,
+  IconMail,
+  IconCopy
 } from "@/components/Icons";
 import { useToast } from "@/components/Toast";
 import HRRevisionEditor from "@/components/HRRevisionEditor";
@@ -55,6 +57,21 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   const [scorecardCriteria, setScorecardCriteria] = useState<any[]>([]);
   const [scorecardDirty, setScorecardDirty] = useState(false);
   const [savingScorecard, setSavingScorecard] = useState(false);
+
+  // Executive Summary & Email Draft state
+  const [executiveSummary, setExecutiveSummary] = useState<ExecutiveSummaryData | null>(null);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [emailDraft, setEmailDraft] = useState<EmailDraftData | null>(null);
+  const [generatingEmailDraft, setGeneratingEmailDraft] = useState(false);
+  const [selectedEmailTemplate, setSelectedEmailTemplate] = useState<string>("technical_clarification");
+  const [emailContentReviewed, setEmailContentReviewed] = useState(false);
+  const [editingEmailDraft, setEditingEmailDraft] = useState(false);
+  const emailEditingRef = useRef(false);
+  emailEditingRef.current = editingEmailDraft;
+  const [editedEmailSubject, setEditedEmailSubject] = useState("");
+  const [editedEmailBody, setEditedEmailBody] = useState("");
+  const [savingEmailDraft, setSavingEmailDraft] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   const [activeTab, setActiveTab] = useState<"assessment" | "sanitization" | "revision" | "interview">("sanitization");
   const [loading, setLoading] = useState(true);
@@ -142,11 +159,13 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
         app.current_assessment_run_id ? api.getAssessmentRun(id, app.current_assessment_run_id) : Promise.resolve(null),
         api.listHRRevisions(id), api.listDecisions(id), api.getLatestInterviewDraft(id), api.getApplicationProgress(id),
         api.getInterviewScorecards(id),
+        api.getCandidateSummary(id).catch(() => null),
+        api.getEmailDraft(id).catch(() => null),
       ];
       const results = await Promise.allSettled(requests);
       const value = (index: number, fallback: any) => results[index].status === "fulfilled" ? (results[index] as PromiseFulfilledResult<any>).value : fallback;
-      const names = ["tiêu chí", "câu hỏi chuẩn", "CV đã che", "đánh giá AI", "bản điều chỉnh HR", "quyết định", "gợi ý phỏng vấn", "trạng thái xử lý", "phiếu phỏng vấn"];
-      const warnings = results.flatMap((result, index) => result.status === "rejected" && !(index === 2 && String(result.reason.message).includes("403")) ? [`Không tải được ${names[index]}: ${result.reason.message}`] : []);
+      const names = ["tiêu chí", "câu hỏi chuẩn", "CV đã che", "đánh giá AI", "bản điều chỉnh HR", "quyết định", "gợi ý phỏng vấn", "trạng thái xử lý", "phiếu phỏng vấn", "tóm tắt hồ sơ", "bản nháp email"];
+      const warnings = results.flatMap((result, index) => result.status === "rejected" && !(index === 2 && String(result.reason.message).includes("403")) && index < 9 ? [`Không tải được ${names[index]}: ${result.reason.message}`] : []);
       setLoadWarnings(warnings);
       setRubric(value(0, null)); setQuestionBanks(value(1, [])); setSanitizedVersion(value(2, null));
       const run = value(3, null);
@@ -158,6 +177,16 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
       setAssessmentRun(usableRun);
       setHrRevisions(value(4, [])); setDecisions(value(5, [])); setInterviewDraft(value(6, null)); setProgress(value(7, null));
       setInterviewScorecards(value(8, []));
+      setExecutiveSummary(value(9, null));
+      const loadedDraft = value(10, null);
+      // Preserve both text AND its original revision while the editor is dirty.
+      // Otherwise polling could silently rebase stale text onto a newer draft.
+      if (!emailEditingRef.current) setEmailDraft(loadedDraft);
+      if (loadedDraft && !emailEditingRef.current) {
+        setSelectedEmailTemplate(loadedDraft.template_type);
+        setEditedEmailSubject(loadedDraft.subject);
+        setEditedEmailBody(loadedDraft.body);
+      }
       if (!initialTab.current) {
         setActiveTab(value(2, null)?.status !== "approved" ? "sanitization" : value(5, []).length ? "interview" : "assessment");
         initialTab.current = true;
@@ -360,10 +389,96 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
       success("Quyết định tuyển dụng đã được ban hành và ký cam kết thành công!");
       await loadData();
+      try {
+        const freshDraft = await api.generateEmailDraft(id);
+        setEmailDraft(freshDraft);
+        setSelectedEmailTemplate(freshDraft.template_type);
+        setEditedEmailSubject(freshDraft.subject);
+        setEditedEmailBody(freshDraft.body);
+      } catch {
+        // Non-blocking
+      }
     } catch (err: any) {
       toastError(err.message || "Lỗi ban hành quyết định");
     } finally {
       setSubmittingDecision(false);
+    }
+  }
+
+  async function handleGenerateSummary() {
+    setGeneratingSummary(true);
+    try {
+      const summary = await api.generateCandidateSummary(id);
+      setExecutiveSummary(summary);
+      success("Đã phân tích và cập nhật tóm tắt hồ sơ ứng viên thành công!");
+    } catch (err: any) {
+      toastError(err.message || "Lỗi tạo tóm tắt hồ sơ");
+    } finally {
+      setGeneratingSummary(false);
+    }
+  }
+
+  async function handleGenerateEmailDraft(template?: string) {
+    const targetTemplate = template || selectedEmailTemplate;
+    setGeneratingEmailDraft(true);
+    try {
+      const draft = await api.generateEmailDraft(id, targetTemplate);
+      setEmailDraft(draft);
+      setEmailContentReviewed(false);
+      setSelectedEmailTemplate(draft.template_type);
+      setEditedEmailSubject(draft.subject);
+      setEditedEmailBody(draft.body);
+      setEditingEmailDraft(false);
+      success("Đã sinh bản nháp email phản hồi ứng viên!");
+    } catch (err: any) {
+      toastError(err.message || "Lỗi sinh bản nháp email");
+    } finally {
+      setGeneratingEmailDraft(false);
+    }
+  }
+
+  async function handleSaveEmailDraft(approve = false) {
+    if (!emailDraft) return;
+    if (!editedEmailSubject.trim() || !editedEmailBody.trim()) {
+      warning("Tiêu đề và nội dung email không được để trống.");
+      return;
+    }
+    setSavingEmailDraft(true);
+    try {
+      const updated = await api.updateEmailDraft(id, editedEmailSubject, editedEmailBody, emailDraft.id, emailDraft.version_no, approve ? "approved" : "draft", approve && emailContentReviewed);
+      setEmailDraft(updated);
+      setEditingEmailDraft(false);
+      setEmailContentReviewed(false);
+      success(approve ? "Đã ghi nhận người duyệt và phiên bản thư." : "Đã lưu phiên bản nháp mới; thư chưa được duyệt.");
+    } catch (err: any) {
+      toastError(err.message || "Lỗi lưu bản nháp email");
+    } finally {
+      setSavingEmailDraft(false);
+    }
+  }
+
+  async function handleCopyEmail() {
+    if (!emailDraft || emailDraft.status !== "approved" || editingEmailDraft) return;
+    try {
+      const current = await api.getEmailDraft(id);
+      if (current.id !== emailDraft.id || current.status !== "approved") {
+        setEmailDraft(current);
+        warning("Thư đã đổi. Kiểm tra và duyệt lại trước khi sao chép.");
+        return;
+      }
+    } catch (err: any) {
+      setEmailDraft(null);
+      toastError(err.message || "Thư đã hết hiệu lực. Tạo và duyệt bản mới.");
+      return;
+    }
+    const textToCopy = `Tiêu đề: ${editingEmailDraft ? editedEmailSubject : emailDraft?.subject}\n\n${editingEmailDraft ? editedEmailBody : emailDraft?.body}`;
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopiedEmail(true);
+      success("Đã sao chép nội dung email vào bộ nhớ tạm!");
+      setTimeout(() => setCopiedEmail(false), 2500);
+    } catch {
+      toastError("Không thể sao chép vào bộ nhớ tạm.");
     }
   }
 
@@ -620,6 +735,160 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
             </div>
           ) : (
             <div>
+              {/* Quick Win 1: Candidate One-Page Summary (Executive Summary) */}
+              <div className="card" style={{ marginBottom: "1.5rem", borderLeft: "4px solid var(--accent-cyan)", background: "linear-gradient(180deg, rgba(56, 189, 248, 0.04) 0%, var(--bg-surface) 100%)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                    <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "rgba(56, 189, 248, 0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <IconSparkles size={18} color="var(--accent-cyan)" />
+                    </div>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <h2 className="card-title" style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0 }}>
+                          Tóm Tắt Hồ Sơ Ứng Viên · AI Executive Summary
+                        </h2>
+                        {executiveSummary?.recommendation_label && (
+                          <span className={`badge ${
+                            (executiveSummary.comparable_score ?? 0) >= 70 ? "badge-rec-advance" :
+                            (executiveSummary.comparable_score ?? 0) < 50 ? "badge-rec-review" : "badge-rec-clarify"
+                          }`} style={{ fontSize: "0.75rem", padding: "0.2rem 0.55rem" }}>
+                            {executiveSummary.recommendation_label}
+                          </span>
+                        )}
+                        {executiveSummary?.cached && (
+                          <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", background: "rgba(255,255,255,0.05)", padding: "0.15rem 0.45rem", borderRadius: "4px" }}>
+                            Cache
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "0.2rem" }}>
+                        Bản tổng hợp 5 câu giúp HR và Hiring Manager nắm bắt năng lực cốt lõi trong 60 giây
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => void handleGenerateSummary()}
+                    disabled={generatingSummary}
+                    title="Cập nhật hoặc phân tích lại tóm tắt hồ sơ"
+                  >
+                    <IconRefresh size={14} className={generatingSummary ? "spin" : ""} />
+                    <span>{generatingSummary ? "Đang phân tích…" : executiveSummary ? "Cập nhật tóm tắt" : "Tạo tóm tắt AI"}</span>
+                  </button>
+                </div>
+
+                {executiveSummary ? (
+                  <div>
+                    {/* Headline */}
+                    <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <span>💡</span>
+                      <span>{executiveSummary.headline}</span>
+                    </div>
+
+                    {/* Summary Narrative */}
+                    <div style={{
+                      padding: "0.9rem 1.1rem",
+                      background: "var(--bg-surface-elevated)",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--border-subtle)",
+                      fontSize: "0.885rem",
+                      lineHeight: 1.65,
+                      color: "var(--text-primary)",
+                      marginBottom: "1.25rem",
+                      whiteSpace: "pre-line"
+                    }}>
+                      {executiveSummary.summary_paragraph}
+                    </div>
+
+                    {/* Strengths, Gaps, Interview Focus Grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}>
+                      {/* Key Strengths */}
+                      <div style={{
+                        padding: "0.9rem",
+                        background: "rgba(16, 185, 129, 0.05)",
+                        border: "1px solid rgba(16, 185, 129, 0.2)",
+                        borderRadius: "var(--radius-md)"
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.6rem", fontWeight: 700, fontSize: "0.825rem", color: "var(--emerald-text)" }}>
+                          <IconCheckCircle size={15} color="var(--emerald-text)" />
+                          <span>Điểm Mạnh Nổi Bật ({executiveSummary.key_strengths?.length || 0})</span>
+                        </div>
+                        {executiveSummary.key_strengths?.length ? (
+                          <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: 1.55 }}>
+                            {executiveSummary.key_strengths.map((s, idx) => (
+                              <li key={idx} style={{ marginBottom: "0.35rem" }}>{s}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)" }}>Chưa ghi nhận điểm mạnh vượt trội rõ ràng.</p>
+                        )}
+                      </div>
+
+                      {/* Gaps / Questions */}
+                      <div style={{
+                        padding: "0.9rem",
+                        background: "rgba(245, 158, 11, 0.05)",
+                        border: "1px solid rgba(245, 158, 11, 0.2)",
+                        borderRadius: "var(--radius-md)"
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.6rem", fontWeight: 700, fontSize: "0.825rem", color: "var(--amber-text)" }}>
+                          <IconAlertTriangle size={15} color="var(--amber-text)" />
+                          <span>Điểm Cần Lưu Ý / Làm Rõ ({executiveSummary.gaps_or_questions?.length || 0})</span>
+                        </div>
+                        {executiveSummary.gaps_or_questions?.length ? (
+                          <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: 1.55 }}>
+                            {executiveSummary.gaps_or_questions.map((g, idx) => (
+                              <li key={idx} style={{ marginBottom: "0.35rem" }}>{g}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)" }}>Không phát hiện khoảng trống năng lực đáng kể.</p>
+                        )}
+                      </div>
+
+                      {/* Recommended Interview Focus */}
+                      <div style={{
+                        padding: "0.9rem",
+                        background: "rgba(56, 189, 248, 0.05)",
+                        border: "1px solid rgba(56, 189, 248, 0.2)",
+                        borderRadius: "var(--radius-md)"
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.6rem", fontWeight: 700, fontSize: "0.825rem", color: "var(--accent-cyan)" }}>
+                          <IconSliders size={15} color="var(--accent-cyan)" />
+                          <span>Trọng Tâm Phỏng Vấn Kỹ Thuật</span>
+                        </div>
+                        {executiveSummary.recommended_interview_focus?.length ? (
+                          <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.8rem", color: "var(--text-primary)", lineHeight: 1.55 }}>
+                            {executiveSummary.recommended_interview_focus.map((f, idx) => (
+                              <li key={idx} style={{ marginBottom: "0.35rem" }}>{f}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)" }}>Theo sát các câu hỏi chuẩn trong rubric.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: "1.25rem", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius-md)", textAlign: "center" }}>
+                    <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
+                      Chưa có bản tóm tắt nhanh cho hồ sơ này. Nhấn nút bên dưới để tổng hợp điểm mạnh, khoảng trống và trọng tâm phỏng vấn.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => void handleGenerateSummary()}
+                      disabled={generatingSummary}
+                    >
+                      <IconSparkles size={14} />
+                      <span>{generatingSummary ? "Đang phân tích…" : "Tạo tóm tắt 1 trang cho HR"}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Recommendation & Confidence Banner */}
               <div className="card assessment-summary" style={{ marginBottom: "1.5rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1.25rem" }}>
@@ -1164,6 +1433,220 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                   <span>{submittingDecision ? "Đang ký duyệt…" : "Xác nhận và ghi quyết định"}</span>
                 </button>
               </form>
+            )}
+          </div>
+
+          {/* Versioned candidate correspondence templates */}
+          <div className="card" style={{ borderLeft: "4px solid #8b5cf6" }}>
+            <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "rgba(139, 92, 246, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <IconMail size={20} color="#a78bfa" />
+                </div>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <h2 className="card-title" style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0 }}>
+                      Thư phản hồi ứng viên
+                    </h2>
+                    <span className="badge" style={{ background: "rgba(139, 92, 246, 0.2)", color: "#c4b5fd", border: "1px solid rgba(139, 92, 246, 0.3)" }}>
+                      {emailDraft?.status === "approved" ? `HR đã duyệt · v${emailDraft.version_no}` : "Thư nháp — chưa duyệt"}
+                    </span>
+                  </div>
+                  <p style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "0.2rem" }}>
+                    Mẫu thư để HR chỉnh sửa và duyệt theo quyết định hiện hành. Hệ thống không gửi email và không gọi LLM để soạn thư.
+                  </p>
+                </div>
+              </div>
+
+              {/* Template Switcher Tabs */}
+              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${selectedEmailTemplate === "interview_invitation" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => {
+                    setSelectedEmailTemplate("interview_invitation");
+                    void handleGenerateEmailDraft("interview_invitation");
+                  }}
+                  disabled={generatingEmailDraft}
+                  title="Thư mời ứng viên tham gia vòng phỏng vấn kỹ thuật"
+                >
+                  <span>✉️ Mời phỏng vấn</span>
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${selectedEmailTemplate === "technical_clarification" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => {
+                    setSelectedEmailTemplate("technical_clarification");
+                    void handleGenerateEmailDraft("technical_clarification");
+                  }}
+                  disabled={generatingEmailDraft}
+                  title="Thư yêu cầu ứng viên làm rõ hoặc bổ sung thông tin năng lực"
+                >
+                  <span>❓ Yêu cầu làm rõ</span>
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${selectedEmailTemplate === "rejection_polite" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => {
+                    setSelectedEmailTemplate("rejection_polite");
+                    void handleGenerateEmailDraft("rejection_polite");
+                  }}
+                  disabled={generatingEmailDraft}
+                  title="Thư cảm ơn và từ chối lịch thiệp, lưu hồ sơ cho cơ hội tương lai"
+                >
+                  <span>📩 Thư từ chối</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Email Content Box */}
+            {emailDraft ? (
+              <div>
+                {/* Subject Line & Actions */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "0.75rem", padding: "0.6rem 0.85rem", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)" }}>
+                  <div style={{ flex: 1, minWidth: "260px" }}>
+                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em", marginRight: "0.5rem" }}>
+                      Tiêu đề email:
+                    </span>
+                    {editingEmailDraft ? (
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ marginTop: "0.25rem", width: "100%", fontSize: "0.85rem" }}
+                        value={editedEmailSubject}
+                        onChange={(e) => { setEditedEmailSubject(e.target.value); setEmailContentReviewed(false); }}
+                      />
+                    ) : (
+                      <strong style={{ fontSize: "0.875rem", color: "var(--text-primary)" }}>{emailDraft.subject}</strong>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                    {editingEmailDraft ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => void handleSaveEmailDraft()}
+                          disabled={savingEmailDraft}
+                        >
+                          <IconCheckCircle size={14} />
+                          <span>{savingEmailDraft ? "Đang lưu…" : "Lưu thay đổi"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => {
+                            setEditingEmailDraft(false);
+                            setEditedEmailSubject(emailDraft.subject);
+                            setEditedEmailBody(emailDraft.body);
+                          }}
+                        >
+                          <span>Hủy</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setEditingEmailDraft(true)}
+                          title="Tự chỉnh sửa nội dung hoặc thêm thời gian phỏng vấn cụ thể"
+                        >
+                          <IconSliders size={14} />
+                          <span>Chỉnh sửa</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${copiedEmail ? "btn-primary" : "btn-secondary"}`}
+                          onClick={() => void handleCopyEmail()}
+                          disabled={emailDraft.status !== "approved" || editingEmailDraft}
+                          title="Sao chép tiêu đề và nội dung thư vào bộ nhớ tạm"
+                          style={{
+                            background: copiedEmail ? "rgba(16, 185, 129, 0.2)" : undefined,
+                            borderColor: copiedEmail ? "rgba(16, 185, 129, 0.5)" : undefined,
+                            color: copiedEmail ? "var(--emerald-text)" : undefined,
+                          }}
+                        >
+                          {copiedEmail ? <IconCheckCircle size={14} /> : <IconCopy size={14} />}
+                          <span>{copiedEmail ? "Đã sao chép!" : "Sao chép email"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => void handleGenerateEmailDraft()}
+                          disabled={generatingEmailDraft}
+                          title="Tạo lại bản thảo từ đầu"
+                        >
+                          <IconRefresh size={14} className={generatingEmailDraft ? "spin" : ""} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Email Body */}
+                {editingEmailDraft ? (
+                  <textarea
+                    className="form-textarea"
+                    rows={14}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem", lineHeight: 1.6 }}
+                    value={editedEmailBody}
+                    onChange={(e) => { setEditedEmailBody(e.target.value); setEmailContentReviewed(false); }}
+                  />
+                ) : (
+                  <div style={{
+                    padding: "1.25rem",
+                    background: "var(--bg-surface-elevated)",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-medium)",
+                    fontFamily: "inherit",
+                    fontSize: "0.875rem",
+                    lineHeight: 1.7,
+                    color: "var(--text-primary)",
+                    whiteSpace: "pre-line",
+                    maxHeight: "450px",
+                    overflowY: "auto"
+                  }}>
+                    {emailDraft.body}
+                  </div>
+                )}
+
+                {emailDraft.status !== "approved" && (
+                  <div style={{ marginTop: "1rem", display: "grid", gap: "0.75rem" }}>
+                    <label className="rubric-ack"><input type="checkbox" checked={emailContentReviewed} onChange={event => setEmailContentReviewed(event.target.checked)} />
+                      Tôi đã kiểm tra nội dung thư và đối chiếu với quyết định hiện hành của HR.
+                    </label>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={!canManage || !emailContentReviewed || !application.current_decision_id || savingEmailDraft}
+                      onClick={() => void handleSaveEmailDraft(true)}>Duyệt phiên bản thư này</button>
+                    {!application.current_decision_id && <p className="muted">Ghi nhận quyết định của HR trước khi duyệt thư.</p>}
+                  </div>
+                )}
+                {emailDraft.approved_at && <p className="muted">Phiên bản {emailDraft.version_no} · Duyệt lúc {new Date(emailDraft.approved_at).toLocaleString("vi-VN")} · Người duyệt: {emailDraft.approved_by?.slice(0, 8)}</p>}
+
+                {/* Privacy Safeguard Notice */}
+                <div style={{ marginTop: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                  <IconShield size={14} color="var(--emerald-text)" />
+                  <span>
+                    Nội dung được kiểm tra để chặn điểm số và dữ liệu đánh giá nội bộ. HR vẫn cần rà soát người nhận, thời gian, nội dung trước khi duyệt. Không tự động gửi thư.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: "center", padding: "1.75rem 1rem", background: "var(--bg-surface-elevated)", borderRadius: "var(--radius-md)" }}>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginBottom: "0.85rem" }}>
+                  Chưa có thư nháp hiện hành. Chọn mẫu để soạn; chỉ duyệt thư sau khi HR đã ghi nhận quyết định phù hợp.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => void handleGenerateEmailDraft()}
+                  disabled={generatingEmailDraft}
+                >
+                  <IconMail size={14} />
+                  <span>{generatingEmailDraft ? "Đang soạn thảo…" : "Tạo bản nháp email ngay"}</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

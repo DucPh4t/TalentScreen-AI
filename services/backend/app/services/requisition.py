@@ -790,6 +790,10 @@ async def create_jd_version(
     await db.flush()
 
     # Update requisition current JD pointer
+    from app.db.models.candidate import Application
+    from app.services.email_draft import invalidate_email_drafts
+    affected_ids = list((await db.execute(select(Application.id).where(Application.requisition_id == req.id))).scalars())
+    await invalidate_email_drafts(db, affected_ids)
     req.current_jd_version_id = jd_version.id
     req.row_version += 1
     req.updated_at = datetime.now(timezone.utc)

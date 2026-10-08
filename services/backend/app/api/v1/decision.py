@@ -11,6 +11,8 @@ from app.schemas.decision import (
     AttestationCreateRequest,
     DecisionCreateRequest,
     DecisionResponse,
+    EmailDraftResponse,
+    EmailDraftUpdateRequest,
     HRRevisionCreateRequest,
     HRRevisionFinalizeRequest,
     HRRevisionResponse,
@@ -26,6 +28,11 @@ from app.services.decision import (
     list_decisions,
     list_hr_revisions,
     update_hr_revision,
+)
+from app.services.email_draft import (
+    get_or_generate_email_draft,
+    get_email_draft,
+    update_email_draft,
 )
 
 router = APIRouter(tags=["HR Revisions, Attestation & Decisions"])
@@ -150,3 +157,58 @@ async def get_application_decisions(
 ):
     """List historical decisions for an application."""
     return await list_decisions(db, id, ctx)
+
+
+# ---------------- Email Draft Endpoints ---------------- #
+
+
+@router.get(
+    "/applications/{id}/email-draft",
+    response_model=EmailDraftResponse,
+)
+async def get_email_draft_endpoint(
+    id: uuid.UUID,
+    template: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """Read the latest template draft without creating or modifying correspondence."""
+    return await get_email_draft(db, application_id=id, ctx=ctx)
+
+
+@router.post(
+    "/applications/{id}/email-draft/generate",
+    response_model=EmailDraftResponse,
+)
+async def post_generate_email_draft_endpoint(
+    id: uuid.UUID,
+    template: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """Regenerate a fresh candidate email draft."""
+    return await get_or_generate_email_draft(db, application_id=id, ctx=ctx, force_template=template)
+
+
+@router.put(
+    "/applications/{id}/email-draft",
+    response_model=EmailDraftResponse,
+)
+async def put_update_email_draft_endpoint(
+    id: uuid.UUID,
+    payload: EmailDraftUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """Update and save customized email draft text."""
+    return await update_email_draft(
+        db,
+        application_id=id,
+        subject_text=payload.subject,
+        body_text=payload.body,
+        status_str=payload.status,
+        ctx=ctx,
+        draft_id=payload.draft_id,
+        expected_version=payload.expected_version,
+        acknowledged_content=payload.acknowledged_content,
+    )

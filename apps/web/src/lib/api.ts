@@ -126,6 +126,11 @@ export interface ReviewQueueItem {
   risk_flags: string[];
   assessment_available: boolean;
   workflow_stage?: string;
+  sla_breached?: boolean;
+  hours_in_stage?: number;
+  application_history_count?: number;
+  is_duplicate?: boolean;
+  duplicate_reasons?: string[];
 }
 
 export interface CandidateComparison {
@@ -142,6 +147,71 @@ export interface CandidateComparison {
     criteria: Record<string, { status: string; score: number | null }>;
   }>;
 }
+
+export interface ShortlistCandidate {
+  application_id: string;
+  candidate_id: string;
+  public_label: string;
+  rank: number | null;
+  tier: "recommend" | "borderline" | "below_threshold" | "core_fail" | "not_assessed";
+  tier_display: string;
+  comparable_score: number | null;
+  observed_score: number | null;
+  coverage: number | null;
+  recommendation: string | null;
+  strengths: string[];
+  missing_criteria: string[];
+  core_failed_criteria: string[];
+  criteria_scores: Record<string, { label: string; score: number | null; status: string; core: boolean }>;
+  has_decision: boolean;
+  received_at: string | null;
+}
+
+export interface ShortlistResponse {
+  requisition_id: string;
+  requisition_title: string;
+  rubric_version_id: string | null;
+  threshold: number;
+  total_candidates: number;
+  assessed_candidates: number;
+  shortlisted_candidates: number;
+  average_score: number | null;
+  tier_summary: Record<string, number>;
+  criteria: Array<{ id: string; label: string; weight: number; core: boolean }>;
+  candidates: ShortlistCandidate[];
+}
+
+export interface EmailDraftData {
+  id: string;
+  application_id: string;
+  decision_id?: string | null;
+  template_type: string;
+  subject: string;
+  body: string;
+  variables: Record<string, any>;
+  status: "draft" | "approved" | "invalidated";
+  version_no: number;
+  created_by?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExecutiveSummaryData {
+  application_id: string;
+  status: string;
+  headline: string;
+  summary_paragraph: string;
+  key_strengths: string[];
+  gaps_or_questions: string[];
+  recommended_interview_focus: string[];
+  recommendation_label: string;
+  comparable_score?: number;
+  coverage?: number;
+  cached: boolean;
+}
+
 
 export interface IndependentReviewContext {
   requisition_id?: string;
@@ -316,6 +386,18 @@ export const api = {
     });
   },
 
+  async approveJDForAI(jdVersionId: string, textHash: string): Promise<any> {
+    return apiRequest(`/jd-versions/${jdVersionId}/approve-egress`, {
+      method: "POST", body: JSON.stringify({ expected_text_hash: textHash, acknowledged: true }),
+    });
+  },
+
+  async draftRubricFromJD(requisitionId: string): Promise<any> {
+    return apiRequest<any>(`/requisitions/${requisitionId}/rubrics/draft-from-jd`, {
+      method: "POST",
+    });
+  },
+
   async getJDVersion(id: string): Promise<any> {
     return apiRequest<any>(`/jd-versions/${id}`);
   },
@@ -331,6 +413,11 @@ export const api = {
 
   async getCandidateComparison(requisitionId: string): Promise<CandidateComparison> {
     return apiRequest<CandidateComparison>(`/requisitions/${requisitionId}/comparison`);
+  },
+
+  async getShortlist(requisitionId: string, threshold?: number): Promise<ShortlistResponse> {
+    const query = threshold !== undefined ? `?threshold=${threshold}` : "";
+    return apiRequest<ShortlistResponse>(`/requisitions/${requisitionId}/shortlist${query}`);
   },
 
   async getIndependentReviewWorklist(requisitionId: string): Promise<Array<{ application_id: string; public_label: string; ready: boolean; submitted: boolean; received_at: string }>> {
@@ -478,6 +565,16 @@ export const api = {
     return apiRequest<AssessmentRunData>(`/applications/${applicationId}/assessments/${runId}`);
   },
 
+  async getCandidateSummary(applicationId: string): Promise<ExecutiveSummaryData> {
+    return apiRequest<ExecutiveSummaryData>(`/applications/${applicationId}/summary`);
+  },
+
+  async generateCandidateSummary(applicationId: string): Promise<ExecutiveSummaryData> {
+    return apiRequest<ExecutiveSummaryData>(`/applications/${applicationId}/summary/generate`, {
+      method: "POST",
+    });
+  },
+
   async getApprovedSpans(applicationId: string): Promise<any[]> { return apiRequest(`/applications/${applicationId}/approved-spans`); },
   async getSourceSpan(spanId: string): Promise<any> { return apiRequest(`/source-spans/${spanId}`); },
   async updateHRRevision(revisionId: string, payload: any): Promise<any> { return apiRequest(`/hr-revisions/${revisionId}`, { method: "PUT", body: JSON.stringify(payload) }); },
@@ -517,6 +614,26 @@ export const api = {
     return apiRequest<any>(`/applications/${applicationId}/decisions`, {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  },
+
+  // Versioned correspondence templates; no sending or LLM call.
+  async getEmailDraft(applicationId: string, template?: string): Promise<EmailDraftData> {
+    const query = template ? `?template=${template}` : "";
+    return apiRequest<EmailDraftData>(`/applications/${applicationId}/email-draft${query}`);
+  },
+
+  async generateEmailDraft(applicationId: string, template?: string): Promise<EmailDraftData> {
+    const query = template ? `?template=${template}` : "";
+    return apiRequest<EmailDraftData>(`/applications/${applicationId}/email-draft/generate${query}`, {
+      method: "POST",
+    });
+  },
+
+  async updateEmailDraft(applicationId: string, subject: string, body: string, draftId: string, expectedVersion: number, status: "draft" | "approved" = "draft", acknowledgedContent = false): Promise<EmailDraftData> {
+    return apiRequest<EmailDraftData>(`/applications/${applicationId}/email-draft`, {
+      method: "PUT",
+      body: JSON.stringify({ subject, body, status, draft_id: draftId, expected_version: expectedVersion, acknowledged_content: acknowledgedContent }),
     });
   },
 

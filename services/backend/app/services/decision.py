@@ -870,6 +870,8 @@ async def create_decision(
     await db.flush()
 
     # Update application pointer & row version
+    from app.services.email_draft import invalidate_email_drafts
+    await invalidate_email_drafts(db, [app_obj.id])
     app_obj.current_decision_id = decision.id
     app_obj.row_version += 1
     app_obj.updated_at = now

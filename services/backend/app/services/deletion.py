@@ -397,7 +397,11 @@ async def execute_purge_job(
 
     # Decisions, HR Revisions, Raw Grants, Documents
     scorecards_purged = 0
+    emails_purged = 0
     if target_app_ids:
+        from app.db.models.email_draft import EmailDraft
+        purge_emails = await db.execute(EmailDraft.__table__.delete().where(EmailDraft.application_id.in_(target_app_ids)))
+        emails_purged = purge_emails.rowcount or 0
         purge_scorecards = await db.execute(
             InterviewScorecard.__table__.delete().where(InterviewScorecard.application_id.in_(target_app_ids))
         )
@@ -427,6 +431,7 @@ async def execute_purge_job(
         "sanitized_versions_purged": len(sanitized_ids),
         "interview_drafts_purged": len(draft_ids),
         "interview_scorecards_purged": scorecards_purged,
+        "email_drafts_purged": emails_purged,
         "files_unlinked": files_unlinked,
         "files_failed": files_failed,
         "failed_keys": failed_keys,

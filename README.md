@@ -85,12 +85,13 @@ Tools cannot browse the web, send messages, modify records, or record a hiring d
 
 | Step | HR capability |
 | --- | --- |
-| Define a vacancy | Create a requisition, version the JD, draft/approve a dynamic rubric with 2–12 criteria, weights, and 0–4 anchors. |
-| Receive applications | Upload PDF/DOCX files individually or in batches; monitor extraction and OCR status. |
+| Define a vacancy | Enter your own JD for any role; draft 2–12 JD-grounded criteria, edit weights/0–4 anchors, then approve the rubric. JD egress approval is a separate explicit action before external generation. |
+| Receive applications | Upload PDF/DOCX files individually or in batches; monitor extraction/OCR and scoped duplicate hints from file hashes or local contact fingerprints. Duplicate hints never change capability scores. |
 | Review privacy | Inspect and approve redacted text. Original-document access is role-gated, time-limited, and audited. |
-| Assess evidence | Inspect per-criterion observations, source citations, information gaps, coverage, and provider status. |
+| Assess evidence | Inspect per-criterion observations, citations, gaps, coverage, and provider status. Approving a CV or replacement rubric queues eligible assessments with snapshot deduplication. |
 | Compare and decide | Compare applications, record justified revisions, and submit the final human decision after required review. |
 | Prepare interviews | Generate candidate-specific follow-ups and record interviewer scorecards separately from CV assessment. |
+| Prepare correspondence | Generate invitation, clarification, or rejection templates; edit and explicitly approve a version attributed to the reviewer. Changed decisions/sources invalidate drafts. No LLM agent or automatic email delivery is used. |
 | Manage data | Track retention settings and deletion requests through their processing states. |
 
 The Vietnamese interface supports desktop, tablet, and phone layouts. Navigation focuses on **Overview / Requisitions / Data & privacy**. Technical execution details are collapsed by default; the old training page redirects to the dashboard.
@@ -185,6 +186,8 @@ make test
   --output /tmp/talentscreen-rag-benchmark.json
 ```
 
+**Workflow repair verification, 2026-10-08:** 275 backend tests passed, migration upgrade/downgrade roundtrip passed, and the production frontend build passed. This run uses synthetic fixtures and mocked model calls; see [scope, evidence and remaining issues](docs/reviews/2026-10-08-workflow-repairs.md).
+
 **Local verification, 2026-10-07:** 242 backend tests passed, migrations from an empty database passed, and the production frontend build passed. UI verification covered 320, 390, 820, and 1440 px layouts, authentication, keyboard dialog behavior, the recruitment queue, JD/rubric views, and the candidate workspace. See [verification evidence](docs/verification.md).
 
 The benchmark reports criterion-scoped Recall@5/10, sufficient-evidence coverage, citation validity, unsupported claims, MAE, weighted kappa, counterfactual invariance, latency, and cost. Reports separate role families and providers rather than averaging models into a hiring score.
@@ -196,7 +199,7 @@ The benchmark reports criterion-scoped Recall@5/10, sufficient-evidence coverage
 | Retrieval/scoring quality against independent HR/IT labels | Not established; representative, protected holdout data is still required. |
 | Live-provider quality, fairness, production SLOs and deletion/restore drills | Not established by the automated suite or synthetic benchmark. |
 
-The committed benchmark is **synthetic harness data**, including visible holdout-shaped fixtures; it is not a protected hiring holdout and its metric values are not production-quality claims. Redaction rules can miss identifiers. Public deployment and use of AI scores for real applicants require the [G1–G7 readiness gates](docs/runbooks/rag-agent-readiness.md). ATS integration, candidate email, scheduling, and dossier export are future work.
+The committed benchmark is **synthetic harness data**, including visible holdout-shaped fixtures; it is not a protected hiring holdout and its metric values are not production-quality claims. Redaction rules can miss identifiers. Public deployment and use of AI scores for real applicants require the [G1–G7 readiness gates](docs/runbooks/rag-agent-readiness.md). ATS integration, email delivery, scheduling, and dossier export are future work. Correspondence templates are implemented with versioned human approval.
 
 ## Code walkthrough
 
@@ -209,6 +212,7 @@ A suggested review path for the implementation:
 | [Versioned prompts](services/backend/app/services/assessment/prompt.py) → [validator](services/backend/app/services/assessment/validator.py) → [scoring](services/backend/app/services/assessment/scoring.py) | Model-output contracts, exact citations, and deterministic advisory scores. |
 | [Invocation orchestration](services/backend/app/services/llm/orchestrator.py) → [budget ledger](services/backend/app/services/llm/ledger.py) | Reserve-before-call, settlement, unknown outcomes, and requisition spend caps. |
 | [Benchmark CLI](scripts/run_rag_benchmark.py) → [protocol](docs/evaluation/rag-agent-benchmark-protocol.md) | Criterion-level metrics, data contracts, split manifests, and validation limits. |
+| [JD rubric drafting](services/backend/app/services/rubric_drafting.py) → [correspondence](services/backend/app/services/email_draft.py) | JD-grounded structured generation, explicit egress review, content filtering and versioned human approval. |
 | [HR workspace](apps/web/src/components/DashboardHome.tsx) → [candidate review](apps/web/src/app/applications/[id]/page.tsx) | Queue states, evidence review, overrides, and decision controls. |
 
 ## Repository map

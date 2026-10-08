@@ -20,6 +20,7 @@ from app.schemas.intake import SourceSpanResponse
 from app.services.audit import record_audit_event
 from app.services.parser import DocumentParsingError, parse_document_content
 from app.services.storage import read_private_blob
+from app.services.source_lock import lock_source_application
 
 
 async def ingest_and_parse_document(
@@ -27,11 +28,13 @@ async def ingest_and_parse_document(
     document_id: uuid.UUID,
 ) -> SanitizedVersion:
     """Execute parsing on an uploaded document, build canonical text, and register source spans."""
+    await lock_source_application(db, Document, document_id)
     stmt_doc = (
         select(Document)
         .where(Document.id == document_id)
         .options(selectinload(Document.application))
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     res_doc = await db.execute(stmt_doc)
     doc = res_doc.scalar_one_or_none()
@@ -58,6 +61,10 @@ async def ingest_and_parse_document(
     doc.ingestion_status = "parsed"
     doc.quality_report = parse_result.quality_report
     doc.safety_status = DocumentSafetyStatus.PASSED
+    from app.services.duplicates import contact_fingerprints
+    from app.db.models.requisition import Requisition
+    requisition = await db.get(Requisition, doc.application.requisition_id)
+    doc.duplicate_fingerprints = contact_fingerprints(parse_result.canonical_text, requisition.organization_id)
 
     # Determine next SanitizedVersion version_no
     stmt_v = select(func.max(SanitizedVersion.version_no)).where(

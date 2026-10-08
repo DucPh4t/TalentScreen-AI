@@ -356,6 +356,8 @@ async def upload_application_document(
     db.add(doc)
 
     # Advance application generation & row_version, point current document
+    from app.services.email_draft import invalidate_email_drafts
+    await invalidate_email_drafts(db, [app_obj.id])
     app_obj.current_document_id = doc.id
     app_obj.current_sanitized_version_id = None  # New raw doc requires new sanitization
     app_obj.generation += 1

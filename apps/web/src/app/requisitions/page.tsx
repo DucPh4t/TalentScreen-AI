@@ -59,6 +59,10 @@ export default function RequisitionsPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (jdText.trim().length < 50) {
+      setErrorMsg('Nhập JD của vị trí cần tuyển (ít nhất 50 ký tự), gồm nhiệm vụ và yêu cầu năng lực.');
+      return;
+    }
     setSubmitting(true);
     setErrorMsg('');
     try {
@@ -288,7 +292,7 @@ export default function RequisitionsPage() {
                   id="title"
                   className="form-input"
                   type="text"
-                  placeholder="Ví dụ: Senior Backend Python Engineer"
+                  placeholder="Ví dụ: Frontend React, Data Engineer, Product Designer…"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
@@ -300,35 +304,7 @@ export default function RequisitionsPage() {
                   <label className="form-label" htmlFor="jdText" style={{ marginBottom: 0 }}>
                     Nội dung bản mô tả công việc (Job Description)
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTitle('Chuyên viên Backend Python cho hệ thống nội bộ');
-                      setJdText(
-                        '# JD tham khảo — Backend Python cho hệ thống nội bộ\n' +
-                        'HR và người phụ trách IT cần xác nhận nhu cầu, phạm vi công việc và ngưỡng chấm trước khi dùng cho tuyển dụng thật.\n\n' +
-                        '| Requirement ID | Criterion ID / trọng số | Nội dung yêu cầu chuẩn để trích dẫn |\n' +
-                        '|---|---|---|\n' +
-                        '| `JD-PY-01` | `python_backend` /20 | Triển khai chức năng backend bằng Python từ một yêu cầu nghiệp vụ; tổ chức mã thành các phần có trách nhiệm rõ, xử lý lỗi và duy trì hành vi của chức năng khi sửa đổi. |\n' +
-                        '| `JD-API-01` | `api_design` /25 | Thiết kế và triển khai HTTP API có hợp đồng đầu vào, đầu ra và mã trạng thái phù hợp; kiểm tra dữ liệu đầu vào và xử lý lỗi để bên sử dụng API nhận được hành vi nhất quán. |\n' +
-                        '| `JD-SQL-01` | `sql_data` /20 | Làm việc với cơ sở dữ liệu quan hệ để lưu và truy vấn dữ liệu nghiệp vụ; thiết kế hoặc sửa cấu trúc dữ liệu, dùng ràng buộc và giao dịch khi cần để giữ tính đúng đắn của dữ liệu. |\n' +
-                        '| `JD-TEST-01` | `testing_debugging` /15 | Kiểm thử hành vi backend và tái hiện lỗi từ tình huống cụ thể; xác định nguyên nhân, sửa lỗi và bổ sung kiểm tra phù hợp để hạn chế lỗi tái diễn. |\n' +
-                        '| `JD-SEC-01` | `security_privacy` /10 | Áp dụng xác thực, phân quyền và bảo vệ dữ liệu trong phạm vi tính năng phụ trách; kiểm soát dữ liệu nhạy cảm trong truy cập, cấu hình và log, đồng thời xử lý các trường hợp truy cập không hợp lệ. |\n' +
-                        '| `JD-OPS-01` | `delivery_ops` /10 | Đưa thay đổi backend qua quy trình Git, kiểm tra và triển khai có kiểm soát; cấu hình môi trường, quan sát tình trạng dịch vụ và có cách xử lý khi bản triển khai gặp lỗi. |\n\n' +
-                        'Kinh nghiệm làm việc, dự án cá nhân, đồ án và dự án cộng đồng đều được xem xét theo cùng tiêu chí. Không dùng tuổi, giới tính, tên trường, danh tiếng tổ chức hoặc ngôn ngữ CV làm căn cứ chấm điểm.'
-                      );
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--accent-cyan)',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                      textDecoration: 'underline'
-                    }}
-                  >
-                    Nạp JD tham khảo khớp rubric seed
-                  </button>
+
                 </div>
                 <textarea
                   id="jdText"

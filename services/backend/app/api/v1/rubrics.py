@@ -18,6 +18,7 @@ from app.schemas.rubric import (
 from app.services.rubric import (
     approve_rubric,
     create_rubric_draft,
+    draft_rubric_from_jd,
     get_rubric_by_id,
     list_rubrics_for_requisition,
     update_rubric_draft,
@@ -44,6 +45,17 @@ async def post_create_rubric(
 ):
     """Create a new rubric draft via seed import, clone, or manual specification."""
     return await create_rubric_draft(db, id, payload, ctx)
+
+
+@router.post("/requisitions/{id}/rubrics/draft-from-jd", response_model=RubricResponse, status_code=status.HTTP_201_CREATED)
+async def post_draft_rubric_from_jd(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """AI Rubric Drafter: Automatically synthesize and propose a draft rubric from active Job Description."""
+    return await draft_rubric_from_jd(db, requisition_id=id, ctx=ctx)
+
 
 
 @router.get("/rubrics/{id}", response_model=RubricResponse)

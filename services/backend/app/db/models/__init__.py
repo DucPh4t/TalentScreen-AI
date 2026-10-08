@@ -37,6 +37,7 @@ from app.db.models.decision import (
     ReviewAttestation,
     Decision,
 )
+from app.db.models.email_draft import EmailDraft
 from app.db.models.independent_review import IndependentReview, IndependentReviewDraft
 from app.db.models.interview import (
     InterviewQuestionBank,
@@ -85,6 +86,7 @@ __all__ = [
     "IndependentReview",
     "IndependentReviewDraft",
     "Decision",
+    "EmailDraft",
     "InterviewQuestionBank",
     "InterviewDraft",
     "InterviewRevision",

@@ -40,7 +40,7 @@ class RecommendationPolicyDTO(BaseModel):
 
 class RubricCreateRequest(BaseModel):
     jd_version_id: Optional[uuid.UUID] = None
-    source: str = Field(default="seed", description="'seed' | 'clone' | 'manual'")
+    source: str = Field(default="ai_draft", description="'ai_draft' | 'manual' | 'clone' | 'seed' (demo only)")
     clone_from_id: Optional[uuid.UUID] = None
     rubric: Optional[dict[str, Any]] = None
 
@@ -55,7 +55,7 @@ class RubricApproveRequest(BaseModel):
     expected_jd_version_id: uuid.UUID
     acknowledge_thresholds: bool = Field(
         default=True,
-        description="Xác nhận đồng ý với ngưỡng điểm 70 và core floor 2",
+        description="Xác nhận đã rà soát ngưỡng điểm và mức sàn năng lực trong rubric hiện hành",
     )
 
 

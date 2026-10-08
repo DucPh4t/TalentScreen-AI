@@ -503,6 +503,16 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
         )
         assert appr_res.status_code == 200
 
+        # Approval now auto-enqueues a full assessment. Explicitly cancel it
+        # before this test requests a focused rerun; keep both immutable records.
+        from sqlalchemy import select
+        from app.db.models.assessment import AssessmentRun
+        async with test_session_factory() as session:
+            auto_run = (await session.execute(select(AssessmentRun).where(AssessmentRun.application_id == app_id))).scalar_one()
+            auto_job_id = auto_run.job_id
+        cancelled = await client.post(f"/api/v1/jobs/{auto_job_id}/cancel", json={"reason": "Test a focused rerun after the automatic assessment"})
+        assert cancelled.status_code == 200, cancelled.text
+
         # 5. Enqueue Assessment Run
         assess_res = await client.post(
             f"/api/v1/applications/{app_id}/assessments",
@@ -548,8 +558,10 @@ async def test_end_to_end_assessment_and_worker_execution(test_session_factory, 
                 Job.type == JobType.ASSESS_APPLICATION,
             )
         )).scalar_one()
-        assert assessment_run_count == 1
-        assert assessment_job_count == 1
+        assert assessment_run_count == 2
+        assert assessment_job_count == 2
+        auto_job = await session.get(Job, auto_job_id)
+        assert auto_job.status == JobStatus.CANCELLED
 
     # A later config change must not mutate the already queued run.
     monkeypatch.setattr(

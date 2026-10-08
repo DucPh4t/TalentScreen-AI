@@ -1,9 +1,10 @@
 """Requisition-level review queue and safe, same-rubric comparison."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -14,6 +15,7 @@ from app.db.models import (
 from app.domain.authorization import AuthenticatedContext, get_current_context
 from app.domain.enums import AccountRole, MembershipRole, SanitizedVersionStatus, JobStatus, JobType
 from app.services.sanitizer import residual_contact_types
+from app.services.duplicates import duplicate_signals
 
 router = APIRouter(tags=["Review workflow"])
 
@@ -60,6 +62,9 @@ async def review_queue(
     jobs = (await db.execute(select(Job).where(Job.target_id.in_(target_ids), Job.status.in_([JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.RETRY_WAIT]), Job.type.in_([JobType.INGEST_DOCUMENT, JobType.ASSESS_APPLICATION])))).scalars().all() if target_ids else []
     reading_ids = {job.target_id for job in jobs if job.type == JobType.INGEST_DOCUMENT}
     analyzing_ids = {job.target_id for job in jobs if job.type == JobType.ASSESS_APPLICATION}
+    duplicates = await duplicate_signals(db, requisition, ctx)
+
+    now = datetime.now(timezone.utc)
     result = []
     for application, label, document, version in rows:
         flags = []
@@ -67,6 +72,30 @@ async def review_queue(
             flags.append("parse_quality")
         if version and residual_contact_types(version.canonical_text):
             flags.append("contact_data")
+
+        app_count, duplicate_reasons = duplicates.get(application.id, (1, []))
+        if app_count > 1:
+            flags.append("duplicate_candidate")
+
+        run = runs.get(application.current_assessment_run_id)
+        current_stage = _stage(
+            application,
+            document,
+            version,
+            run,
+            requisition.current_rubric_version_id,
+            bool(document and document.id in reading_ids),
+            application.id in analyzing_ids,
+        )
+
+        # SLA Alert (QW4): Check if application is awaiting HR decision for more than 72 hours
+        hours_in_stage = 0.0
+        sla_breached = False
+        if current_stage == "awaiting_decision" and run:
+            ref_time = run.completed_at or run.created_at or application.received_at
+            hours_in_stage = round((now - ref_time).total_seconds() / 3600.0, 1)
+            sla_breached = hours_in_stage > 72.0
+
         result.append({
             "application_id": application.id,
             "public_label": label,
@@ -75,9 +104,26 @@ async def review_queue(
             "sanitized_status": version.status.value if version else "missing",
             "risk_flags": flags,
             "assessment_available": bool(application.current_assessment_run_id),
-            "workflow_stage": _stage(application, document, version, runs.get(application.current_assessment_run_id), requisition.current_rubric_version_id, bool(document and document.id in reading_ids), application.id in analyzing_ids),
+            "workflow_stage": current_stage,
+            "sla_breached": sla_breached,
+            "hours_in_stage": hours_in_stage,
+            "application_history_count": app_count,
+            "is_duplicate": app_count > 1,
+            "duplicate_reasons": duplicate_reasons,
         })
     return result
+
+
+@router.get("/requisitions/{id}/shortlist")
+async def get_requisition_shortlist_endpoint(
+    id: uuid.UUID,
+    threshold: float | None = None,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """AI Shortlist Engine: Returns ranked candidates categorized by tier (recommend, borderline, below_threshold, core_fail)."""
+    from app.services.shortlist import compute_requisition_shortlist
+    return await compute_requisition_shortlist(db, requisition_id=id, ctx=ctx, custom_threshold=threshold)
 
 
 @router.get("/requisitions/{id}/comparison")
@@ -172,10 +218,16 @@ async def application_progress(id: uuid.UUID, db: AsyncSession = Depends(get_db)
     analyzing = any(job.type == JobType.ASSESS_APPLICATION for job in pending)
     stage = _stage(application, document, version, run, requisition.current_rubric_version_id,
                    any(job.type == JobType.INGEST_DOCUMENT for job in pending), analyzing)
+
+    history_count, duplicate_reasons = (await duplicate_signals(db, requisition, ctx)).get(application.id, (1, []))
+
     return {"application_id": application.id, "stage": stage, "pending": bool(pending),
             "document_status": document.ingestion_status if document else "missing",
             "assessment_status": "running" if analyzing else run.status if fresh else "missing_or_stale",
-            "failure_code": run.failure_code if fresh and run.status == "failed" else None}
+            "failure_code": run.failure_code if fresh and run.status == "failed" else None,
+            "application_history_count": history_count,
+            "is_duplicate": history_count > 1, "duplicate_reasons": duplicate_reasons}
+
 
 
 @router.get("/applications/{id}/approved-spans")

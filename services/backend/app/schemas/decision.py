@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Literal, Optional, Union
+from typing import Literal, Any, Literal, Optional, Union
 import uuid
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -213,3 +213,36 @@ class DecisionResponse(BaseModel):
     source_hash: str
     supersedes_decision_id: Optional[uuid.UUID] = None
     created_at: datetime
+
+
+# ---------------- Email Draft Schemas ---------------- #
+
+
+class EmailDraftUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str = Field(min_length=5, max_length=255)
+    body: str = Field(min_length=20, max_length=10000)
+    status: Literal["draft", "approved"] = "draft"
+    draft_id: uuid.UUID
+    expected_version: int = Field(ge=1)
+    acknowledged_content: bool = False
+
+
+class EmailDraftResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    application_id: str
+    decision_id: Optional[str] = None
+    version_no: int
+    created_by: Optional[str] = None
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+    template_type: str
+    subject: str
+    body: str
+    variables: dict[str, Any] = Field(default_factory=dict)
+    status: str
+    created_at: str
+    updated_at: str

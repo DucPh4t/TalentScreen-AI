@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
+
+logger = logging.getLogger(__name__)
 import hashlib
 from typing import Any, Optional
 import uuid
@@ -33,6 +36,7 @@ from app.services.sanitizer import (
     residual_contact_types,
 )
 from app.services.storage import read_private_blob
+from app.services.source_lock import lock_source_application
 
 
 async def _verify_membership_and_grant(
@@ -308,11 +312,13 @@ async def edit_sanitized_version(
       - Old approved/draft text is immutable; creates a brand new version.
       - Increments application generation, clears any existing approval.
     """
+    await lock_source_application(db, Document, document_id)
     stmt_doc = (
         select(Document)
         .options(selectinload(Document.application))
         .where(Document.id == document_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     doc = (await db.execute(stmt_doc)).scalar_one_or_none()
     if not doc:
@@ -372,6 +378,8 @@ async def edit_sanitized_version(
 
     # Invalidate current approval and increment application generation
     app_obj = doc.application
+    from app.services.email_draft import invalidate_email_drafts
+    await invalidate_email_drafts(db, [app_obj.id])
     app_obj.current_sanitized_version_id = new_version.id
     app_obj.generation += 1
     app_obj.row_version += 1
@@ -408,11 +416,13 @@ async def approve_sanitized_version(
       - Hash and application version must match exactly (prevent race / mismatch).
       - Supersedes any existing approved version.
     """
+    await lock_source_application(db, SanitizedVersion, version_id)
     stmt_v = (
         select(SanitizedVersion)
         .options(selectinload(SanitizedVersion.application), selectinload(SanitizedVersion.document))
         .where(SanitizedVersion.id == version_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     v = (await db.execute(stmt_v)).scalar_one_or_none()
     if not v:
@@ -500,6 +510,32 @@ async def approve_sanitized_version(
         },
     )
 
+    # Auto-Assessment Trigger: When CV sanitization is approved, automatically queue assessment
+    # if requisition has an approved rubric and is not closed.
+    if app_obj.requisition_id:
+        try:
+            from app.db.models.requisition import Requisition, RubricVersion
+            from app.domain.enums import RequisitionStatus, RubricStatus
+            from app.schemas.assessment import AssessmentRunCreateRequest
+            from app.services.assessment.service import enqueue_assessment_if_needed
+
+            req = await db.get(Requisition, app_obj.requisition_id)
+            if req and req.status != RequisitionStatus.CLOSED and req.current_rubric_version_id:
+                rubric = await db.get(RubricVersion, req.current_rubric_version_id)
+                if rubric and rubric.status == RubricStatus.APPROVED:
+                    await enqueue_assessment_if_needed(
+                        db=db,
+                        application_id=app_obj.id,
+                        payload=AssessmentRunCreateRequest(
+                            sanitized_version_id=v.id,
+                            rubric_version_id=rubric.id,
+                        ),
+                        ctx=ctx,
+                    )
+                    logger.info("Auto-triggered assessment run for application %s upon sanitization approval", app_obj.id)
+        except Exception as exc:
+            logger.warning("Auto-assessment trigger omitted or failed for application %s: %s", app_obj.id, exc)
+
     return SanitizedVersionDetailResponse.model_validate(v)
 
 
@@ -515,11 +551,13 @@ async def revoke_sanitized_version(
       - Quarantines derived data.
       - Requires Owner role + active raw_cv grant.
     """
+    await lock_source_application(db, SanitizedVersion, version_id)
     stmt_v = (
         select(SanitizedVersion)
         .options(selectinload(SanitizedVersion.application))
         .where(SanitizedVersion.id == version_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     v = (await db.execute(stmt_v)).scalar_one_or_none()
     if not v:
@@ -535,6 +573,7 @@ async def revoke_sanitized_version(
     )
 
     app_obj = v.application
+    await db.refresh(app_obj)
     if app_obj.row_version != payload.expected_application_version:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -546,6 +585,8 @@ async def revoke_sanitized_version(
 
     # If this was the current active sanitized version, clear it
     if app_obj.current_sanitized_version_id == v.id:
+        from app.services.email_draft import invalidate_email_drafts
+        await invalidate_email_drafts(db, [app_obj.id])
         app_obj.current_sanitized_version_id = None
         app_obj.current_assessment_run_id = None
 

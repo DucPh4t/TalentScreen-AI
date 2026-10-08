@@ -48,3 +48,28 @@ async def get_assessment_run(
 ):
     """Retrieve detailed assessment results, scores, evidence quotes, and recommendation."""
     return await get_assessment_run_detail(db, run_id, ctx)
+
+
+# ---------------- Candidate Executive Summary Endpoints ---------------- #
+
+
+@router.get("/applications/{id}/summary")
+async def get_candidate_summary_endpoint(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """Retrieve high-density 5-sentence executive summary for rapid HR screening."""
+    from app.services.candidate_summary import generate_candidate_summary
+    return await generate_candidate_summary(db, application_id=id, ctx=ctx, force_refresh=False)
+
+
+@router.post("/applications/{id}/summary/generate")
+async def post_generate_candidate_summary_endpoint(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    ctx: AuthenticatedContext = Depends(get_current_context),
+):
+    """Force fresh regeneration of candidate executive summary."""
+    from app.services.candidate_summary import generate_candidate_summary
+    return await generate_candidate_summary(db, application_id=id, ctx=ctx, force_refresh=True)

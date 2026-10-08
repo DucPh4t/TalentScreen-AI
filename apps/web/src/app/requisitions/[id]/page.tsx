@@ -2,7 +2,7 @@
 
 import React, { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, RequisitionItem, ApplicationItem, ReviewQueueItem, CandidateComparison } from "@/lib/api";
+import { api, RequisitionItem, ApplicationItem, ReviewQueueItem, CandidateComparison, ShortlistResponse, ShortlistCandidate } from "@/lib/api";
 import {
   IconFileText,
   IconSparkles,
@@ -41,9 +41,15 @@ export default function RequisitionDetailPage({ params }: PageProps) {
   const [pendingOnly, setPendingOnly] = useState(false);
   const [comparison, setComparison] = useState<CandidateComparison | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [shortlist, setShortlist] = useState<ShortlistResponse | null>(null);
+  const [shortlistLoading, setShortlistLoading] = useState(false);
+  const [shortlistError, setShortlistError] = useState<string | null>(null);
+  const [shortlistTierFilter, setShortlistTierFilter] = useState<string>("all");
+  const [shortlistThresholdInput, setShortlistThresholdInput] = useState<number>(70);
   const [rubric, setRubric] = useState<any>(null);
   const [jdVersion, setJdVersion] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"applications" | "jd_rubric" | "comparison">("applications");
+  const [jdContentReviewed, setJdContentReviewed] = useState(false);
+  const [activeTab, setActiveTab] = useState<"applications" | "shortlist" | "jd_rubric" | "comparison">("applications");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [applicationsLoadError, setApplicationsLoadError] = useState<string | null>(null);
@@ -159,6 +165,12 @@ export default function RequisitionDetailPage({ params }: PageProps) {
     return () => { active = false; window.clearInterval(timer); };
   }, [id, reviewQueue]);
 
+  useEffect(() => {
+    if (activeTab === "shortlist") {
+      void loadShortlist();
+    }
+  }, [activeTab, id]);
+
   const queueByApplication = new Map(reviewQueue.map((item) => [item.application_id, item]));
   const displayedApplications = pendingOnly
     ? applications.filter((item) => {
@@ -186,20 +198,51 @@ export default function RequisitionDetailPage({ params }: PageProps) {
   }
 
 
-  async function handleCreateSeedRubric() {
-    if (!requisition) return;
+  async function handleApproveJDForAI() {
+    if (!jdVersion || !jdContentReviewed) return;
     setRubricActionLoading(true);
     try {
-      const newRubric = await api.createRubric(id, { source: "seed", jd_version_id: requisition.current_jd_version_id });
-      setRubric(newRubric);
-      success("Đã tạo bản nháp rubric Backend Python. Hãy kiểm tra trích dẫn với JD trước khi duyệt.");
+      await api.approveJDForAI(jdVersion.id, jdVersion.text_hash);
+      setJdContentReviewed(false);
+      success("Đã ghi nhận duyệt JD này để gửi mô hình AI.");
       await loadData();
     } catch (err: any) {
-      toastError(err.message || "Không thể tạo Rubric mẫu");
+      toastError(err.message || "Không thể duyệt JD cho AI");
     } finally {
       setRubricActionLoading(false);
     }
   }
+
+  async function handleDraftRubricFromJD() {
+    if (!requisition) return;
+    setRubricActionLoading(true);
+    try {
+      const newRubric = await api.draftRubricFromJD(id);
+      setRubric(newRubric);
+      success("Đã tạo rubric nháp từ JD của vị trí này. Hãy kiểm tra yêu cầu nguồn, mức điểm và trọng số trước khi duyệt.");
+      await loadData();
+    } catch (err: any) {
+      toastError(err.message || "Không thể tạo Rubric tự động từ JD");
+    } finally {
+      setRubricActionLoading(false);
+    }
+  }
+
+  async function loadShortlist(thresholdVal?: number) {
+    setShortlistLoading(true);
+    setShortlistError(null);
+    try {
+      const targetThreshold = thresholdVal !== undefined ? thresholdVal : shortlistThresholdInput;
+      const res = await api.getShortlist(id, targetThreshold);
+      setShortlist(res);
+      setShortlistThresholdInput(res.threshold);
+    } catch (err: any) {
+      setShortlistError(err.message || "Không tải được dữ liệu Shortlist.");
+    } finally {
+      setShortlistLoading(false);
+    }
+  }
+
 
   function emptyCustomCriterion(index: number): any {
     return {
@@ -449,6 +492,18 @@ export default function RequisitionDetailPage({ params }: PageProps) {
           <span>Danh Sách Ứng Viên ({applicationsLoadError ? "—" : applications.length})</span>
         </button>
         <button
+          className={`tab-btn ${activeTab === "shortlist" ? "active" : ""}`}
+          onClick={() => setActiveTab("shortlist")}
+        >
+          <IconSparkles size={16} />
+          <span>Bảng Xếp Hạng & Shortlist (AI)</span>
+          {shortlist && (
+            <span className="badge badge-open" style={{ fontSize: "0.65rem", padding: "0.15rem 0.4rem", marginLeft: "0.35rem" }}>
+              {shortlist.shortlisted_candidates} ưu tiên
+            </span>
+          )}
+        </button>
+        <button
           className={`tab-btn ${activeTab === "jd_rubric" ? "active" : ""}`}
           onClick={() => setActiveTab("jd_rubric")}
         >
@@ -530,13 +585,18 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                     {displayedApplications.filter(app => app.public_label.toLowerCase().includes(search.trim().toLowerCase()) && (!stageFilter || queueByApplication.get(app.id)?.workflow_stage === stageFilter)).map((app, index) => (
                       <tr key={app.id}>
                         <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                             <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                               #{index + 1}
                             </span>
                             <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--accent-cyan)", fontSize: "0.9rem" }}>
                               {app.public_label}
                             </span>
+                            {queueByApplication.get(app.id)?.is_duplicate && (
+                              <span className="badge badge-subtle" title="Tệp CV hoặc liên hệ trùng với hồ sơ khác bạn có quyền xem. HR cần kiểm tra; hệ thống không tự gộp ứng viên." style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem" }}>
+                                Nghi trùng · {queueByApplication.get(app.id)?.application_history_count} hồ sơ
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td style={{ fontSize: "0.825rem", color: "var(--text-secondary)" }}>
@@ -558,6 +618,13 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                           <span className="badge badge-subtle" style={{ fontFamily: "var(--font-mono)", fontSize: "0.725rem" }}>
                             {stageLabels[queueByApplication.get(app.id)?.workflow_stage || ""] || "Chưa xác định"}
                           </span>
+                          {queueByApplication.get(app.id)?.sla_breached && (
+                            <div style={{ marginTop: "0.25rem" }}>
+                              <span className="badge badge-paused" style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.3)" }}>
+                                ⚠️ Chờ duyệt {queueByApplication.get(app.id)?.hours_in_stage}h (Quá SLA)
+                              </span>
+                            </div>
+                          )}
                         </td>
                         <td>
                           {app.current_assessment_run_id ? (
@@ -587,6 +654,308 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                         </td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Shortlist (AI Shortlist Engine) */}
+      {activeTab === "shortlist" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+          {/* Header & Filter Controls */}
+          <div className="card">
+            <div className="card-header" style={{ flexWrap: "wrap", gap: "1rem" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <IconSparkles size={18} color="var(--accent-cyan)" />
+                  <h2 className="card-title">Bảng Xếp Hạng & Phân Tầng Ứng Viên (AI Shortlist Engine)</h2>
+                </div>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "0.25rem" }}>
+                  Tự động lọc, xếp thứ hạng và phân nhóm ứng viên dựa trên điểm chuẩn hóa, độ phủ bằng chứng và tiêu chuẩn cốt lõi (Core Competencies).
+                </p>
+              </div>
+
+              {/* Threshold Adjuster */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Ngưỡng xét tuyển /100:</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="form-input"
+                  style={{ width: "70px", padding: "0.3rem 0.5rem" }}
+                  value={shortlistThresholdInput}
+                  onChange={(e) => setShortlistThresholdInput(Number(e.target.value))}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => void loadShortlist(shortlistThresholdInput)}
+                  disabled={shortlistLoading}
+                >
+                  Lọc theo ngưỡng mới
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => void loadShortlist()}
+                  disabled={shortlistLoading}
+                >
+                  Làm mới
+                </button>
+              </div>
+            </div>
+
+            {/* KPI Summary Cards */}
+            {shortlist && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.75rem", marginTop: "1rem" }}>
+                <div
+                  onClick={() => setShortlistTierFilter(shortlistTierFilter === "recommend" ? "all" : "recommend")}
+                  style={{
+                    padding: "0.85rem 1rem",
+                    borderRadius: "var(--radius-sm)",
+                    background: shortlistTierFilter === "recommend" ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.08)",
+                    border: `1px solid ${shortlistTierFilter === "recommend" ? "var(--emerald-border)" : "rgba(16, 185, 129, 0.2)"}`,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div style={{ fontSize: "0.75rem", color: "var(--emerald-text)", fontWeight: 600 }}>🌟 KHUYẾN NGHỊ ƯU TIÊN</div>
+                  <div style={{ fontSize: "1.45rem", fontWeight: 700, color: "var(--emerald-text)", marginTop: "0.2rem" }}>
+                    {shortlist.tier_summary.recommend || 0}
+                  </div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Điểm ≥ {shortlist.threshold} & đạt Core</div>
+                </div>
+
+                <div
+                  onClick={() => setShortlistTierFilter(shortlistTierFilter === "borderline" ? "all" : "borderline")}
+                  style={{
+                    padding: "0.85rem 1rem",
+                    borderRadius: "var(--radius-sm)",
+                    background: shortlistTierFilter === "borderline" ? "rgba(56, 189, 248, 0.2)" : "rgba(56, 189, 248, 0.08)",
+                    border: `1px solid ${shortlistTierFilter === "borderline" ? "var(--accent-cyan)" : "rgba(56, 189, 248, 0.2)"}`,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontWeight: 600 }}>⚖️ CÂN NHẮC / PHỎNG VẤN THÊM</div>
+                  <div style={{ fontSize: "1.45rem", fontWeight: 700, color: "var(--accent-cyan)", marginTop: "0.2rem" }}>
+                    {shortlist.tier_summary.borderline || 0}
+                  </div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Điểm {Math.max(0, shortlist.threshold - 15)} – {shortlist.threshold}</div>
+                </div>
+
+                <div
+                  onClick={() => setShortlistTierFilter(shortlistTierFilter === "core_fail" ? "all" : "core_fail")}
+                  style={{
+                    padding: "0.85rem 1rem",
+                    borderRadius: "var(--radius-sm)",
+                    background: shortlistTierFilter === "core_fail" ? "rgba(245, 158, 11, 0.2)" : "rgba(245, 158, 11, 0.08)",
+                    border: `1px solid ${shortlistTierFilter === "core_fail" ? "var(--amber-border)" : "rgba(245, 158, 11, 0.2)"}`,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div style={{ fontSize: "0.75rem", color: "var(--amber-text)", fontWeight: 600 }}>⚠️ THIẾU TIÊU CHÍ CỐT LÕI</div>
+                  <div style={{ fontSize: "1.45rem", fontWeight: 700, color: "var(--amber-text)", marginTop: "0.2rem" }}>
+                    {shortlist.tier_summary.core_fail || 0}
+                  </div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Chưa đạt mức sàn năng lực chính</div>
+                </div>
+
+                <div
+                  onClick={() => setShortlistTierFilter(shortlistTierFilter === "below_threshold" ? "all" : "below_threshold")}
+                  style={{
+                    padding: "0.85rem 1rem",
+                    borderRadius: "var(--radius-sm)",
+                    background: shortlistTierFilter === "below_threshold" ? "rgba(148, 163, 184, 0.2)" : "rgba(148, 163, 184, 0.08)",
+                    border: `1px solid ${shortlistTierFilter === "below_threshold" ? "var(--text-primary)" : "rgba(148, 163, 184, 0.2)"}`,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>📉 DƯỚI NGƯỠNG TIÊU CHUẨN</div>
+                  <div style={{ fontSize: "1.45rem", fontWeight: 700, color: "var(--text-secondary)", marginTop: "0.2rem" }}>
+                    {shortlist.tier_summary.below_threshold || 0}
+                  </div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Điểm &lt; {Math.max(0, shortlist.threshold - 15)}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Candidates Shortlist Table */}
+          {shortlistLoading ? (
+            <div className="card" style={{ padding: "2rem", textAlign: "center" }}>
+              <p>Đang phân tích và xếp hạng ứng viên theo Rubric…</p>
+            </div>
+          ) : shortlistError ? (
+            <div className="card notice notice-error" role="alert">
+              <p>{shortlistError}</p>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => void loadShortlist()}>Thử lại</button>
+            </div>
+          ) : !shortlist || shortlist.candidates.length === 0 ? (
+            <div className="card" style={{ padding: "2.5rem 1rem", textAlign: "center" }}>
+              <p className="muted">Chưa có ứng viên nào được tiếp nhận hoặc có kết quả đánh giá.</p>
+            </div>
+          ) : (
+            <div className="card" style={{ padding: "0.5rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.75rem 1rem", borderBottom: "1px solid var(--border-subtle)", flexWrap: "wrap", gap: "0.5rem" }}>
+                <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                  Hiển thị: <strong>{shortlistTierFilter === "all" ? "Tất cả các nhóm" : shortlistTierFilter.toUpperCase()}</strong> (
+                  {shortlist.candidates.filter(c => shortlistTierFilter === "all" || c.tier === shortlistTierFilter).length} / {shortlist.total_candidates} hồ sơ)
+                </div>
+                {shortlistTierFilter !== "all" && (
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShortlistTierFilter("all")}>
+                    Bỏ lọc nhóm
+                  </button>
+                )}
+              </div>
+
+              <div className="table-wrapper" style={{ border: "none" }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "70px" }}>Hạng</th>
+                      <th>Mã Ứng Viên</th>
+                      <th>Phân Nhóm AI (Tier)</th>
+                      <th>Điểm Chuẩn Hóa</th>
+                      <th>Độ Phủ Bằng Chứng</th>
+                      <th>Thế Mạnh Nổi Bật</th>
+                      <th>Điểm Thiếu / Cần Làm Rõ</th>
+                      <th style={{ textAlign: "right" }}>Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shortlist.candidates
+                      .filter(c => shortlistTierFilter === "all" || c.tier === shortlistTierFilter)
+                      .map((c) => {
+                        const rankColor = c.rank === 1 ? "#fbbf24" : c.rank === 2 ? "#94a3b8" : c.rank === 3 ? "#d97706" : "var(--accent-cyan)";
+                        const tierBadgeClass =
+                          c.tier === "recommend" ? "badge-open" :
+                          c.tier === "borderline" ? "badge-subtle" :
+                          c.tier === "core_fail" ? "badge-paused" : "badge-subtle";
+
+                        return (
+                          <tr key={c.application_id}>
+                            <td>
+                              {c.rank ? (
+                                <span style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  width: "28px",
+                                  height: "28px",
+                                  borderRadius: "50%",
+                                  background: c.rank <= 3 ? `${rankColor}22` : "var(--bg-surface-elevated)",
+                                  color: rankColor,
+                                  fontWeight: 800,
+                                  fontSize: "0.85rem",
+                                  border: `1px solid ${rankColor}55`,
+                                }}>
+                                  #{c.rank}
+                                </span>
+                              ) : (
+                                <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>—</span>
+                              )}
+                            </td>
+                            <td>
+                              <div style={{ display: "flex", flexDirection: "column" }}>
+                                <Link
+                                  href={`/applications/${c.application_id}`}
+                                  style={{ fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--accent-cyan)", fontSize: "0.9rem" }}
+                                >
+                                  {c.public_label}
+                                </Link>
+                                {c.has_decision && (
+                                  <span style={{ fontSize: "0.7rem", color: "var(--emerald-text)" }}>✓ Đã có quyết định HR</span>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`badge ${tierBadgeClass}`} style={{ fontSize: "0.75rem" }}>
+                                {c.tier === "recommend" && "🌟 KHUYẾN NGHỊ"}
+                                {c.tier === "borderline" && "⚖️ CÂN NHẮC"}
+                                {c.tier === "core_fail" && "⚠️ THIẾU CORE"}
+                                {c.tier === "below_threshold" && "📉 DƯỚI NGƯỠNG"}
+                                {c.tier === "not_assessed" && "CHƯA ĐÁNH GIÁ"}
+                              </span>
+                            </td>
+                            <td>
+                              {c.comparable_score !== null ? (
+                                <div>
+                                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.25rem" }}>
+                                    <strong style={{ fontSize: "1.05rem", color: c.comparable_score >= shortlist.threshold ? "var(--emerald-text)" : "var(--text-primary)" }}>
+                                      {c.comparable_score.toFixed(1)}
+                                    </strong>
+                                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>/100</span>
+                                  </div>
+                                  <div style={{ width: "80px", height: "4px", background: "var(--border-subtle)", borderRadius: "2px", marginTop: "0.25rem", overflow: "hidden" }}>
+                                    <div style={{ width: `${Math.min(100, Math.max(0, c.comparable_score))}%`, height: "100%", background: c.comparable_score >= shortlist.threshold ? "var(--emerald-text)" : "var(--accent-cyan)" }} />
+                                  </div>
+                                </div>
+                              ) : (
+                                <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>Chưa có điểm</span>
+                              )}
+                            </td>
+                            <td>
+                              {c.coverage !== null ? (
+                                <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                                  {Math.round(c.coverage * 100)}%
+                                </span>
+                              ) : (
+                                <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>—</span>
+                              )}
+                            </td>
+                            <td>
+                              {c.strengths.length > 0 ? (
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", maxWidth: "200px" }}>
+                                  {c.strengths.slice(0, 2).map((s, idx) => (
+                                    <span key={idx} className="badge badge-open" style={{ fontSize: "0.68rem", padding: "0.1rem 0.35rem" }}>
+                                      {s}
+                                    </span>
+                                  ))}
+                                  {c.strengths.length > 2 && (
+                                    <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>+{c.strengths.length - 2}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}>—</span>
+                              )}
+                            </td>
+                            <td>
+                              {c.core_failed_criteria.length > 0 ? (
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", maxWidth: "200px" }}>
+                                  {c.core_failed_criteria.map((cf, idx) => (
+                                    <span key={idx} className="badge badge-paused" style={{ fontSize: "0.68rem", padding: "0.1rem 0.35rem" }}>
+                                      Thiếu {cf}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : c.missing_criteria.length > 0 ? (
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", maxWidth: "200px" }}>
+                                  {c.missing_criteria.slice(0, 2).map((mc, idx) => (
+                                    <span key={idx} className="badge badge-subtle" style={{ fontSize: "0.68rem", padding: "0.1rem 0.35rem" }}>
+                                      {mc}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span style={{ color: "var(--emerald-text)", fontSize: "0.78rem" }}>Đầy đủ bằng chứng</span>
+                              )}
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              <Link href={`/applications/${c.application_id}`} className="btn btn-secondary btn-sm">
+                                <span>Xem & Duyệt</span>
+                                <IconArrowRight size={14} />
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -685,6 +1054,16 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             )}
           </div>
 
+          {canManage && jdVersion && !jdVersion.egress_reviewed_at && requisition.status !== "closed" && (
+            <div className="notice" style={{ display: "grid", gap: "0.75rem" }}>
+              <label className="rubric-ack"><input type="checkbox" checked={jdContentReviewed} onChange={event => setJdContentReviewed(event.target.checked)} />
+                Tôi đã kiểm tra JD này, loại thông tin riêng tư và cho phép gửi nội dung tới mô hình AI đã cấu hình để gợi ý tiêu chí.
+              </label>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={!jdContentReviewed || rubricActionLoading} onClick={handleApproveJDForAI}>Duyệt riêng JD này cho AI</button>
+              <span className="muted">Duyệt gửi JD không đồng nghĩa duyệt rubric. Lập tiêu chí thủ công hoặc chế độ mock không cần gửi JD ra ngoài.</span>
+            </div>
+          )}
+
           {requisition.current_rubric_version_id && <QuestionBankSetup rubricId={requisition.current_rubric_version_id} canManage={canCompare && requisition.status !== "closed"} />}
           {/* Rubric Card */}
           <div className="card">
@@ -692,7 +1071,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
               <div>
                 <h2 className="card-title">Rubric năng lực theo JD</h2>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.825rem", marginTop: "0.2rem" }}>
-                  Tạo 2–12 tiêu chí, gắn trích dẫn JD nguyên văn và anchor 0–4. Owner duyệt trước khi đánh giá CV.
+                  Tạo 2–12 tiêu chí theo yêu cầu của vị trí, trích dẫn JD và mức điểm 0–4. Khi cấu hình API, gợi ý dùng mô hình đã chọn; chế độ mock chỉ tách yêu cầu tại máy chủ. Owner duyệt trước khi chấm CV.
                 </p>
               </div>
 
@@ -703,9 +1082,15 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                     <span>{rubric?.status === "draft" ? "Sửa rubric nháp" : rubric ? "Tạo phiên bản rubric mới" : "Tạo rubric theo JD"}</span>
                   </button>
                 )}
-                {!rubric && canManage && (
-                  <button className="btn btn-outline btn-sm" onClick={handleCreateSeedRubric} disabled={rubricActionLoading || !jdVersion || Boolean(rubricLoadError)}>
-                    <span>Dùng mẫu Backend Python</span>
+                {canManage && jdVersion && requisition.status !== "closed" && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={handleDraftRubricFromJD}
+                    disabled={rubricActionLoading || Boolean(rubricLoadError)}
+                  >
+                    <IconSparkles size={14} />
+                    <span>Gợi ý tiêu chí từ JD</span>
                   </button>
                 )}
                 {rubric?.status === "draft" && (
@@ -828,15 +1213,15 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             ) : (
               <div style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
                 <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", marginBottom: "1rem" }}>
-                  Chưa có tiêu chí Rubric nào được gán. Hãy tạo rubric theo JD hoặc dùng mẫu Backend Python.
+                  Chưa có bộ tiêu chí. Nhập JD của vị trí cần tuyển, sau đó lập rubric thủ công hoặc gợi ý từ JD; không có mẫu Backend mặc định.
                 </p>
                 <button
                   className="btn btn-primary btn-sm"
-                  onClick={handleCreateSeedRubric}
+                  onClick={openCustomRubricEditor}
                   disabled={rubricActionLoading || !jdVersion || Boolean(rubricLoadError)}
                 >
                   <IconPlus size={14} />
-                  <span>Dùng mẫu Backend Python</span>
+                  <span>Lập tiêu chí theo JD</span>
                 </button>
               </div>
             )}

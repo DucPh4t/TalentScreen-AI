@@ -41,6 +41,7 @@ class Document(Base, PrimaryKeyMixin):
         default=DocumentSafetyStatus.PENDING,
         nullable=False,
     )
+    duplicate_fingerprints: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     parser_manifest: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     quality_report: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     raw_text_blob_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

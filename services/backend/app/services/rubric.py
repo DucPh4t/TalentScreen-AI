@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any, Optional
 import uuid
@@ -15,7 +16,9 @@ from sqlalchemy.orm import selectinload
 
 from app.db.models.requisition import JDVersion, Requisition, RequisitionMembership, RubricCriterion, RubricVersion
 from app.domain.authorization import AuthenticatedContext
-from app.domain.enums import AccountRole, MembershipRole, RubricStatus
+from app.domain.enums import AccountRole, MembershipRole, RubricStatus, SanitizedVersionStatus
+
+logger = logging.getLogger(__name__)
 from app.domain.rubric_policy import RubricValidationError, validate_canonical_rubric
 from app.schemas.rubric import (
     CriterionDTO,
@@ -60,6 +63,7 @@ def compute_content_hash(criteria_data: list[dict[str, Any]], policy_data: dict[
     }
     dumped = json.dumps(canonical, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(dumped.encode("utf-8")).hexdigest()
+
 
 
 async def check_requisition_owner_guard(
@@ -279,10 +283,41 @@ async def create_rubric_draft(
                     "bilingual_terms": c.get("bilingual_terms"),
                 }
             )
+    elif payload.source == "ai_draft":
+        jd = (await db.execute(select(JDVersion).where(
+            JDVersion.id == jd_id,
+            JDVersion.requisition_id == requisition_id,
+        ))).scalar_one_or_none()
+        if jd is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="JD hiện hành không thuộc đợt tuyển dụng này.")
+        from app.services.rubric_drafting import draft_jd_rubric
+        proposed = await draft_jd_rubric(db, jd, ctx.user.id)
+        # A bounded provider call commits its ledger before network I/O. Re-lock
+        # and re-check the JD before persisting the draft after that boundary.
+        req = await check_requisition_owner_guard(db, requisition_id, ctx)
+        await db.refresh(req)
+        if req.current_jd_version_id != jd_id:
+            raise HTTPException(409, "JD_VERSION_MISMATCH: JD đã thay đổi trong lúc tạo rubric. Hãy thử lại theo bản mới.")
+        next_version = ((await db.execute(select(func.max(RubricVersion.version_no)).where(
+            RubricVersion.requisition_id == requisition_id))).scalar() or 0) + 1
+        raw_criteria = proposed["criteria"]
+        threshold_config = proposed["recommendation_policy"]
+        for c in raw_criteria:
+            criteria_to_insert.append(
+                {
+                    "criterion_id": c["id"],
+                    "label_vi": c["label"],
+                    "description_vi": c["description"],
+                    "weight": c["weight"],
+                    "anchors": c["scoring_anchors"],
+                    "jd_evidence_refs": c["source_requirements"],
+                    "bilingual_terms": c.get("bilingual_terms"),
+                }
+            )
     else:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Nguồn rubric không hợp lệ '{payload.source}'. Phải là 'seed', 'clone', hoặc 'manual'.",
+            detail=f"Nguồn rubric không hợp lệ '{payload.source}'. Phải là 'seed', 'clone', 'manual', hoặc 'ai_draft'.",
         )
 
     # Compute content hash
@@ -607,7 +642,62 @@ async def approve_rubric(
         },
     )
 
+    from app.db.models.candidate import Application
+    from app.services.email_draft import invalidate_email_drafts
+    affected_ids = list((await db.execute(select(Application.id).where(Application.requisition_id == req.id).order_by(Application.id).with_for_update())).scalars())
+    await invalidate_email_drafts(db, affected_ids)
+
+    # Auto-Assessment Trigger: When rubric is approved, auto-trigger assessments
+    # including applications assessed against a previous rubric. Historical runs remain immutable.
+    try:
+        from app.db.models.candidate import Application
+        from app.db.models.document import SanitizedVersion
+        from app.schemas.assessment import AssessmentRunCreateRequest
+
+        stmt_waiting = (
+            select(Application)
+            .join(SanitizedVersion, SanitizedVersion.id == Application.current_sanitized_version_id)
+            .where(
+                Application.requisition_id == req.id,
+                Application.status == "active",
+                SanitizedVersion.status == SanitizedVersionStatus.APPROVED,
+            )
+        )
+        waiting_apps = (await db.execute(stmt_waiting)).scalars().all()
+        for waiting_app in waiting_apps:
+            try:
+                from app.services.assessment.service import enqueue_assessment_if_needed
+                async with db.begin_nested():
+                    await enqueue_assessment_if_needed(
+                        db=db,
+                        application_id=waiting_app.id,
+                        payload=AssessmentRunCreateRequest(
+                            sanitized_version_id=waiting_app.current_sanitized_version_id,
+                            rubric_version_id=rubric.id,
+                        ),
+                        ctx=ctx,
+                    )
+                logger.info("Auto-triggered assessment for application %s upon rubric approval", waiting_app.id)
+            except Exception as single_err:
+                logger.warning("Could not auto-trigger assessment for application %s: %s", waiting_app.id, single_err)
+    except Exception as batch_err:
+        logger.warning("Auto-trigger assessments on rubric approval skipped: %s", batch_err)
+
     return RubricApproveResponse(
         rubric=rubric_model_to_dto(rubric),
         requisition_row_version=req.row_version,
+    )
+
+
+async def draft_rubric_from_jd(
+    db: AsyncSession,
+    requisition_id: uuid.UUID,
+    ctx: AuthenticatedContext,
+) -> RubricResponse:
+    """Auto-synthesize a draft rubric with valid JD evidence citations."""
+    return await create_rubric_draft(
+        db=db,
+        requisition_id=requisition_id,
+        payload=RubricCreateRequest(source="ai_draft"),
+        ctx=ctx,
     )

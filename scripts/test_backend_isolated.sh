@@ -48,4 +48,4 @@ export DATABASE_SYNC_URL="postgresql://postgres:postgres@127.0.0.1:${test_port}/
 export PYTHONPATH=services/backend
 
 .venv/bin/alembic upgrade head
-.venv/bin/python -m pytest services/backend/tests -q
+.venv/bin/python -m pytest "${@:-services/backend/tests}" -q

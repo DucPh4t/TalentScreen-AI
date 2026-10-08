@@ -172,6 +172,22 @@ def _build_no_evidence_assessment(
     )
 
 
+async def enqueue_assessment_if_needed(db, application_id, payload, ctx):
+    """Auto-trigger once per current source/rubric; manual reruns remain possible."""
+    application = (await db.execute(select(Application).where(Application.id == application_id).with_for_update())).scalar_one()
+    existing = (await db.execute(select(AssessmentRun.id).where(
+        AssessmentRun.application_id == application_id,
+        AssessmentRun.application_generation == application.generation,
+        AssessmentRun.document_id == application.current_document_id,
+        AssessmentRun.sanitized_version_id == payload.sanitized_version_id,
+        AssessmentRun.rubric_version_id == payload.rubric_version_id,
+        AssessmentRun.status.in_(["queued", "running", "succeeded"]),
+    ).limit(1))).scalar_one_or_none()
+    if existing:
+        return None
+    return await create_assessment_run(db, application_id, payload, ctx)
+
+
 async def create_assessment_run(
     db: AsyncSession,
     application_id: uuid.UUID,
@@ -729,6 +745,9 @@ async def execute_assessment_job(
             db.add(ev_model)
 
     # Point application to current assessment run
+    await db.execute(select(Application.id).where(Application.id == run.application_id).with_for_update())
+    from app.services.email_draft import invalidate_email_drafts
+    await invalidate_email_drafts(db, [run.application_id])
     run.application.current_assessment_run_id = run.id
     run.application.updated_at = datetime.now(timezone.utc)
     await db.flush()
