@@ -23,6 +23,7 @@ import { stageLabels } from "@/lib/workflow";
 import BatchDropzone from "@/components/BatchDropzone";
 import ApplicationList from "@/components/ApplicationList";
 import { filterApplicationList, shortlistEvidenceFallback } from "@/lib/application-list";
+import { getRequisitionSetup } from "@/lib/requisition-setup";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -49,6 +50,8 @@ export default function RequisitionDetailPage({ params }: PageProps) {
   const [shortlistTierFilter, setShortlistTierFilter] = useState<string>("all");
   const [shortlistThresholdInput, setShortlistThresholdInput] = useState<number>(70);
   const [rubric, setRubric] = useState<any>(null);
+  const [rubricVersions, setRubricVersions] = useState<any[]>([]);
+  const [setupLoading, setSetupLoading] = useState(true);
   const [jdVersion, setJdVersion] = useState<any>(null);
   const [jdContentReviewed, setJdContentReviewed] = useState(false);
   const [activeTab, setActiveTab] = useState<"applications" | "shortlist" | "jd_rubric" | "comparison">("applications");
@@ -75,6 +78,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
   const canManage = requisition?.my_role === "owner" || requisition?.my_role === "admin";
   const canCompare = requisition?.my_role === "owner";
   const canReviewIndependently = requisition?.my_role === "reviewer";
+  const intakeSetup = getRequisitionSetup(requisition, rubricVersions, setupLoading || Boolean(jdLoadError || rubricLoadError));
 
   const rubricJDAligned = Boolean(rubric && jdVersion && rubric.jd_version_id === jdVersion.id && rubric.criteria?.length > 0 && rubric.criteria.every((criterion: any) =>
     criterion.source_requirements?.length > 0 && criterion.source_requirements.every((ref: any) =>
@@ -84,6 +88,8 @@ export default function RequisitionDetailPage({ params }: PageProps) {
 
   async function loadData(silent = false) {
     if (!silent) setLoading(true);
+    setSetupLoading(true);
+    setRubricVersions([]);
     setError(null);
     setApplicationsLoadError(null);
     setRubricLoadError(null);
@@ -116,6 +122,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
 
       try {
         const versions = await api.listRubrics(id);
+        setRubricVersions(versions);
         setRubric(versions.find((version) => version.status === "draft") || versions.find((version) => version.id === req.current_rubric_version_id) || null);
         setAcknowledgedRubric(false);
       } catch (e) {
@@ -133,10 +140,13 @@ export default function RequisitionDetailPage({ params }: PageProps) {
           setJdVersion(null);
           setJdLoadError("Không tải được JD hiện hành. Thử lại trước khi tạo phiên bản khác.");
         }
+      } else {
+        setJdVersion(null);
       }
     } catch (err: any) {
       setError(err.message || "Không thể tải thông tin đợt tuyển dụng");
     } finally {
+      setSetupLoading(false);
       setLoading(false);
     }
   }
@@ -182,6 +192,12 @@ export default function RequisitionDetailPage({ params }: PageProps) {
 
   async function handleStatusChange(nextStatus: string) {
     if (!requisition) return;
+    if (nextStatus === "open" && requisition.status === "draft" && !intakeSetup.ready) {
+      info(intakeSetup.message);
+      if (intakeSetup.action === "reload") void loadData();
+      else setActiveTab("jd_rubric");
+      return;
+    }
     setUpdatingStatus(true);
     try {
       const updated = await api.patchRequisition(
@@ -443,7 +459,9 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             <button
               className="btn btn-primary"
               onClick={() => handleStatusChange("open")}
-              disabled={updatingStatus}
+              disabled={updatingStatus || !intakeSetup.ready}
+              title={intakeSetup.message}
+              aria-describedby="intake-setup-message"
             >
               Mở Nhận Hồ Sơ
             </button>
@@ -482,6 +500,12 @@ export default function RequisitionDetailPage({ params }: PageProps) {
           </button>}
         </div>
       </div>
+
+      {requisition.status === "draft" && (
+        <p id="intake-setup-message" className="notice" role="status" style={{ marginBottom: "1rem" }}>
+          {intakeSetup.message}
+        </p>
+      )}
 
       {/* Tabs Switcher */}
       <div className="tabs-container">
@@ -547,10 +571,28 @@ export default function RequisitionDetailPage({ params }: PageProps) {
               <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "var(--accent-soft)", color: "var(--accent-cyan)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
                 <IconUpload size={24} color="var(--accent-cyan)" />
               </div>
-              <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.35rem" }}>Chưa có hồ sơ nào được tiếp nhận</h3>
+              <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                {requisition.status === "draft" ? "Thiết lập đợt tuyển để tải CV" : requisition.status === "paused" ? "Đợt đang tạm dừng nhận CV" : requisition.status === "closed" ? "Đợt đã đóng, chưa có hồ sơ" : "Chưa có hồ sơ nào được tiếp nhận"}
+              </h3>
               <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", maxWidth: "520px", margin: "0 auto 1.5rem auto", lineHeight: 1.6 }}>
-                Đợt tuyển dụng chưa có hồ sơ ứng viên. Tải tối đa 20 CV PDF hoặc DOCX mỗi lượt (10 MB/tệp). Hệ thống tạo bản nháp đã khử định danh để HR kiểm tra trước khi chạy AI.
+                {requisition.status === "draft"
+                  ? "Hoàn tất JD và rubric → mở nhận hồ sơ → tải CV. Đợt còn ở bản nháp nên chưa thể tải tệp."
+                  : requisition.status === "paused"
+                    ? "Tiếp tục mở lại đợt để tải thêm CV. Hồ sơ đã tiếp nhận vẫn được giữ nguyên."
+                    : requisition.status === "closed"
+                      ? "Đợt đã kết thúc và không nhận thêm CV. Tạo đợt tuyển dụng mới nếu cần tiếp nhận hồ sơ."
+                      : "Tải tối đa 20 CV PDF hoặc DOCX mỗi lượt (10 MB/tệp). Hệ thống tạo bản nháp đã khử định danh để HR kiểm tra trước khi chạy AI."}
               </p>
+              {canManage && requisition.status === "draft" && (
+                <button type="button" className="btn btn-primary" style={{ margin: "0 auto" }} disabled={updatingStatus || setupLoading}
+                  onClick={() => intakeSetup.ready ? void handleStatusChange("open") : intakeSetup.action === "reload" ? void loadData() : setActiveTab("jd_rubric")}>
+                  <span>{intakeSetup.ready ? "Mở nhận hồ sơ để tải CV" : intakeSetup.action === "reload" ? "Thử tải lại JD & tiêu chí" : "Thiết lập JD & tiêu chí"}</span>
+                  <IconArrowRight size={16} />
+                </button>
+              )}
+              {canManage && requisition.status === "paused" && (
+                <button type="button" className="btn btn-primary" style={{ margin: "0 auto" }} disabled={updatingStatus} onClick={() => void handleStatusChange("open")}>Mở lại để tải CV</button>
+              )}
               {canManage && requisition.status === "open" && (
                 <button
                   type="button"

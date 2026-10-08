@@ -52,3 +52,15 @@ The screenshots below show the current warm neutral theme and contain synthetic 
 ![Desktop candidate queue](candidate-list-desktop-2026-10-08.jpg)
 
 <img src="candidate-list-mobile-2026-10-08.jpg" alt="Mobile candidate queue with synthetic records" width="390" />
+
+
+## Follow-up: draft requisition intake guidance
+
+The draft requisition screen exposed an enabled “Mở Nhận Hồ Sơ” button before a rubric existed. The API correctly returned 422, but the empty candidate list described uploading without explaining why its upload control was absent.
+
+- Draft intake now checks the current approved rubric against the current JD, separately from the rubric draft selected in the editor. Missing JD, missing/unapproved rubric, stale JD mapping and metadata failures keep intake closed.
+- The empty list directs managers to JD and rubric setup, opens intake only when eligible, and explains paused/closed states. Server-side approval requirements remain unchanged.
+- Verified the original error on the affected local draft, then verified the disabled open button and the setup action reaching the rubric tab. Verified the upload chooser on an existing open demo requisition.
+- Mobile verification at 390 px reported document width 390 px; the viewport override was reset afterwards.
+- Frontend regression: 16/16 tests passed, including eight setup guards added after observing their initial failures. Production build passed with TypeScript validation.
+- This follow-up did not approve the affected rubric, upload CVs, make provider requests or record any hiring decision.
