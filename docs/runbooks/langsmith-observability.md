@@ -39,7 +39,9 @@ If the local backend uses another port, retain its existing port and frontend re
 ```
 
 This creates **one synthetic telemetry span**, flushes it and reads it back. It
-makes no CV/model/DB request. `verified: true` and exit code 0 confirm read-back;
+makes no CV/model/DB request. Read-back retries only missing/pending runs, up to
+eight reads, to tolerate asynchronous ingestion. Access/network failures are not
+retried. `verified: true` and exit code 0 confirm read-back;
 `not_enabled` exits 2; export/read-back failures exit 1. A successful local mock
 transport test is not cloud verification.
 
