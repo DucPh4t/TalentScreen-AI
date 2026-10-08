@@ -36,6 +36,10 @@ There were no declined-to-judge items in this fresh review. The reviewer perform
 
 Measured figures and their limits are in [the results](../evaluation/ai-benchmark-results-2026-10-09.md) and [aggregate JSON](../evaluation/ai-benchmark-results-2026-10-09.json). Synthetic anchor-0 live cases do not establish representative hiring accuracy; hybrid did not improve span ranking over dense here, and no live agent-recovery gain was measured. Independent representative labels and longer selective-retrieval cases remain future evidence requirements.
 
+## Main integration verification
+
+Primary `main` fast-forwarded to `4563d42` without conflicts. The full isolated backend suite was repeated on that exact checkout: **417 passed, 1 opt-in skip, 0 failed**. The opt-in cached real-E5/pgvector smoke was also repeated there and passed on `mps:0`; no paid LLM requests. Runtime journals, regenerated reports, tokenizer proof cache and verification logs were preserved under the primary checkout's ignored `reports/ai-benchmark/` and `reports/ai-benchmark-cache/`. Only the benchmark worktree is eligible for cleanup; the pre-existing RAG worktree is outside this task.
+
 ## Rulings I made
 
 - Ruling: native worktree tool cannot select the required project-local path and this chat's cwd is a different directory; use git worktree add in the user's explicit project root — no current checkout/data touched; cost if wrong: app would run an old version until verified integration.
