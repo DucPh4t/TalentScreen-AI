@@ -1,7 +1,7 @@
 # TalentScreen AI: production-pipeline evaluation and RAG/agent ablation
 
 - Date: 2026-10-08
-- Design status: proposed written spec; implementation has not started.
+- Design status: written spec approved by the user on 2026-10-08; implementation awaits plan review.
 - Selected approach: B — a developer evaluation runner that exercises application services.
 - Baseline: main at ca62f56.
 
