@@ -1,0 +1,13 @@
+{
+  "schema_version": "ai-benchmark.v1",
+  "data_origin": "synthetic",
+  "labels_origin": "design_expected",
+  "seed": 20261008,
+  "public_test_is_protected_holdout": false,
+  "annotation_method": "Curated template scenarios with exact span references; no independent HR labels",
+  "files": {
+    "cases.jsonl": "d82a3444dc84b92d3eaa1c42e384f5aaa95e6312bf2468a7345fda205de177d0",
+    "roles.json": "4c9aa4aa88b83805de6edead5de71fa9017dffa13b822575297a1c54520fffc6",
+    "references.jsonl": "da6c0a676cf0e3da4e3f280e7e36595ae8a4b9bbf2b4b31f896b061b0f3383e2"
+  }
+}
