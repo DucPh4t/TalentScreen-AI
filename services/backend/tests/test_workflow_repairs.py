@@ -316,7 +316,19 @@ async def test_configured_provider_drafts_validated_jd_rubric_with_ledger(test_s
         jd.egress_reviewed_by = ctx["owner"].id
         await session.commit()
         valid = rubric_drafting.local_jd_draft(jd.source_text)
-    provider = MockLLMProvider(custom_content=json.dumps(valid))
+        # Provider selects immutable JD passage IDs; the server owns source quotes.
+        for index, criterion in enumerate(valid["criteria"], start=2):
+            criterion["source_requirements"] = [{"requirement_id": f"JD-SOURCE-{index:03d}"}]
+    class RecordingProvider(MockLLMProvider):
+        def __init__(self):
+            super().__init__(custom_content=json.dumps(valid))
+            self.requests = []
+
+        async def complete(self, request):
+            self.requests.append(request)
+            return await super().complete(request)
+
+    provider = RecordingProvider()
     monkeypatch.setattr(rubric_drafting, "get_settings", lambda: SimpleNamespace(LLM_PROVIDER="deepseek", DEEPSEEK_MODEL="deepseek-flash"))
     monkeypatch.setattr(orchestrator, "get_llm_provider", lambda: provider)
     async with client_for(ctx) as client:
@@ -330,6 +342,54 @@ async def test_configured_provider_drafts_validated_jd_rubric_with_ledger(test_s
         invocation = (await session.execute(select(LLMInvocation).where(LLMInvocation.job_id == job.id))).scalar_one()
         assert invocation.cost_actual is not None
     assert provider.invocation_count == 1
+    # Rubric JSON must not lose its output allowance to default reasoning.
+    assert provider.requests[0].thinking_mode == "disabled"
+    prompt = json.loads(provider.requests[0].user_prompt)
+    anchor_schema = prompt["output_schema"]["$defs"]["ProposalAnchor"]
+    # Keep five anchors useful without expanding optional evidence arrays per score.
+    assert set(anchor_schema["properties"]) == {"score", "description"}
+    assert anchor_schema["additionalProperties"] is False
+    assert anchor_schema["properties"]["description"]["maxLength"] == 400
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault, status_code, expected_code", [
+    ("401", 502, "RUBRIC_DRAFT_AUTHENTICATION_FAILED"),
+    ("402", 502, "RUBRIC_DRAFT_QUOTA_EXHAUSTED"),
+    ("timeout", 504, "RUBRIC_DRAFT_NETWORK_TIMEOUT"),
+    ("truncated", 502, "RUBRIC_DRAFT_RESPONSE_TRUNCATED"),
+    ("malformed_json", 502, "RUBRIC_DRAFT_INVALID"),
+])
+async def test_rubric_provider_failure_explains_cause_without_storing_draft(
+    test_session_factory, sample_docx_cv, monkeypatch, fault, status_code, expected_code
+):
+    from types import SimpleNamespace
+    from app.db.models import Job, RubricVersion
+    from app.services import rubric_drafting
+    from app.services.llm import orchestrator
+    from app.services.llm.provider import MockLLMProvider
+    async with test_session_factory() as session:
+        ctx = await setup_test_context(session, sample_docx_cv)
+        req = await session.get(Requisition, ctx["req_id"])
+        jd = await session.get(JDVersion, req.current_jd_version_id)
+        jd.egress_reviewed_at = datetime.now(timezone.utc)
+        jd.egress_reviewed_by = ctx["owner"].id
+        await session.commit()
+        before = (await session.execute(select(RubricVersion.id).where(RubricVersion.requisition_id == ctx["req_id"]))).scalars().all()
+    provider = MockLLMProvider(fault_mode=fault)
+    monkeypatch.setattr(rubric_drafting, "get_settings", lambda: SimpleNamespace(LLM_PROVIDER="deepseek", DEEPSEEK_MODEL="deepseek-flash"))
+    monkeypatch.setattr(orchestrator, "get_llm_provider", lambda: provider)
+    async with client_for(ctx) as client:
+        response = await client.post(f"/api/v1/requisitions/{ctx['req_id']}/rubrics/draft-from-jd")
+        assert response.status_code == status_code
+        assert response.json()["detail"].startswith(expected_code + ":")
+        assert "Not valid JSON" not in response.text
+    async with test_session_factory() as session:
+        after = (await session.execute(select(RubricVersion.id).where(RubricVersion.requisition_id == ctx["req_id"]))).scalars().all()
+        assert set(after) == set(before)
+        job = (await session.execute(select(Job).where(Job.target_id == jd.id))).scalar_one()
+        assert job.status.value == "failed"
+        assert job.last_error_code == expected_code
 
 
 @pytest.mark.asyncio
@@ -506,3 +566,113 @@ async def test_reassessment_and_source_revoke_do_not_deadlock(test_session_facto
                 if not revoke_task.done():
                     revoke_task.cancel()
                 await asyncio.gather(revoke_task, return_exceptions=True)
+
+
+def test_rubric_proposal_resolves_original_markdown_sources_and_normalizes_priorities():
+    import json
+    from app.services import rubric_drafting
+    source = "Yêu cầu:\n* Thiết kế API **Python** có phân quyền.\n* Kiểm thử backend bằng **pytest**."
+    proposal = rubric_drafting.local_jd_draft(source)
+    proposal["criteria"][0]["weight"] = 80
+    proposal["criteria"][1]["weight"] = 40
+    for index, criterion in enumerate(proposal["criteria"], start=2):
+        criterion["source_requirements"] = [{"requirement_id": f"JD-SOURCE-{index:03d}"}]
+    output = rubric_drafting.validate_jd_proposal(json.dumps(proposal), source)
+    assert output is not None
+    assert [c["weight"] for c in output["criteria"]] == [67, 33]
+    assert output["criteria"][0]["source_requirements"][0]["quote"] == "* Thiết kế API **Python** có phân quyền."
+    assert output["criteria"][1]["source_requirements"][0]["quote"] == "* Kiểm thử backend bằng **pytest**."
+    assert sum(c["weight"] for c in output["criteria"]) == 100
+
+
+def test_rubric_proposal_never_uses_an_unknown_source_id_or_model_supplied_quote():
+    import json
+    from app.services import rubric_drafting
+    source = "Yêu cầu:\n- Thiết kế giao diện React và TypeScript.\n- Viết kiểm thử giao diện Playwright."
+    proposal = rubric_drafting.local_jd_draft(source)
+    for index, criterion in enumerate(proposal["criteria"], start=2):
+        criterion["source_requirements"] = [{"requirement_id": f"JD-SOURCE-{index:03d}"}]
+    validate = rubric_drafting.validate_jd_proposal
+    proposal["criteria"][0]["source_requirements"][0]["requirement_id"] = "JD-SOURCE-999"
+    with pytest.raises(ValueError, match="JD_SOURCE_ID_UNKNOWN"):
+        validate(json.dumps(proposal), source)
+    proposal["criteria"][0]["source_requirements"][0] = {"requirement_id": "JD-SOURCE-002", "quote": "Invented source quote"}
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        validate(json.dumps(proposal), source)
+
+
+def test_rubric_proposal_keeps_minimum_weights_and_never_turns_missing_evidence_into_zero():
+    import json
+    from app.services import rubric_drafting
+    source = "Yêu cầu:\n- Thiết kế API Python và phân quyền.\n- Viết kiểm thử backend với pytest."
+    base = rubric_drafting.local_jd_draft(source)
+    proposal = {"criteria": [], "recommendation_policy": base["recommendation_policy"]}
+    for index in range(11):
+        item = json.loads(json.dumps(base["criteria"][index % 2]))
+        item["id"] = f"competency_{index}"
+        item["weight"] = 10
+        item["source_requirements"] = [{"requirement_id": f"JD-SOURCE-{2 + index % 2:03d}"}]
+        proposal["criteria"].append(item)
+    validate = rubric_drafting.validate_jd_proposal
+    output = validate(json.dumps(proposal), source)
+    assert output is not None
+    assert [item["weight"] for item in output["criteria"]] == [10] + [9] * 10
+    extreme = json.loads(json.dumps(proposal))
+    for index, item in enumerate(extreme["criteria"]):
+        item["weight"] = 99 if index == 0 else 1
+    assert [item["weight"] for item in validate(json.dumps(extreme), source)["criteria"]] == [90] + [1] * 10
+    proposal["criteria"][0]["weight"] = 0
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        validate(json.dumps(proposal), source)
+    proposal["criteria"][0]["weight"] = 10
+    proposal["criteria"][0]["scoring_anchors"][0]["description"] = "Không có bằng chứng"
+    with pytest.raises(ValueError, match="MISSING_EVIDENCE_IS_NOT_ZERO"):
+        validate(json.dumps(proposal), source)
+
+
+@pytest.mark.parametrize("minimum", [True, False, "2", 2.0, "0", -1, 5])
+def test_rubric_proposal_rejects_coerced_or_out_of_range_core_minima(minimum):
+    import json
+    from pydantic import ValidationError
+    from app.services import rubric_drafting
+    source = "Yêu cầu:\n- Bắt buộc thiết kế API Python có phân quyền.\n- Viết kiểm thử backend với pytest."
+    proposal = rubric_drafting.local_jd_draft(source)
+    for index, criterion in enumerate(proposal["criteria"], start=2):
+        criterion["source_requirements"] = [{"requirement_id": f"JD-SOURCE-{index:03d}"}]
+    proposal["recommendation_policy"]["core_minimum_scores"] = {"jd_competency_01": minimum}
+    with pytest.raises(ValidationError):
+        rubric_drafting.validate_jd_proposal(json.dumps(proposal), source)
+
+
+@pytest.mark.parametrize("threshold", [True, "70", 70.0])
+def test_rubric_proposal_rejects_coerced_threshold(threshold):
+    import json
+    from pydantic import ValidationError
+    from app.services import rubric_drafting
+    source = "Yêu cầu:\n- Thiết kế API Python có phân quyền.\n- Viết kiểm thử backend với pytest."
+    proposal = rubric_drafting.local_jd_draft(source)
+    for index, criterion in enumerate(proposal["criteria"], start=2):
+        criterion["source_requirements"] = [{"requirement_id": f"JD-SOURCE-{index:03d}"}]
+    proposal["recommendation_policy"]["threshold"] = threshold
+    with pytest.raises(ValidationError):
+        rubric_drafting.validate_jd_proposal(json.dumps(proposal), source)
+
+
+@pytest.mark.parametrize("zero_description", [
+    "Không thể hiện kinh nghiệm thiết kế RESTful API.",
+    "Không chứng minh kiến thức về kiến trúc phần mềm.",
+    "CV không đề cập kỹ năng kiểm thử.",
+    "Does not demonstrate backend experience.",
+])
+def test_rubric_proposal_rejects_absence_of_claims_as_zero(zero_description):
+    import json
+    from app.services import rubric_drafting
+    source = "Yêu cầu:\n- Thiết kế API Python có phân quyền.\n- Viết kiểm thử backend với pytest."
+    proposal = rubric_drafting.local_jd_draft(source)
+    for index, criterion in enumerate(proposal["criteria"], start=2):
+        criterion["source_requirements"] = [{"requirement_id": f"JD-SOURCE-{index:03d}"}]
+    proposal["criteria"][0]["scoring_anchors"][0]["description"] = zero_description
+    with pytest.raises(ValueError, match="MISSING_EVIDENCE_IS_NOT_ZERO"):
+        rubric_drafting.validate_jd_proposal(json.dumps(proposal), source)
