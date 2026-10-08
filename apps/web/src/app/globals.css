@@ -375,36 +375,17 @@ summary { cursor: pointer; color: var(--accent-teal); font-size: 13px; }
   margin-top: 3px;
 }
 
-.assessment-trace {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 1rem 1.1rem;
-  background: var(--bg-surface-reading);
-  box-shadow: var(--shadow-sm);
-}
-
-.assessment-trace-failed,
 .assessment-failure-card {
   border-color: var(--amber-border);
   background: linear-gradient(135deg, var(--amber-bg), rgba(255, 255, 255, 0.94));
 }
 
-.assessment-trace-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.assessment-trace-heading h3,
 .assessment-failure-card h2 {
   color: var(--text-primary);
   font-size: 0.98rem;
   font-weight: 750;
 }
 
-.assessment-trace-heading p,
 .assessment-failure-card > p {
   margin-top: 0.25rem;
   max-width: 58rem;
@@ -413,119 +394,13 @@ summary { cursor: pointer; color: var(--accent-teal); font-size: 13px; }
   line-height: 1.55;
 }
 
-.assessment-trace-status {
-  max-width: 100%;
-  border: 1px solid var(--emerald-border);
-  border-radius: var(--radius-full);
-  padding: 0.25rem 0.65rem;
-  background: var(--emerald-bg);
-  color: var(--emerald-text);
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.assessment-trace-status.is-failed {
-  border-color: var(--amber-border);
-  background: var(--amber-bg);
-  color: var(--amber-text);
-}
-
-.assessment-trace-facts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.65rem;
-  margin: 0.9rem 0;
-}
-
-.assessment-trace-facts > div {
-  min-width: 0;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0.55rem 0.7rem;
-  background: var(--bg-surface-subtle);
-}
-
-.assessment-trace-facts dt {
-  color: var(--text-muted);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
-}
-
-.assessment-trace-facts dd {
-  margin-top: 0.2rem;
-  overflow-wrap: anywhere;
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  font-weight: 650;
-}
-
-.assessment-trace-error {
-  margin: 0.5rem 0;
-  color: var(--amber-text);
-  font-size: 0.8rem;
+.assessment-failure-card code {
   overflow-wrap: anywhere;
 }
 
-.assessment-trace-details {
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 0.7rem;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-}
-
-.assessment-trace-details summary {
-  width: fit-content;
-  color: var(--accent-teal);
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.assessment-trace-details summary:focus-visible,
 .evidence-followup-button:focus-visible {
   outline: 3px solid var(--border-focus);
   outline-offset: 3px;
-}
-
-.assessment-trace-versions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  margin-top: 0.65rem;
-}
-
-.assessment-trace-tools {
-  display: grid;
-  gap: 0.6rem;
-  margin: 0.7rem 0 0;
-  padding-left: 1.25rem;
-}
-
-.assessment-trace-tools li {
-  padding-left: 0.2rem;
-  line-height: 1.5;
-}
-
-.assessment-trace-tools li > span {
-  margin-left: 0.55rem;
-  color: var(--text-muted);
-  font-size: 0.74rem;
-}
-
-.assessment-trace-ref-list {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem;
-  margin-top: 0.25rem;
-  overflow-wrap: anywhere;
-}
-
-.assessment-trace-empty {
-  margin-top: 0.6rem;
-  color: var(--text-muted);
-  font-size: 0.78rem;
 }
 
 .assessment-criteria-scroll-hint {
@@ -663,14 +538,6 @@ summary { cursor: pointer; color: var(--accent-teal); font-size: 13px; }
 
 
 /* Refine retained operational components against the shared tokens. */
-.assessment-trace { margin: 0 0 20px; padding: 0; border-radius: 10px; box-shadow: none; }
-.assessment-trace-summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; list-style: none; padding: 15px 18px; color: var(--text-secondary); font-size: 12px; font-weight: 600; }
-.assessment-trace-summary::after { content: "+"; color: var(--text-muted); font-size: 18px; font-weight: 400; }
-.assessment-trace[open] > .assessment-trace-summary::after { content: "−"; }
-.assessment-trace-summary > span:nth-child(2) { margin-left: auto; color: var(--text-muted); font-size: 11px; font-weight: 400; }
-.assessment-trace-content { border-top: 1px solid var(--border-subtle); padding: 18px; }
-.assessment-trace-heading p { max-width: 620px; }
-.assessment-trace-failed { background: var(--amber-bg); }
 .assessment-failure-card { background: #fffdf8; }
 .assessment-criteria-table td { vertical-align: top; }
 .assessment-criteria-table .rubric-ack { padding: 10px; font-size: 11px; }
@@ -780,10 +647,6 @@ summary { cursor: pointer; color: var(--accent-teal); font-size: 13px; }
   .modal-overlay { padding: 12px; }
   .modal-card { padding: 20px; max-height: 94dvh; }
   .modal-title { font-size: 18px; }
-  .assessment-trace-summary { flex-wrap: wrap; }
-  .assessment-trace-summary > span:nth-child(2) { display: none; }
-  .assessment-trace-summary::after { margin-left: auto; }
-  .assessment-trace-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 }
 @media (max-width: 420px) {

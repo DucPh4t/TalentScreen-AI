@@ -709,3 +709,81 @@ async def test_late_agent_result_is_discarded_after_application_tombstone(
         assert run.failure_code == "APPLICATION_TOMBSTONED"
         assert run.execution_trace["outcome"] == "validated"
         assert criteria == []
+
+
+@pytest.mark.asyncio
+async def test_langsmith_agent_records_actual_node_repair_order_without_cv_content(
+    agent_context, test_session_factory, monkeypatch
+):
+    from app.services.agent.assessment_graph import run_assessment_agent
+    from services.backend.tests.test_langsmith_observability import enable_recording
+    client = enable_recording(monkeypatch)
+    async with test_session_factory() as session:
+        run = (await session.execute(select(AssessmentRun).where(AssessmentRun.id == agent_context["run_id"]))).scalar_one()
+        criteria = (await session.execute(select(RubricCriterion).where(RubricCriterion.rubric_version_id == run.rubric_version_id))).scalars().all()
+        provider = ScriptedProvider([
+            CompletionResult(content="INVALID_JSON_PRIVATE_MARKER", requested_model="deepseek-flash"),
+            CompletionResult(content=_score_output(agent_context["span_id"], SYNTHETIC_CANONICAL_TEXT),
+                requested_model="deepseek-flash", input_tokens=100, output_tokens=50),
+        ])
+        result = await run_assessment_agent(db=session, run=run, rubric_criteria=criteria,
+            initial_pack={"strategy": "hybrid", "criteria_retrieval_map": {
+                criterion.criterion_id: [{"span_ids": [agent_context["span_id"]]}] for criterion in criteria
+            }, "source_span_ids": [agent_context["span_id"]]}, provider_override=provider)
+    assert result.trace["outcome"] == "validated"
+    nodes = [entry for entry in client.posts if entry["run_type"] == "chain" and entry.get("extra", {}).get("metadata", {}).get("node")]
+    assert [entry["name"] for entry in nodes] == ["authorize", "model", "validate", "repair", "model", "validate"]
+    root = next(entry for entry in client.posts if entry["name"] == "assessment_agent")
+    assert all(entry["parent_run_id"] == root["id"] for entry in nodes)
+    validations = [entry for entry in client.patches if entry["name"] == "validate"]
+    assert validations[0]["error"] == "ASSESSMENT_OUTPUT_INVALID"
+    assert validations[1].get("error") is None
+    model_calls = [entry for entry in client.patches if entry["run_type"] == "llm"]
+    assert len(model_calls) == 2
+    assert model_calls[1]["extra"]["metadata"]["usage_metadata"]["total_tokens"] == 150
+    exported = json.dumps([client.posts, client.patches])
+    assert SYNTHETIC_CANONICAL_TEXT not in exported
+    assert "INVALID_JSON_PRIVATE_MARKER" not in exported
+    assert agent_context["span_id"] not in exported
+    assert "messages" not in exported
+
+
+@pytest.mark.asyncio
+async def test_langsmith_agent_telemetry_outage_does_not_change_validated_output(
+    agent_context, test_session_factory, monkeypatch
+):
+    from app.services.agent.assessment_graph import run_assessment_agent
+    from services.backend.tests.test_langsmith_observability import enable_recording
+    enable_recording(monkeypatch, fail=True)
+    async with test_session_factory() as session:
+        run = (await session.execute(select(AssessmentRun).where(AssessmentRun.id == agent_context["run_id"]))).scalar_one()
+        criteria = (await session.execute(select(RubricCriterion).where(RubricCriterion.rubric_version_id == run.rubric_version_id))).scalars().all()
+        result = await run_assessment_agent(db=session, run=run, rubric_criteria=criteria,
+            initial_pack={"strategy": "hybrid", "criteria_retrieval_map": {
+                criterion.criterion_id: [{"span_ids": [agent_context["span_id"]]}] for criterion in criteria
+            }, "source_span_ids": [agent_context["span_id"]]}, provider_override=ScriptedProvider([
+                CompletionResult(content=_score_output(agent_context["span_id"], SYNTHETIC_CANONICAL_TEXT), requested_model="deepseek-flash")
+            ]))
+    assert result.trace["outcome"] == "validated"
+    assert [criterion.score for criterion in result.output.criteria] == [3, 3]
+
+
+@pytest.mark.asyncio
+async def test_langsmith_business_failure_return_is_marked_failed_without_model_call(
+    agent_context, test_session_factory, monkeypatch
+):
+    from app.services.assessment.service import execute_assessment_job
+    from services.backend.tests.test_langsmith_observability import enable_recording
+    client = enable_recording(monkeypatch)
+    async with test_session_factory() as session:
+        run = (await session.execute(select(AssessmentRun).where(AssessmentRun.id == agent_context["run_id"]))).scalar_one()
+        version = (await session.execute(select(SanitizedVersion).where(SanitizedVersion.id == run.sanitized_version_id))).scalar_one()
+        version.status = SanitizedVersionStatus.DRAFT
+        await session.commit()
+        result = await execute_assessment_job(session, run.job_id)
+        assert result is None
+        assert run.status == "failed"
+    root = next(entry for entry in client.patches if entry["name"] == "assessment")
+    assert root["error"] == "ASSESSMENT_INPUT_STALE"
+    assert root["extra"]["metadata"]["outcome"] == "failed"
+    assert not any(entry["run_type"] == "llm" for entry in client.posts)

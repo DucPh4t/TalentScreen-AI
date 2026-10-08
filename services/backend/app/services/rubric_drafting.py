@@ -11,6 +11,8 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 
+from app.services.observability import observed
+
 from app.config import get_settings
 from app.db.models import JDVersion, Job
 from app.domain.enums import JobStatus, JobType
@@ -233,6 +235,8 @@ def rubric_draft_failure(exc: Exception) -> tuple[int, str, str]:
     return 502, "RUBRIC_DRAFT_UNAVAILABLE", "Chưa hoàn tất gợi ý rubric do lỗi xử lý AI. Có thể thử lại hoặc lập tiêu chí thủ công."
 
 
+@observed("jd_to_rubric", input_metadata=lambda args: {"jd_version_id": str(args["jd"].id),
+    "rubric_prompt_version": RUBRIC_PROMPT_VERSION}, result_metadata=lambda result: {"outcome": "succeeded"})
 async def draft_jd_rubric(db, jd: JDVersion, actor_id: uuid.UUID) -> dict:
     settings = get_settings()
     if len(jd.source_text) > 24000:

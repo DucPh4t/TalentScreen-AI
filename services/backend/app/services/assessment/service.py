@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
+from app.services.observability import observed, record_trace_metadata
 from app.db.models.assessment import AssessmentRun, CriterionAssessment, CriterionEvidence
 from app.db.models.candidate import Application
 from app.db.models.document import Document, SanitizedVersion, SourceSpan
@@ -359,6 +360,7 @@ async def create_assessment_run(
     )
 
 
+@observed("assessment", input_metadata=lambda args: {"job_id": str(args["job_id"])})
 async def execute_assessment_job(
     db: AsyncSession,
     job_id: uuid.UUID,
@@ -378,6 +380,7 @@ async def execute_assessment_job(
     if not run:
         raise ValueError(f"AssessmentRun with job_id {job_id} not found.")
 
+    record_trace_metadata({"assessment_run_id": str(run.id), "retrieval_strategy": run.strategy})
     run.status = "running"
     run.started_at = now
     await db.flush()
@@ -401,6 +404,7 @@ async def execute_assessment_job(
         logger.warning("Assessment %s input snapshot is stale before model call.", run.id)
         run.status = "failed"
         run.failure_code = "APPLICATION_TOMBSTONED" if not app_check or app_check[0] == "deleted" else "ASSESSMENT_INPUT_STALE"
+        record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
         run.completed_at = now
         await db.flush()
         return
@@ -423,12 +427,14 @@ async def execute_assessment_job(
     except ValueError:
         run.status = "failed"
         run.failure_code = "ASSESSMENT_PROMPT_VERSION_UNKNOWN"
+        record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
         run.completed_at = datetime.now(timezone.utc)
         await db.flush()
         return
     if retrieval_strategy not in {"full_text_baseline", "hybrid"}:
         run.status = "failed"
         run.failure_code = "ASSESSMENT_RETRIEVAL_STRATEGY_UNKNOWN"
+        record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
         run.completed_at = datetime.now(timezone.utc)
         await db.flush()
         return
@@ -476,6 +482,7 @@ async def execute_assessment_job(
             logger.warning("Hybrid retrieval failed for assessment %s (%s).", run.id, type(exc).__name__)
             run.status = "failed"
             run.failure_code = "HYBRID_RETRIEVAL_FAILED"
+            record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
             run.completed_at = datetime.now(timezone.utc)
             await db.flush()
             return
@@ -484,6 +491,7 @@ async def execute_assessment_job(
         if any(span_id not in span_registry for span_id in pack_span_ids):
             run.status = "failed"
             run.failure_code = "HYBRID_RETRIEVAL_PROVENANCE_INVALID"
+            record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
             run.completed_at = datetime.now(timezone.utc)
             await db.flush()
             return
@@ -505,6 +513,7 @@ async def execute_assessment_job(
         if not isinstance(raw_criterion_map, dict) or set(raw_criterion_map) - expected_criterion_ids:
             run.status = "failed"
             run.failure_code = "HYBRID_RETRIEVAL_PROVENANCE_INVALID"
+            record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
             run.completed_at = datetime.now(timezone.utc)
             await db.flush()
             return
@@ -518,6 +527,7 @@ async def execute_assessment_job(
             if not retrieved_ids.issubset(pack_span_id_set):
                 run.status = "failed"
                 run.failure_code = "HYBRID_RETRIEVAL_PROVENANCE_INVALID"
+                record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
                 run.completed_at = datetime.now(timezone.utc)
                 await db.flush()
                 return
@@ -568,6 +578,7 @@ async def execute_assessment_job(
             run.execution_trace = exc.trace
             run.status = "failed"
             run.failure_code = exc.code[:100]
+            record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
             run.completed_at = datetime.now(timezone.utc)
             await db.flush()
             return
@@ -582,6 +593,7 @@ async def execute_assessment_job(
             }
             run.status = "failed"
             run.failure_code = type(exc).__name__[:100]
+            record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
             run.completed_at = datetime.now(timezone.utc)
             await db.flush()
             return
@@ -592,6 +604,7 @@ async def execute_assessment_job(
         logger.warning("Assessment %s input snapshot changed during model call; discarding output.", run.id)
         run.status = "failed"
         run.failure_code = "APPLICATION_TOMBSTONED" if not app_check or app_check[0] == "deleted" else "ASSESSMENT_INPUT_STALE"
+        record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
         run.completed_at = datetime.now(timezone.utc)
         await db.flush()
         return
@@ -642,6 +655,7 @@ async def execute_assessment_job(
                     logger.warning("Assessment %s input changed during Jev shadow call; discarding all output.", run.id)
                     run.status = "failed"
                     run.failure_code = "APPLICATION_TOMBSTONED" if not app_check or app_check[0] == "deleted" else "ASSESSMENT_INPUT_STALE"
+                    record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
                     run.completed_at = datetime.now(timezone.utc)
                     await db.flush()
                     return
@@ -766,6 +780,7 @@ async def execute_assessment_job(
             "recommendation": rec.value if rec else None,
         },
     )
+    record_trace_metadata({"outcome": "succeeded"})
 
 
 async def get_assessment_run_detail(

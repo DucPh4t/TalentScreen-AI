@@ -7,6 +7,8 @@ import unicodedata
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.observability import observed
+
 from app.db.models.assessment import AssessmentRun
 from app.db.models.candidate import Application
 from app.db.models.document import SanitizedVersion, SourceSpan
@@ -114,6 +116,7 @@ def _safe_query_hint(query_hint: str) -> str:
     return cleaned
 
 
+@observed("retrieve_more_evidence", run_type="tool", result_metadata=lambda result: {"result_count": len(result)})
 async def retrieve_more_evidence(
     *,
     db: AsyncSession,
@@ -156,6 +159,7 @@ async def retrieve_more_evidence(
     return results
 
 
+@observed("get_source_spans", run_type="tool", result_metadata=lambda result: {"result_count": len(result)})
 async def get_source_spans(
     *,
     db: AsyncSession,

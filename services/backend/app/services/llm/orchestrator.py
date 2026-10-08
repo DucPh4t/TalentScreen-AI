@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.services.observability import observed, record_trace_metadata
 from app.db.models import Application, AssessmentRun
 from app.db.models.document import SanitizedVersion
 from app.db.models.ops import LLMInvocation
@@ -123,6 +124,20 @@ async def _resolve_requisition_id_for_job(db: AsyncSession, job_id: uuid.UUID) -
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+@observed("bounded_llm_call", run_type="llm", input_metadata=lambda args: {
+    "job_id": str(args["job_id"]), "task_kind": args["request"].task_kind,
+    "attempt_no": args["attempt_no"], "model": args["request"].model,
+    "ls_model_name": args["request"].model, "external_call_count": 0,
+}, result_metadata=lambda result: {
+    "outcome": "succeeded", "tool_call_count": len(result.tool_calls),
+    "model": result.reported_model or result.requested_model,
+    "ls_model_name": result.reported_model or result.requested_model,
+    "input_tokens": result.input_tokens, "output_tokens": result.output_tokens,
+    "provider_latency_ms": result.latency_ms,
+    "usage_metadata": {"input_tokens": result.input_tokens, "output_tokens": result.output_tokens,
+        "total_tokens": (result.input_tokens + result.output_tokens)
+            if result.input_tokens is not None and result.output_tokens is not None else None},
+})
 async def execute_bounded_llm_call(
     db: AsyncSession,
     job_id: uuid.UUID,
@@ -177,6 +192,8 @@ async def execute_bounded_llm_call(
     req_hash = hashlib.sha256(serialized_request.encode("utf-8")).hexdigest()
     llm = provider_override or get_llm_provider()
     provider_name = type(llm).__name__
+    provider_label = "mock" if "mock" in provider_name.lower() else "jev" if "jev" in provider_name.lower() else "deepseek" if "deepseek" in provider_name.lower() else "custom"
+    record_trace_metadata({"provider": provider_label, "ls_provider": provider_label})
 
     invocation = LLMInvocation(
         id=uuid.uuid4(),
@@ -200,6 +217,7 @@ async def execute_bounded_llm_call(
     outcome_unknown = False
 
     try:
+        record_trace_metadata({"external_call_count": 1})
         result = await llm.complete(request)
     except (LLMAuthenticationError, LLMQuotaExhaustedError, LLMModelUnavailableError) as e:
         # Non-retryable configuration errors: zero actual cost if network call was not made/rejected
@@ -252,6 +270,7 @@ async def execute_bounded_llm_call(
             inv_record.output_tokens = result.output_tokens
             inv_record.provider_request_id = result.provider_request_id
             inv_record.cost_actual = float(actual_cost)
+            record_trace_metadata({"cost_actual_usd": float(actual_cost)})
             inv_record.finished_at = finished_now
 
             await settle_budget(db, reservation_id=reservation.id, actual_cost_usd=actual_cost)

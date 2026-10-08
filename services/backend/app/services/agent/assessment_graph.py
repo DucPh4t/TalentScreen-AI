@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.services.observability import observed, observe_node
 from app.db.models.assessment import AssessmentRun
 from app.db.models.document import SourceSpan
 from app.db.models.requisition import RubricCriterion
@@ -156,6 +157,13 @@ def _null_unretrieved_criteria(
     return json.dumps(parsed, ensure_ascii=False)
 
 
+@observed("assessment_agent", input_metadata=lambda args: {
+    "assessment_run_id": str(args["run"].id),
+    "criterion_count": len(args["rubric_criteria"]),
+    "retrieval_strategy": args["run"].snapshot.get("retrieval_strategy"),
+    "agent_prompt_version": args["run"].snapshot.get("agent_prompt_version"),
+    "assessment_prompt_version": args["run"].snapshot.get("assessment_prompt_version"),
+}, result_metadata=lambda result: result.trace)
 async def run_assessment_agent(
     *,
     db: AsyncSession,
@@ -572,11 +580,11 @@ async def run_assessment_agent(
         return "done"
 
     workflow = StateGraph(_AgentState)
-    workflow.add_node("authorize", authorize_node)
-    workflow.add_node("model", call_model_node)
-    workflow.add_node("tools", execute_tools_node)
-    workflow.add_node("validate", validate_node)
-    workflow.add_node("repair", prepare_repair_node)
+    workflow.add_node("authorize", observe_node("authorize", authorize_node))
+    workflow.add_node("model", observe_node("model", call_model_node))
+    workflow.add_node("tools", observe_node("tools", execute_tools_node))
+    workflow.add_node("validate", observe_node("validate", validate_node))
+    workflow.add_node("repair", observe_node("repair", prepare_repair_node))
     workflow.add_edge(START, "authorize")
     workflow.add_conditional_edges("authorize", after_authorize, {"model": "model", "done": END})
     workflow.add_conditional_edges("model", after_model, {"tools": "tools", "validate": "validate", "done": END})

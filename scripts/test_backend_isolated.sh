@@ -43,6 +43,10 @@ export DEEPSEEK_API_KEY=
 export JEV_MODE=off
 export JEV_API_KEY=
 export RAG_MODE=full_text_baseline
+# Generic tests must never inherit cloud telemetry credentials.
+export LANGSMITH_TRACING=false
+export LANGCHAIN_TRACING_V2=false
+export LANGSMITH_API_KEY=
 export DATABASE_URL="postgresql+asyncpg://postgres:postgres@127.0.0.1:${test_port}/talentscreen_test"
 export DATABASE_SYNC_URL="postgresql://postgres:postgres@127.0.0.1:${test_port}/talentscreen_test"
 export PYTHONPATH=services/backend

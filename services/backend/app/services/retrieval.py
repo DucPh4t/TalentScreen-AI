@@ -10,6 +10,8 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.observability import observed
+
 from app.db.models.document import RetrievalChunk, SourceSpan
 from app.services.embedding import EMBEDDING_CONFIG_ID, embed_texts
 
@@ -90,6 +92,8 @@ def _build_criterion_query(
     return query_text, lexical_terms
 
 
+@observed("hybrid_retrieve_for_criterion", run_type="retriever",
+    result_metadata=lambda result: {"result_count": len(result)})
 async def hybrid_retrieve_for_criterion(
     db: AsyncSession,
     sanitized_version_id: uuid.UUID,
@@ -220,6 +224,9 @@ def _select_diverse_matches(
     return selected
 
 
+@observed("initial_rag", run_type="retriever",
+    input_metadata=lambda args: {"criterion_count": len(args["criteria"]), "retrieval_strategy": "hybrid"},
+    result_metadata=lambda pack: {"source_span_count": len(pack.get("source_span_ids") or [])})
 async def build_hybrid_assessment_pack(
     db: AsyncSession,
     sanitized_version_id: uuid.UUID,

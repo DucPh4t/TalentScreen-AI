@@ -23,6 +23,7 @@ dependencies = [
     "pillow>=10.0.0",
     "pytesseract>=0.3.10",
     "langgraph>=1.0,<2.0",
+    "langsmith>=0.14.4,<0.15",
 ]
 
 [project.optional-dependencies]

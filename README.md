@@ -72,7 +72,7 @@ The assessment graph authorizes the input snapshot, calls the model, validates t
 | `retrieve_more_evidence` | Search for evidence for selected rubric criteria | Current approved CV snapshot; at most four approved criterion IDs per request; validated technical query hint. |
 | `get_source_spans` | Read exact canonical text for retrieved spans | At most eight span IDs exposed by the preceding retrieval, within the same snapshot. |
 
-Tools cannot browse the web, send messages, modify records, or record a hiring decision. The graph is transient: durable job/run status lives in PostgreSQL rather than a separate LangGraph checkpoint service. The UI exposes a compact execution trace and lets HR request additional evidence for a selected criterion.
+Tools cannot browse the web, send messages, modify records, or record a hiring decision. The graph is transient: durable job/run status lives in PostgreSQL rather than a separate LangGraph checkpoint service. Optional LangSmith telemetry lets developers inspect actual graph-node, RAG, tool and model spans using metadata only. HR can request additional evidence for a selected criterion without a technical trace panel.
 
 ### Model and scoring boundaries
 
@@ -111,6 +111,7 @@ The Vietnamese interface uses warm neutral surfaces, black navigation and muted 
 | Database | PostgreSQL 16, pgvector, SQLAlchemy 2 async, Alembic |
 | Retrieval | Sentence Transformers, multilingual E5, PostgreSQL full-text search, RRF |
 | Agent & providers | LangGraph, DeepSeek adapter, optional Jev shadow adapter |
+| Developer observability | Optional LangSmith RunTree spans, metadata allowlist, local audit trace |
 | Documents & operations | PDF/DOCX extraction, Tesseract OCR, LibreOffice, Docker Compose, pytest, GitHub Actions |
 
 ## Run locally
@@ -171,6 +172,7 @@ Open **http://localhost:2004**. Backend API docs are at **http://127.0.0.1:8000/
 | `RAG_MODE` | `full_text_baseline` | Set `hybrid` to enable local E5 + lexical/vector retrieval. |
 | `EMBEDDING_DEVICE` | `auto` | Select `cpu`, `mps`, or `cuda` explicitly when needed. |
 | `JEV_MODE` | `off` | `shadow` enables separately approved/configured secondary scoring. |
+| `LANGSMITH_TRACING` | `false` | Enable developer-only metadata tracing after setting `LANGSMITH_API_KEY`; see the [setup and verification runbook](docs/runbooks/langsmith-observability.md). |
 
 Restart the backend and worker after changing configuration. See [`.env.example`](.env.example) for all settings and [readiness gates](docs/runbooks/rag-agent-readiness.md) before real-data use.
 

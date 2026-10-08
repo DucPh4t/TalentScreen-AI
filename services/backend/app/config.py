@@ -19,6 +19,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     # Environment & Stage
@@ -86,6 +87,12 @@ class Settings(BaseSettings):
     JEV_INPUT_PRICE_PER_MILLION_USD: Optional[float] = Field(default=None)
     JEV_RATE_CARD_VERIFIED_AT: Optional[str] = Field(default=None)
 
+    # Developer observability: no candidate content is exported.
+    LANGSMITH_TRACING: bool = Field(default=False)
+    LANGSMITH_API_KEY: Optional[str] = Field(default=None, repr=False)
+    LANGSMITH_PROJECT: str = Field(default="talentscreen-dev", min_length=1, max_length=100)
+    LANGSMITH_ENDPOINT: str = Field(default="https://api.smith.langchain.com")
+
     # Policy & Sanitization
     EXTERNAL_REAL_DATA_POLICY: str = Field(
         default="allowed_deepseek_confirmed_by_owner",
@@ -135,6 +142,7 @@ class Settings(BaseSettings):
     @field_validator(
         "PILOT_STAGE",
         "DEEPSEEK_API_KEY",
+        "LANGSMITH_API_KEY",
         "JEV_API_KEY",
         "JEV_INPUT_PRICE_PER_MILLION_USD",
         "REQUISITION_LLM_BUDGET_USD",
@@ -180,6 +188,16 @@ class Settings(BaseSettings):
             raise ValueError("JEV_BASE_URL must be the HTTPS TypeSafe or OpenRouter System One endpoint without credentials/query/fragment")
         return value.rstrip("/")
 
+    @field_validator("LANGSMITH_ENDPOINT")
+    @classmethod
+    def require_langsmith_endpoint(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if (parsed.scheme != "https" or parsed.hostname not in {"api.smith.langchain.com", "eu.api.smith.langchain.com"}
+            or parsed.username or parsed.password or parsed.query or parsed.fragment
+            or parsed.path not in ("", "/") or parsed.port not in (None, 443)):
+            raise ValueError("LANGSMITH_ENDPOINT must be the HTTPS US or EU LangSmith API origin")
+        return value.rstrip("/")
+
     @property
     def storage_path(self) -> Path:
         """Return resolved absolute Path for private storage root."""
@@ -196,6 +214,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_provider_and_stage(self) -> Settings:
+        if self.LANGSMITH_TRACING and not self.LANGSMITH_API_KEY:
+            raise ValueError("LANGSMITH_API_KEY is required when LANGSMITH_TRACING=true")
         # Check LLM provider requirements
         if self.LLM_PROVIDER == "deepseek":
             if not self.DEEPSEEK_API_KEY or not self.DEEPSEEK_API_KEY.strip():
@@ -248,7 +268,7 @@ class Settings(BaseSettings):
         redacted = "[REDACTED]"
 
         # Redact secrets
-        for secret_field in ("DEEPSEEK_API_KEY", "JEV_API_KEY"):
+        for secret_field in ("DEEPSEEK_API_KEY", "JEV_API_KEY", "LANGSMITH_API_KEY"):
             if data.get(secret_field):
                 data[secret_field] = redacted
         if data.get("SECRET_KEY"):

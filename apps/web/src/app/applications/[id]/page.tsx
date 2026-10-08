@@ -23,7 +23,6 @@ import {
 } from "@/components/Icons";
 import { useToast } from "@/components/Toast";
 import HRRevisionEditor from "@/components/HRRevisionEditor";
-import AssessmentExecutionTrace from "@/components/AssessmentExecutionTrace";
 import RawPdfViewer from "@/components/RawPdfViewer";
 import { stageLabels } from "@/lib/workflow";
 import { SkeletonDossier } from "@/components/Skeleton";
@@ -688,14 +687,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
             <div className="card assessment-failure-card" role="alert">
               <div className="assessment-failure-icon"><IconAlertTriangle size={24} /></div>
               <h2>Không có đánh giá hợp lệ — hồ sơ cần HR xử lý thủ công</h2>
-              <p>Hệ thống không sử dụng kết quả lỗi để chấm điểm hay thay đổi trạng thái ứng viên. Kiểm tra trace bên dưới; nếu nguyên nhân đã được xử lý, HR có thể tạo một lượt mới.</p>
-              <AssessmentExecutionTrace
-                strategy={assessmentRun.strategy}
-                trace={Object.keys(assessmentRun.execution_trace || {}).length
-                  ? assessmentRun.execution_trace
-                  : { outcome: "failed", error_code: assessmentRun.failure_code }}
-                criterionLabels={Object.fromEntries((rubric?.criteria || []).map((criterion: any) => [criterion.id, criterion.label]))}
-              />
+              <p>Hệ thống không sử dụng kết quả lỗi để chấm điểm hay thay đổi trạng thái ứng viên. Bạn có thể rà soát hồ sơ thủ công hoặc thử lại sau khi nguyên nhân được xử lý. Nếu lỗi lặp lại, gửi mã lượt đánh giá cho người phụ trách kỹ thuật.</p>
+              <p className="muted">Mã lượt đánh giá: <code>{assessmentRun.id}</code></p>
               {canManage && (
                 <button
                   type="button"
@@ -936,12 +929,6 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                   </div>
                 </div>
               </div>
-
-              <AssessmentExecutionTrace
-                strategy={assessmentRun.strategy}
-                trace={assessmentRun.execution_trace || {}}
-                criterionLabels={Object.fromEntries((rubric?.criteria || []).map((criterion: any) => [criterion.id, criterion.label]))}
-              />
 
               {assessmentRun.secondary_model_output && (
                 <section className="card" aria-label="Kết quả đối chiếu Jev" style={{ marginBottom: "1.5rem", borderColor: "var(--border-subtle)" }}>
