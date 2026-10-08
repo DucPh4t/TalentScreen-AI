@@ -31,7 +31,7 @@ TalentScreen AI makes those requirements explicit: each assessment records the a
 | Grounding | Pydantic schemas, exact span/quote validation, criterion-scoped citations | Reject malformed output and references outside the supplied evidence. |
 | Scoring policy | Deterministic Decimal arithmetic, approved weights and anchors, separate evidence coverage | Keep model observations distinct from application scoring policy. |
 | Reliability & cost | Background jobs, budget reservation/settlement, per-requisition cap, bounded repair | Limit spend and keep failure states visible. |
-| Evaluation | Criterion-scoped retrieval metrics, agreement metrics, counterfactual checks, role/provider reports | Measure retrieval, scoring, and operational behavior separately. |
+| Evaluation | Actual-service benchmark, four RAG/agent ablations, synthetic references, paired cluster comparisons and invocation journals | Separate retrieval, model quality, reliability and measured/uncertain cost. |
 
 ## Architecture
 
@@ -180,6 +180,20 @@ Restart the backend and worker after changing configuration. See [`.env.example`
 
 ## Evaluation and validation status
 
+**Production-pipeline benchmark, 2026-10-09:** actual E5/pgvector retrieval ran over **60 synthetic CVs × four profiles (240 service runs)** with a mock LLM. Separately, a paid DeepSeek probe completed **12/12 runs** over three predetermined synthetic cases, with a settled peak-rate token estimate of **USD 0.023525** and no unresolved funds. These are different experiments: mock is contract/retrieval evidence; the small live probe is integration evidence. Hybrid did not beat dense span ranking on this dataset, and the live agent made no tool calls; no quality-improvement claim is made.
+
+Compare **full text / dense / hybrid / hybrid + bounded agent**, using common immutable prompt/schema, frozen input versions, local E5 on Apple MPS, explicit status/numeric denominators, paired cluster bootstrap, and metadata-only LangSmith correlation. All reference labels are synthetic design expectations, not independent HR agreement.
+
+[Measured results and limitations](docs/evaluation/ai-benchmark-results-2026-10-09.md) · [Reproduce the experiments](docs/evaluation/ai-benchmark-reproducibility.md) · [Aggregate JSON](docs/evaluation/ai-benchmark-results-2026-10-09.json)
+
+```bash
+# Developer contract test through real services, in an owned disposable DB
+bash scripts/run_ai_benchmark_isolated.sh run \
+  --dataset fixtures/ai_benchmark/v1 --provider mock --profiles all \
+  --cases node-01,ai-01,android-01 --embedding-mode scripted \
+  --output reports/ai-benchmark/new-smoke --max-cost-usd 5
+```
+
 ```bash
 # Disposable database, migrations, backend regression suite, frontend build
 make test
@@ -217,7 +231,7 @@ A suggested review path for the implementation:
 | [Assessment graph](services/backend/app/services/agent/assessment_graph.py) → [tools](services/backend/app/services/agent/tools.py) | State transitions, tool allowlist, stale snapshot rejection, and bounded repair. |
 | [Versioned prompts](services/backend/app/services/assessment/prompt.py) → [validator](services/backend/app/services/assessment/validator.py) → [scoring](services/backend/app/services/assessment/scoring.py) | Model-output contracts, exact citations, and deterministic advisory scores. |
 | [Invocation orchestration](services/backend/app/services/llm/orchestrator.py) → [budget ledger](services/backend/app/services/llm/ledger.py) | Reserve-before-call, settlement, unknown outcomes, and requisition spend caps. |
-| [Benchmark CLI](scripts/run_rag_benchmark.py) → [protocol](docs/evaluation/rag-agent-benchmark-protocol.md) | Criterion-level metrics, data contracts, split manifests, and validation limits. |
+| [Actual-service benchmark CLI](scripts/run_ai_benchmark.py) → [runner/evaluator](services/backend/app/services/evaluation/benchmark) → [reproduction protocol](docs/evaluation/ai-benchmark-reproducibility.md) | Four controlled profiles, owned isolation, synthetic-label separation, financial uncertainty and honest denominators. The older [offline aggregator](scripts/run_rag_benchmark.py) remains compatible. |
 | [JD rubric drafting](services/backend/app/services/rubric_drafting.py) → [correspondence](services/backend/app/services/email_draft.py) | JD-grounded structured generation, explicit egress review, content filtering and versioned human approval. |
 | [HR workspace](apps/web/src/components/DashboardHome.tsx) → [candidate review](apps/web/src/app/applications/[id]/page.tsx) | Queue states, evidence review, overrides, and decision controls. |
 
@@ -228,6 +242,7 @@ apps/web/                     Next.js HR workspace
 services/backend/app/
   api/v1/                     Authenticated workflow endpoints
   services/agent/             Bounded LangGraph graph and read-only tools
+  services/evaluation/benchmark/  Actual-service runner, ablations and reports
   services/assessment/        Versioned prompts, validation, scoring
   services/llm/               Provider adapters and invocation/budget ledger
   services/evaluation/        Metric implementations

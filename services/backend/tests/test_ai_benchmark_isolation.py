@@ -147,3 +147,25 @@ def test_wrapper_forwards_term_and_waits_before_cleanup(monkeypatch,tmp_path):
     monkeypatch.setattr(isolation.subprocess,'Popen',lambda *a,**k:Child())
     assert isolation.run_in_isolation(['python','child'])==130
     assert events==['signal','wait','wait','cleanup']
+
+def test_wrapper_sets_offline_flags_before_child_imports(monkeypatch,tmp_path):
+    import app.services.evaluation.benchmark.isolation as isolation
+    monkeypatch.delenv('HF_HUB_OFFLINE',raising=False);monkeypatch.delenv('TRANSFORMERS_OFFLINE',raising=False)
+    root=tmp_path/'offline-owned';root.mkdir();owner=None
+    def fake(args):
+        nonlocal owner
+        if args[0]=='run':owner=args[args.index('--label')+1].split('=',1)[1];return 'owned-id'
+        if args[0]=='port':return '127.0.0.1:54321'
+        if args[0]=='inspect':return owner
+        return ''
+    class Child:
+        def wait(self):return 0
+    def child(*args,**kwargs):
+        assert kwargs['env']['HF_HUB_OFFLINE']=='1'
+        assert kwargs['env']['TRANSFORMERS_OFFLINE']=='1'
+        return Child()
+    monkeypatch.setattr(isolation.tempfile,'mkdtemp',lambda **kw:str(root))
+    monkeypatch.setattr(isolation,'_docker',fake)
+    monkeypatch.setattr(isolation.subprocess,'run',lambda *a,**k:None)
+    monkeypatch.setattr(isolation.subprocess,'Popen',child)
+    assert isolation.run_in_isolation(['python','child'])==0
