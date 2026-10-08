@@ -10,6 +10,7 @@ from app.db.models import RubricCriterion
 
 ASSESSMENT_PROMPT_VERSION = "assessment-v1.4.0"
 HYBRID_ASSESSMENT_PROMPT_VERSION = "assessment-v1.5.0"
+BENCHMARK_ASSESSMENT_PROMPT_VERSION = "assessment-v1.6.0"
 AGENT_PROMPT_VERSION = "assessment-agent.v1"
 
 
@@ -51,6 +52,12 @@ JSON OUTPUT CONTRACT:
 _ASSESSMENT_PROMPT_REGISTRY = MappingProxyType(
     {
         ASSESSMENT_PROMPT_VERSION: build_assessment_system_prompt(),
+        BENCHMARK_ASSESSMENT_PROMPT_VERSION: (
+            build_assessment_system_prompt()
+            + "\n\nPROVIDED-EVIDENCE RULES:\n"
+            + "Source spans are the evidence supplied for this assessment. Use a span for a criterion only if its ID is listed in retrieved_evidence_by_criterion.\n"
+            + "An empty evidence list means insufficient_evidence and score null. Do not fill gaps from general knowledge.\n"
+        ),
         HYBRID_ASSESSMENT_PROMPT_VERSION: (
             build_assessment_system_prompt()
             + "\n\nRETRIEVAL-AWARE RULES:\n"

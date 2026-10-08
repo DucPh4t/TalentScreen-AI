@@ -103,8 +103,11 @@ async def hybrid_retrieve_for_criterion(
     *,
     bilingual_terms: dict[str, Any] | None = None,
     anchor_terms: list[str] | None = None,
+    channels: frozenset[str] = frozenset({"dense", "lexical"}),
 ) -> list[RetrievedChunkScore]:
     """Fuse scoped dense and lexical results using deterministic Reciprocal Rank Fusion."""
+    if not channels or not channels.issubset({"dense", "lexical"}):
+        raise ValueError("RETRIEVAL_CHANNELS_INVALID")
     query_text, keywords = _build_criterion_query(
         criterion_name,
         criterion_description,
@@ -114,7 +117,7 @@ async def hybrid_retrieve_for_criterion(
     if not query_text:
         return []
 
-    query_vec = embed_texts([query_text], prefix="query: ")[0]
+    query_vec = embed_texts([query_text], prefix="query: ")[0] if "dense" in channels else None
 
     # Both retrieval channels are constrained to the exact approved sanitized
     # document version and embedding configuration before ranking.
@@ -131,12 +134,12 @@ async def hybrid_retrieve_for_criterion(
         )
         .limit(DENSE_CANDIDATE_LIMIT)
     )
-    dense_res = (await db.execute(dense_stmt)).scalars().all()
+    dense_res = (await db.execute(dense_stmt)).scalars().all() if "dense" in channels else []
     dense_rank_map = {chunk.id: idx + 1 for idx, chunk in enumerate(dense_res)}
     all_chunks_by_id = {chunk.id: chunk for chunk in dense_res}
 
     lexical_rank_map: dict[uuid.UUID, int] = {}
-    if keywords:
+    if keywords and "lexical" in channels:
         vector = func.to_tsvector("simple", RetrievalChunk.text)
         query = func.to_tsquery("simple", " | ".join(keywords))
         lex_stmt = (
@@ -232,6 +235,8 @@ async def build_hybrid_assessment_pack(
     sanitized_version_id: uuid.UUID,
     criteria: list[dict[str, Any]],
     max_evidence_chars: int = 24000,
+    *,
+    channels: frozenset[str] = frozenset({"dense", "lexical"}),
 ) -> dict[str, Any]:
     """Build a bounded, section-diverse evidence pack for the approved rubric."""
     if max_evidence_chars < 0:
@@ -249,6 +254,7 @@ async def build_hybrid_assessment_pack(
             criterion.get("description", ""),
             top_k=DENSE_CANDIDATE_LIMIT,
             bilingual_terms=criterion.get("bilingual_terms"),
+            **({"channels": channels} if channels != frozenset({"dense", "lexical"}) else {}),
             anchor_terms=[
                 *_flatten_text_values(criterion.get("anchors")),
                 *_flatten_text_values(criterion.get("anchor_terms")),

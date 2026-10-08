@@ -32,6 +32,8 @@ from app.services.llm.orchestrator import execute_bounded_llm_call
 from app.services.llm.provider import BaseLLMProvider
 from app.services.llm.types import CompletionRequest, ToolCall
 
+from app.services.assessment.policy import AssessmentExecutionPolicy, load_execution_policy
+
 MAX_AGENT_TOOL_EXECUTIONS = 2
 MAX_AGENT_MODEL_ROUND_TRIPS = 3
 MAX_AGENT_REPAIRS = 1
@@ -172,6 +174,7 @@ async def run_assessment_agent(
     initial_pack: dict[str, Any],
     provider_override: BaseLLMProvider | None = None,
     focus_criterion_ids: list[str] | None = None,
+    execution_policy: AssessmentExecutionPolicy | None = None,
 ) -> AgentExecutionResult:
     """Run a transient, no-checkpointer graph with at most two validated tool executions."""
     expected_criterion_ids = {criterion.criterion_id for criterion in rubric_criteria}
@@ -181,6 +184,10 @@ async def run_assessment_agent(
         raise ValueError("Rubric criteria do not match the assessment snapshot.")
 
     snapshot = run.snapshot or {}
+    frozen_policy = load_execution_policy(snapshot)
+    if execution_policy is not None and execution_policy != frozen_policy:
+        raise ValueError("ASSESSMENT_EXECUTION_POLICY_INVALID")
+    execution_policy = frozen_policy
     assessment_prompt_version = snapshot.get("assessment_prompt_version")
     agent_prompt_version = snapshot.get("agent_prompt_version")
     try:
@@ -213,6 +220,8 @@ async def run_assessment_agent(
 
     span_rows = await load_initial_source_spans(db=db, run=run, span_ids=initial_span_ids)
     source_spans = {span.span_id: span for span in span_rows}
+    if execution_policy and sum(len(span.text) for span in source_spans.values()) > execution_policy.max_evidence_chars:
+        raise ValueError("ASSESSMENT_CONTEXT_LIMIT")
     if set(source_spans) != initial_span_id_set:
         raise ValueError("Initial retrieval source spans are unavailable.")
     focus_ids = set(focus_criterion_ids or snapshot.get("focus_criterion_ids") or [])
@@ -226,6 +235,7 @@ async def run_assessment_agent(
         criterion_id
         for criterion_id in expected_criterion_ids
         if snapshot.get("retrieval_strategy") == "hybrid"
+        and (execution_policy is None or execution_policy.tools_enabled)
         and (not focus_ids or criterion_id in focus_ids)
     )
     source_span_list = [source_spans[span_id] for span_id in initial_span_ids]
@@ -459,6 +469,9 @@ async def run_assessment_agent(
                     if not isinstance(span_ids, list) or set(span_ids) - set(pending_map):
                         raise AgentToolError("Requested source spans were not returned by this assessment retrieval.")
                     resolved = await get_source_spans(db=db, run=run, span_ids=span_ids)
+                    expanded_spans = {**spans, **{span.span_id: span for span in resolved}}
+                    if execution_policy and sum(len(span.text) for span in expanded_spans.values()) > execution_policy.max_evidence_chars:
+                        raise AgentToolError("Expanded evidence exceeds the assessment context limit.")
                     for span in resolved:
                         spans[span.span_id] = span
                         for criterion_id in pending_map[span.span_id]:

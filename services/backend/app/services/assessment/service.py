@@ -60,6 +60,8 @@ from app.services.jev import JevDecisionResponse, JevQuestion, get_jev_provider
 from app.services.embedding import index_sanitized_version
 from app.services.retrieval import build_hybrid_assessment_pack
 
+from app.services.assessment.policy import AssessmentExecutionPolicy, load_execution_policy
+
 logger = logging.getLogger(__name__)
 MAX_ASSESSMENT_EVIDENCE_CHARS = 24_000
 
@@ -194,6 +196,8 @@ async def create_assessment_run(
     application_id: uuid.UUID,
     payload: AssessmentRunCreateRequest,
     ctx: AuthenticatedContext,
+    *,
+    execution_policy: AssessmentExecutionPolicy | None = None,
 ) -> AssessmentRunResponse:
     """Validate preconditions and enqueue an assessment run job.
     Preconditions:
@@ -270,12 +274,15 @@ async def create_assessment_run(
         {criterion.criterion_id for criterion in approved_criteria},
     )
     settings = get_settings()
-    retrieval_strategy = settings.RAG_MODE
+    retrieval_strategy = execution_policy.retrieval_strategy if execution_policy else settings.RAG_MODE
     assessment_prompt_version = (
         HYBRID_ASSESSMENT_PROMPT_VERSION
         if retrieval_strategy == "hybrid"
         else ASSESSMENT_PROMPT_VERSION
     )
+
+    if execution_policy:
+        assessment_prompt_version = execution_policy.assessment_prompt_version
 
     # Next run number
     stmt_max = select(func.max(AssessmentRun.run_no)).where(AssessmentRun.application_id == application_id)
@@ -295,6 +302,9 @@ async def create_assessment_run(
         "rubric_version_id": str(rubric.id),
         "application_generation": app_obj.generation,
     }
+    if execution_policy:
+        snapshot["assessment_execution_policy"] = execution_policy.to_snapshot()
+        snapshot["assessment_execution_policy_hash"] = execution_policy.digest
     snapshot_hash = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode("utf-8")).hexdigest()
 
     # Enqueue Job
@@ -423,6 +433,7 @@ async def execute_assessment_job(
         "assessment_prompt_version", ASSESSMENT_PROMPT_VERSION
     )
     try:
+        execution_policy = load_execution_policy(run.snapshot)
         system_prompt = get_assessment_prompt(assessment_prompt_version)
     except ValueError:
         run.status = "failed"
@@ -451,6 +462,7 @@ async def execute_assessment_job(
     span_registry = {s.span_id: s for s in spans}
     evidence_ids_by_criterion: dict[str, set[str]] | None = None
     oversized_evidence_excluded = False
+    excluded_span_count = 0
 
     if retrieval_strategy == "hybrid":
         try:
@@ -475,6 +487,8 @@ async def execute_assessment_job(
                     }
                     for criterion in ordered_criteria
                 ],
+                **({"channels": execution_policy.channels, "max_evidence_chars": execution_policy.max_evidence_chars}
+                   if execution_policy else {}),
             )
         except Exception as exc:
             # Model or retrieval errors never silently widen context to the full
@@ -533,6 +547,19 @@ async def execute_assessment_job(
                 return
             evidence_ids_by_criterion[criterion.criterion_id] = retrieved_ids & selected_span_id_set
 
+    if execution_policy and retrieval_strategy == "full_text_baseline":
+        # Same character ceiling as RAG; preserve whole immutable spans.
+        bounded_spans = []
+        characters = 0
+        for span in spans:
+            if characters + len(span.text) <= execution_policy.max_evidence_chars:
+                bounded_spans.append(span)
+                characters += len(span.text)
+        excluded_span_count = len(spans) - len(bounded_spans)
+        oversized_evidence_excluded = bool(spans) and not bounded_spans
+        spans = bounded_spans
+        span_registry = {span.span_id: span for span in spans}
+
     source_span_ids = [span.span_id for span in spans]
     if evidence_ids_by_criterion is None:
         evidence_ids_by_criterion = {
@@ -570,10 +597,11 @@ async def execute_assessment_job(
                 initial_pack=agent_pack,
                 provider_override=provider_override,
                 focus_criterion_ids=run.snapshot.get("focus_criterion_ids"),
+                **({"execution_policy": execution_policy} if execution_policy else {}),
             )
             validated_output = agent_result.output
             span_registry = agent_result.source_spans
-            run.execution_trace = agent_result.trace
+            run.execution_trace = {**agent_result.trace, **({"excluded_span_count": excluded_span_count} if execution_policy else {})}
         except AgentExecutionError as exc:
             run.execution_trace = exc.trace
             run.status = "failed"
