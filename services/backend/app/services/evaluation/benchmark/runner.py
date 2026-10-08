@@ -15,6 +15,7 @@ import uuid
 from .contracts import PROFILES,RunManifest,RunRecord,CriterionObservation,InvocationRecord
 from .dataset import load_inputs,select_runs
 from .artifacts import create_output,atomic_json,append_record,append_event
+from .provenance import git_source_provenance
 
 def now():return datetime.now(timezone.utc).isoformat()
 def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
@@ -118,7 +119,7 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
         model_quality='unmeasured' if is_mock else 'synthetic_reference_only',provider='mock' if is_mock else 'deepseek',
         requested_model=budget_plan.model,embedding_mode=embedding_mode,selection=selection,dataset_hash=inputs.manifest_hash,
         dataset_files=inputs.hashes,policies={p:policy.to_snapshot() for p,policy in policies.items()},
-        provenance={'effective_prompt_sha256':hashlib.sha256((get_assessment_prompt('assessment-v1.6.0')+'\n\n'+_AGENT_PROMPTS[AGENT_PROMPT_VERSION]).encode()).hexdigest(),
+        provenance={**git_source_provenance(),'effective_prompt_sha256':hashlib.sha256((get_assessment_prompt('assessment-v1.6.0')+'\n\n'+_AGENT_PROMPTS[AGENT_PROMPT_VERSION]).encode()).hexdigest(),
             'schema_sha256':digest(AssessmentOutputSchema.model_json_schema()),'embedding_config':EMBEDDING_CONFIG_ID,
             'temperature':0,'thinking':'disabled','max_output_tokens':4096,'concurrency':1,'repetitions':1,
             'reference_origin':'synthetic_design_expected','invoice_usd':None},budget_plan=budget_plan,
@@ -238,8 +239,10 @@ def parser():
             group=q.add_mutually_exclusive_group();group.add_argument('--split',choices=('development','public_test','all'));group.add_argument('--cases')
             q.add_argument('--seed',type=int,default=20261008)
             q.add_argument('--max-cost-usd',type=Decimal,default=Decimal(5))
+        if name!='validate':
+            q.add_argument('--embedding-mode',choices=('real','scripted'),default='real')
         if name=='run':
-            q.add_argument('--output',type=Path,required=True);q.add_argument('--embedding-mode',choices=('real','scripted'),default='real')
+            q.add_argument('--output',type=Path,required=True)
     q=sub.add_parser('report');q.add_argument('--input',type=Path,required=True);q.add_argument('--output',type=Path,required=True)
     q.add_argument('--dataset',type=Path,default=Path('fixtures/ai_benchmark/v1'))
     return p
@@ -260,26 +263,23 @@ def main(argv=None):
             return 0
         selection=select_runs(inputs,split=args.split or (None if args.cases else 'development'),
             case_ids=tuple(args.cases.split(',')) if args.cases else (),profiles=PROFILES if args.profiles=='all' else tuple(args.profiles.split(',')),seed=args.seed)
-        from .preflight import plan_budget,context_bound,verify_utf8_artifacts,validate_live_preflight,embedding_cache_available,resolve_cached_embedding_revision
+        from .preflight import plan_budget,context_bound,verify_utf8_artifacts,execution_prerequisites
         from app.services.assessment.policy import benchmark_policy
         from app.config import get_settings
         model='mock' if args.provider=='mock' else get_settings().DEEPSEEK_MODEL
         try:bound=verify_utf8_artifacts(Path('reports/ai-benchmark-cache'))
         except ValueError:bound=context_bound(model)
         plan=plan_budget(inputs,selection,{p:benchmark_policy(p) for p in selection.profiles},model=model,cap_usd=args.max_cost_usd,bound=bound)
+        prerequisites=execution_prerequisites(plan,provider=args.provider,embedding_mode=args.embedding_mode)
         if args.command=='plan':
-            print(plan.model_dump_json(indent=2));return 0 if plan.admitted else 2
+            print(json.dumps({**plan.model_dump(mode='json'),'execution_prerequisites':prerequisites,
+                              'source_code':git_source_provenance()},indent=2));return 0
         from .isolation import IsolationContext
         try:context=IsolationContext.from_environment()
         except (KeyError,ValueError):raise ValueError('BENCHMARK_ISOLATION_REQUIRED')
         if args.output.exists():raise ValueError('BENCHMARK_OUTPUT_EXISTS')
-        if args.provider=='deepseek':
-            from urllib.parse import urlparse
-            proof=json.loads(Path('docs/evaluation/deepseek-token-bound.json').read_text())
-            validate_live_preflight(plan,provider_host=urlparse(get_settings().DEEPSEEK_BASE_URL).hostname,
-                pricing_verified_at=proof['verified_at'],model_available_locally=embedding_cache_available())
-            if args.embedding_mode!='real':raise ValueError('BENCHMARK_SCRIPTED_LIVE_FORBIDDEN')
-        if args.embedding_mode=='real':os.environ['EMBEDDING_MODEL_REVISION']=resolve_cached_embedding_revision()
+        if prerequisites['embedding_revision']:
+            os.environ['EMBEDDING_MODEL_REVISION']=prerequisites['embedding_revision']
         # These settings apply only in the disposable child; never edit .env.
         os.environ.update(APP_ENV='sandbox',JEV_MODE='off',DEV_EVAL_BUDGET_USD=str(args.max_cost_usd),DEEPSEEK_MODEL=model,
             HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1')

@@ -106,3 +106,46 @@ def resolve_cached_embedding_revision() -> str:
     if not all(exists(f) for f in ('config.json','tokenizer_config.json','tokenizer.json')) or not (exists('model.safetensors') or exists('pytorch_model.bin')):
         raise ValueError('BENCHMARK_E5_NOT_CACHED')
     return revision
+
+
+def execution_prerequisites(plan: BudgetPlan, *, provider: str, embedding_mode: str) -> dict:
+    """Read-only checks shared by plan/run; no client construction, inference or downloads."""
+    from urllib.parse import urlsplit
+    if not plan.admitted:
+        raise ValueError('BENCHMARK_BUDGET_PLAN_REJECTED')
+    if embedding_mode not in {'real', 'scripted'}:
+        raise ValueError('BENCHMARK_EMBEDDING_MODE_INVALID')
+    settings = get_settings()
+    if provider == 'deepseek':
+        try:
+            endpoint = urlsplit(settings.DEEPSEEK_BASE_URL)
+            valid = (endpoint.scheme == 'https' and endpoint.hostname == 'api.deepseek.com'
+                     and endpoint.port in (None, 443) and not endpoint.username and not endpoint.password
+                     and not endpoint.query and not endpoint.fragment
+                     and endpoint.path in ('', '/', '/v1', '/v1/'))
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError('BENCHMARK_PROVIDER_UNVERIFIED')
+        if not settings.DEEPSEEK_API_KEY or not settings.DEEPSEEK_API_KEY.strip():
+            raise ValueError('BENCHMARK_API_KEY_MISSING')
+        if embedding_mode != 'real':
+            raise ValueError('BENCHMARK_SCRIPTED_LIVE_FORBIDDEN')
+        try:
+            proof = json.loads(Path(PROOF_REFERENCE).read_text())
+            verified_at = proof['verified_at']
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise ValueError('BENCHMARK_PRICING_UNVERIFIED') from exc
+        # Validate rate/model/endpoint before touching the optional local embedding dependency.
+        validate_live_preflight(plan, provider_host=endpoint.hostname,
+                                pricing_verified_at=verified_at, model_available_locally=True)
+    elif provider != 'mock' or plan.model != 'mock':
+        raise ValueError('BENCHMARK_PROVIDER_UNVERIFIED')
+    revision = None
+    if embedding_mode == 'real':
+        try:
+            revision = resolve_cached_embedding_revision()
+        except ImportError as exc:
+            raise ValueError('BENCHMARK_E5_NOT_CACHED') from exc
+    return {'verified': True, 'embedding_mode': embedding_mode, 'embedding_revision': revision,
+            'provider': provider, 'pricing_verified': provider == 'deepseek', 'network_performed': False}

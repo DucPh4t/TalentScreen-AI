@@ -40,6 +40,10 @@ The five graph nodes are authorize/model/tools/validate/repair. Tools cannot sen
 
 The 36 development and 24 public-test cases keep identity variants in the same cluster/split. Public fixtures and synthetic design expectations are **not protected holdout or independent HR judgments**. Template repetition and short CVs constrain generalization. Reference explanations contain an evaluator-only sentinel; runner/model/tool inputs do not receive labels. File and manifest hashes are checked before execution and every provider request.
 
+### Long-context collection v2
+
+[`fixtures/ai_benchmark/v2`](../../fixtures/ai_benchmark/v2/README.md) adds 30 explicitly non-technical team planning notes per CV, competition for bounded retrieval and corrections separated from original claims. It preserves v1 role rubrics and synthetic expectations, with relocated exact spans and disjoint IDs. This deliberately repetitive stress collection remains on the v1 wire schema and is not representative of real CVs or an independent holdout. It was frozen before measurement; never overwrite it to improve reported results.
+
 ## Local prerequisites
 
 Run from the repository root. Install backend dependencies from the existing lockfile, start Docker and install LibreOffice for PDF/DOCX smoke tests. The `.env` remains untracked. Mock requires no cloud key. Live execution uses the configured **direct DeepSeek endpoint**, `deepseek-flash`, and existing API key; Jev is forced off in the child. OpenRouter is not a supported route for this benchmark's verified rate card.
@@ -49,6 +53,14 @@ Real embedding runs require the cached `intfloat/multilingual-e5-base` snapshot.
 To populate a new machine's cache deliberately, install the embedding dependencies and explicitly load that pinned revision once, before running with offline flags. This is a separate setup action, not a benchmark result.
 
 A defensible byte-bound requires the official tokenizer artifacts described in [the bound proof](deepseek-token-bound.json). Download `tokenizer.json` and `encoding.py` from the proof's pinned DeepSeek repository/revision into ignored `reports/ai-benchmark-cache/`. `encoding.py` is parsed as AST only, never executed. SHA verification, tokenizer structure and request grammar are checked. Missing/changed artifacts select the conservative context bound; unaffordable live scope is rejected.
+
+### Read-only planning and code provenance
+
+`plan` and `run` share execution prerequisite checks: verified route/model, nonblank key presence for live use, rate-card freshness (7 days), real embedding requirement for live use and an immutable cached E5 snapshot. Planning constructs no provider and makes no network request or weight download. `verified` means these local prerequisites pass; it does **not** establish key validity, provider availability or sufficient provider credits. Planning does not require or create the disposable database; `run` additionally checks owned isolation and a new output directory.
+
+Both commands default to `--embedding-mode real`. Offline mock planning on a machine without E5 must explicitly pass `--embedding-mode scripted`. Pricing verification is not applicable for mock (`pricing_verified: false`). Over-budget or invalid prerequisites return exit 2 rather than a successful plan.
+
+Plan JSON includes `source_code`; run manifests include `provenance.git_sha`, `git_dirty` and `git_provenance_status`. A missing Git checkout yields explicit null/unavailable metadata. A dirty working tree is flagged, never presented as a reproducible clean commit. Ignored files do not affect Git dirty state. No filenames, repository paths, remotes or secret values are exported. Git identity is metadata, not a signed attestation, and does not capture dependency/environment drift.
 
 ## Commands
 
@@ -60,6 +72,11 @@ A defensible byte-bound requires the official tokenizer artifacts described in [
 .venv/bin/python scripts/run_ai_benchmark.py plan \
   --dataset fixtures/ai_benchmark/v1 --provider deepseek --profiles all \
   --cases node-01,ai-01,android-01 --max-cost-usd 5
+
+# Mock planning without cached E5. No database or provider construction.
+.venv/bin/python scripts/run_ai_benchmark.py plan \
+  --dataset fixtures/ai_benchmark/v2 --provider mock --embedding-mode scripted \
+  --cases v2-node-10,v2-node-13 --profiles all --max-cost-usd 5
 
 # Contract smoke: 12 actual service runs, LLM and embedding test doubles.
 bash scripts/run_ai_benchmark_isolated.sh run \
