@@ -207,7 +207,7 @@ export interface ExecutiveSummaryData {
   gaps_or_questions: string[];
   recommended_interview_focus: string[];
   recommendation_label: string;
-  comparable_score?: number;
+  comparable_score?: number | null;
   coverage?: number;
   cached: boolean;
 }

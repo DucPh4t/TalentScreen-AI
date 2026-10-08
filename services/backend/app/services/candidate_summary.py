@@ -19,6 +19,7 @@ from app.domain.authorization import AuthenticatedContext
 from app.domain.enums import AccountRole, CriterionOutcome, Recommendation
 
 logger = logging.getLogger(__name__)
+SUMMARY_VERSION = 2
 
 
 async def generate_candidate_summary(
@@ -86,10 +87,9 @@ async def generate_candidate_summary(
         }
 
     trace = run.execution_trace or {}
-    if not force_refresh and "executive_summary" in trace:
-        cached_data = trace["executive_summary"]
-        cached_data["cached"] = True
-        return cached_data
+    cached_data = trace.get("executive_summary")
+    if not force_refresh and isinstance(cached_data, dict) and cached_data.get("summary_version") == SUMMARY_VERSION:
+        return {**cached_data, "cached": True}
 
     # Load Rubric Criteria labels
     stmt_rubric = (
@@ -119,18 +119,20 @@ async def generate_candidate_summary(
 
     cand_label = app_obj.candidate.public_label
     req_title = app_obj.requisition.title
-    comp_score = float(run.comparable_score) if run.comparable_score is not None else 0.0
+    comp_score = float(run.comparable_score) if run.comparable_score is not None else None
+    score_label = f"{comp_score:.1f}/100" if comp_score is not None else "Chưa có điểm so sánh"
+    score_description = f"có điểm so sánh {score_label}" if comp_score is not None else "chưa có điểm so sánh hợp lệ"
     coverage_pct = round(float(run.coverage) * 100)
 
     # Build concise 5-sentence narrative
-    s1 = f"Ứng viên {cand_label} ứng tuyển vị trí {req_title} đạt điểm năng lực chuẩn hóa {comp_score:.1f}/100 với độ phủ bằng chứng {coverage_pct}%."
+    s1 = f"Ứng viên {cand_label} ứng tuyển vị trí {req_title} {score_description}, với độ phủ bằng chứng {coverage_pct}%."
     if strengths:
         s2 = f"Thế mạnh nổi bật nhất thể hiện ở các kỹ năng: {', '.join(s.split(':')[0] for s in strengths[:3])}."
     else:
-        s2 = "Hồ sơ thể hiện năng lực tổng quát ở mức cơ bản, chưa có kỹ năng bứt phá đạt mức dẫn dắt."
+        s2 = "Chưa ghi nhận tiêu chí nào đạt ngưỡng điểm mạnh trong kết quả đánh giá hiện tại."
 
     if gaps:
-        s3 = f"Các khía cạnh cần làm rõ thêm gồm: {', '.join(g.split(':')[0] for s in gaps[:2])}."
+        s3 = f"Các khía cạnh cần làm rõ thêm gồm: {', '.join(g.split(':')[0] for g in gaps[:2])}."
     else:
         s3 = "Tất cả các tiêu chí trọng tâm của vị trí đều có bằng chứng đối chiếu đầy đủ."
 
@@ -155,7 +157,8 @@ async def generate_candidate_summary(
     summary_result = {
         "application_id": str(application_id),
         "status": "ready",
-        "headline": f"{cand_label} — {rec_label} ({comp_score:.1f}/100)",
+        "summary_version": SUMMARY_VERSION,
+        "headline": f"{cand_label} — {rec_label} ({score_label})",
         "summary_paragraph": full_narrative,
         "key_strengths": strengths[:4],
         "gaps_or_questions": gaps[:4],
