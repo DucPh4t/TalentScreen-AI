@@ -60,3 +60,16 @@ def test_git_provenance_ignores_inherited_repository_redirect(tmp_path,monkeypat
     monkeypatch.setenv('GIT_DIR',str(roots[1]/'.git'))
     monkeypatch.setenv('GIT_WORK_TREE',str(roots[1]))
     assert git_source_provenance(roots[0])['git_sha']==shas[0]
+
+
+def test_git_provenance_handles_non_utf8_status_bytes(monkeypatch):
+    from app.services.evaluation.benchmark import provenance
+    import sys
+    original_run=subprocess.run
+    def raw_status(command,**kwargs):
+        if 'status' in command:
+            return original_run([sys.executable,'-c',"import sys; sys.stdout.buffer.write(b'?? invalid-\\xff\\x00')"],**kwargs)
+        return subprocess.CompletedProcess(command,0,stdout='a'*40+'\n',stderr='')
+    monkeypatch.setattr(provenance.subprocess,'run',raw_status)
+    assert provenance.git_source_provenance(Path('/tmp'))=={
+        'git_sha':'a'*40,'git_dirty':True,'git_provenance_status':'available'}

@@ -15,7 +15,7 @@ def git_source_provenance(root: Path | None = None) -> dict:
         revision = subprocess.run(['git', '-C', str(root), 'rev-parse', 'HEAD'],
                                   capture_output=True, text=True, timeout=5, check=False, env=environment)
         status = subprocess.run(['git', '-C', str(root), 'status', '--porcelain', '-z', '--untracked-files=normal'],
-                                capture_output=True, text=True, timeout=5, check=False, env=environment)
+                                capture_output=True, text=False, timeout=5, check=False, env=environment)
         sha = revision.stdout.strip()
         if revision.returncode or status.returncode or not re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', sha):
             return unavailable
