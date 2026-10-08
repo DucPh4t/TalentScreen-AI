@@ -37,9 +37,11 @@ ERROR_CODES = frozenset({"TRACE_STEP_FAILED", "TRACE_CANCELLED", "ASSESSMENT_OUT
 COUNTERS = frozenset({"model_round_trips", "tool_execution_count", "repair_count", "criterion_count",
     "result_criterion_count", "result_count", "source_span_count", "tool_call_count",
     "input_tokens", "output_tokens", "total_tokens", "validation_error_count", "attempt_no",
-    "max_output_tokens", "external_call_count", "provider_latency_ms"})
-UUID_FIELDS = frozenset({"assessment_run_id", "job_id", "jd_version_id"})
+    "max_output_tokens", "external_call_count", "provider_latency_ms", "cached_input_tokens",
+    "rejected_citations", "normalized_criteria", "schema_failures"})
+UUID_FIELDS = frozenset({"assessment_run_id", "job_id", "jd_version_id", "experiment_id"})
 ENUMS = {
+    "benchmark_profile": {"full_text", "dense", "hybrid", "hybrid_agent"},
     "node": NODES, "outcome": OUTCOMES, "error_code": ERROR_CODES,
     "retrieval_strategy": {"hybrid", "full_text_baseline"},
     "provider": {"mock", "deepseek", "jev", "custom"},
@@ -56,6 +58,8 @@ def safe_metadata(values: dict[str, Any]) -> dict[str, Any]:
     for key, value in values.items():
         if key in ENUMS and isinstance(value, str) and value in ENUMS[key]:
             result[key] = value
+        elif key == 'case_id_sha256' and isinstance(value,str) and re.fullmatch(r'[0-9a-f]{64}',value):
+            result[key]=value
         elif key in COUNTERS and type(value) is int and 0 <= value <= 100_000_000:
             result[key] = value
         elif key in UUID_FIELDS:

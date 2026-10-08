@@ -13,17 +13,29 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: talentscreen
+          POSTGRES_DB: talentscreen_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d talentscreen"
+          --health-cmd "pg_isready -U postgres -d talentscreen_test"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/talentscreen
-      DATABASE_SYNC_URL: postgresql://postgres:postgres@127.0.0.1:5432/talentscreen
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/talentscreen_test
+      DATABASE_SYNC_URL: postgresql://postgres:postgres@127.0.0.1:5432/talentscreen_test
       PGPASSWORD: postgres
+      APP_ENV: sandbox
+      PILOT_STAGE: ''
       LLM_PROVIDER: mock
+      DEEPSEEK_API_KEY: ''
+      JEV_MODE: 'off'
+      JEV_API_KEY: ''
+      RAG_MODE: full_text_baseline
+      LANGSMITH_TRACING: 'false'
+      LANGCHAIN_TRACING_V2: 'false'
+      LANGSMITH_API_KEY: ''
+      TALENTSCREEN_REAL_E5_SMOKE: '0'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
       TALENTSCREEN_TEST_DB_ISOLATED: '1'
     steps:
       - uses: actions/checkout@v4
@@ -43,8 +55,8 @@ jobs:
         run: python -m pip install -e 'services/backend[dev]'
       - name: Prepare isolated test schema
         run: |
-          psql -h 127.0.0.1 -U postgres -d talentscreen -c 'CREATE EXTENSION IF NOT EXISTS vector;'
-          psql -h 127.0.0.1 -U postgres -d talentscreen -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+          psql -h 127.0.0.1 -U postgres -d talentscreen_test -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+          psql -h 127.0.0.1 -U postgres -d talentscreen_test -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
           alembic upgrade head
       - name: Backend regression tests
         run: pytest services/backend/tests -q

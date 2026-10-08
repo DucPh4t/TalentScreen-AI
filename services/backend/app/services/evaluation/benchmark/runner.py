@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import signal
 import sys
+import time
 import uuid
 from .contracts import PROFILES,RunManifest,RunRecord,CriterionObservation,InvocationRecord
 from .dataset import load_inputs,select_runs
@@ -44,8 +45,10 @@ class RecordingProvider:
                 'error_type':type(e).__name__,'at':now()})
             raise
         self.results[pending.id]=result
+        from app.services.observability import safe_metadata
+        safe_model=safe_metadata({'model':result.reported_model}).get('model')
         append_event(self.output/'admissions.jsonl',{'event':'provider_returned','invocation_id':str(pending.id),
-            'reported_model':result.reported_model,'input_tokens':result.input_tokens,'output_tokens':result.output_tokens,
+            'reported_model':safe_model,'input_tokens':result.input_tokens,'output_tokens':result.output_tokens,
             'cached_input_tokens':result.cached_input_tokens,'provider_latency_ms':result.latency_ms,'at':now()})
         return result
 
@@ -66,7 +69,7 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
     from app.services.embedding import EMBEDDING_CONFIG_ID
     from app.services.llm.ledger import get_or_create_active_budget_period,settle_budget
     from app.services.llm.types import StrictReservationPolicy
-    from app.services.observability import trace_span
+    from app.services.observability import trace_span,safe_metadata
     from .isolation import assert_isolated_database
     from .seed import seed_cases
     from .mock_provider import scripted_embeddings,BenchmarkMockProvider
@@ -103,6 +106,20 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
     strict=StrictReservationPolicy(period.id,budget_plan.cap_usd,budget_plan.bound,budget_plan.model)
     stop=None;interrupted=False;records=[]
     with scripted_embeddings(embedding_mode=='scripted'):
+        setup_start=time.perf_counter();device=None
+        try:
+            if any(p.channels for p in policies.values()):
+                from app.services.embedding import _get_embedding_model
+                model=_get_embedding_model()
+                device='scripted_test_double' if embedding_mode=='scripted' else str(model.device)
+        except Exception:
+            stop='BENCHMARK_EMBEDDING_SETUP_FAILED'
+        provenance={**manifest.provenance,'embedding_device':device,
+            'embedding_setup_ms':round((time.perf_counter()-setup_start)*1000,4),
+            'index_reuse':'once per approved version and embedding config',
+            'profile_order':'seeded shuffle per case; model setup excluded from per-run timing'}
+        manifest=manifest.model_copy(update={'provenance':provenance})
+        atomic_json(output/'manifest.json',manifest)
         for case_id,profile in selection.combinations:
             if stop:
                 record=RunRecord(case_id=case_id,profile=profile,status='skipped',error_code=stop,policy_hash=policies[profile].digest)
@@ -118,9 +135,11 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                 await db.commit()
                 run=await db.get(AssessmentRun,response.id)
                 wrapper=(BenchmarkMockRecordingProvider if is_mock else DeepSeekRecordingProvider)(provider,db,run.job_id,inputs,output)
-                with trace_span('benchmark_combination',metadata={}) as span:
+                with trace_span('benchmark_combination',metadata={'experiment_id':str(context.experiment_id),'benchmark_profile':profile,
+                    'case_id_sha256':hashlib.sha256(case_id.encode()).hexdigest()}) as span:
                     trace_id=uuid.UUID(span.run_id) if span.run_id else None
                     await execute_assessment_job(db,run.job_id,provider_override=wrapper,diagnostics=diagnostic,strict_reservation_policy=strict)
+                    span.record(diagnostic.snapshot()["counters"])
                 await db.commit()
                 # Hash changes during the final response also invalidate the batch.
                 assert_frozen(inputs)
@@ -151,7 +170,7 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                     result=wrapper.results.get(invocation.id) if wrapper else None
                     invocations.append(InvocationRecord(invocation_id=invocation.id,logical_step=invocation.logical_step,
                         attempt_no=invocation.attempt_no,status=invocation.status.value,requested_model=budget_plan.model,
-                        reported_model=result.reported_model if result else None,input_tokens=invocation.input_tokens,output_tokens=invocation.output_tokens,
+                        reported_model=safe_metadata({"model":result.reported_model}).get("model") if result else None,input_tokens=invocation.input_tokens,output_tokens=invocation.output_tokens,
                         cached_input_tokens=result.cached_input_tokens if result else None,provider_latency_ms=result.latency_ms if result else None,
                         reserved_usd=invocation.cost_reserved,estimated_peak_usd=invocation.cost_actual,rate_card_version=invocation.rate_card_version))
                 if any(i.status in {'reserved','admitted','outcome_unknown'} for i in invocations) and not stop:
@@ -218,7 +237,7 @@ def main(argv=None):
             return 0
         selection=select_runs(inputs,split=args.split or (None if args.cases else 'development'),
             case_ids=tuple(args.cases.split(',')) if args.cases else (),profiles=PROFILES if args.profiles=='all' else tuple(args.profiles.split(',')),seed=args.seed)
-        from .preflight import plan_budget,context_bound,verify_utf8_artifacts,validate_live_preflight,embedding_cache_available
+        from .preflight import plan_budget,context_bound,verify_utf8_artifacts,validate_live_preflight,embedding_cache_available,resolve_cached_embedding_revision
         from app.services.assessment.policy import benchmark_policy
         from app.config import get_settings
         model='mock' if args.provider=='mock' else get_settings().DEEPSEEK_MODEL
@@ -237,6 +256,7 @@ def main(argv=None):
             validate_live_preflight(plan,provider_host=urlparse(get_settings().DEEPSEEK_BASE_URL).hostname,
                 pricing_verified_at=proof['verified_at'],model_available_locally=embedding_cache_available())
             if args.embedding_mode!='real':raise ValueError('BENCHMARK_SCRIPTED_LIVE_FORBIDDEN')
+        if args.embedding_mode=='real':os.environ['EMBEDDING_MODEL_REVISION']=resolve_cached_embedding_revision()
         # These settings apply only in the disposable child; never edit .env.
         os.environ.update(APP_ENV='sandbox',JEV_MODE='off',DEV_EVAL_BUDGET_USD=str(args.max_cost_usd),DEEPSEEK_MODEL=model,
             HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1')

@@ -137,7 +137,7 @@ async def _resolve_requisition_id_for_job(db: AsyncSession, job_id: uuid.UUID) -
     "model": result.reported_model or result.requested_model,
     "ls_model_name": result.reported_model or result.requested_model,
     "input_tokens": result.input_tokens, "output_tokens": result.output_tokens,
-    "provider_latency_ms": result.latency_ms,
+    "provider_latency_ms": result.latency_ms, "cached_input_tokens": result.cached_input_tokens,
     "usage_metadata": {"input_tokens": result.input_tokens, "output_tokens": result.output_tokens,
         "total_tokens": (result.input_tokens + result.output_tokens)
             if result.input_tokens is not None and result.output_tokens is not None else None},

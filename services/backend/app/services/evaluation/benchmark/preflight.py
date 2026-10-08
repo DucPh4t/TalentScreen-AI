@@ -89,3 +89,20 @@ def validate_live_preflight(plan: BudgetPlan,*,provider_host: str,pricing_verifi
     except (TypeError,ValueError) as exc:raise ValueError('BENCHMARK_PRICING_UNVERIFIED') from exc
     if not 0<=age<=7:raise ValueError('BENCHMARK_PRICING_UNVERIFIED')
     if not model_available_locally:raise ValueError('BENCHMARK_E5_NOT_CACHED')
+
+def resolve_cached_embedding_revision() -> str:
+    """Resolve a mutable local alias once, then require files at its immutable SHA."""
+    import re
+    from huggingface_hub import try_to_load_from_cache
+    settings=get_settings()
+    if settings.EMBEDDING_MODEL!='intfloat/multilingual-e5-base':raise ValueError('BENCHMARK_E5_MODEL_UNVERIFIED')
+    value=try_to_load_from_cache(settings.EMBEDDING_MODEL,'config.json',revision=settings.EMBEDDING_MODEL_REVISION)
+    if not isinstance(value,str) or not Path(value).is_file():raise ValueError('BENCHMARK_E5_NOT_CACHED')
+    snapshot=Path(value).parent;revision=snapshot.name
+    if snapshot.parent.name!='snapshots' or not re.fullmatch('[0-9a-f]{40}',revision):raise ValueError('BENCHMARK_E5_REVISION_UNVERIFIED')
+    def exists(file):
+        item=try_to_load_from_cache(settings.EMBEDDING_MODEL,file,revision=revision)
+        return isinstance(item,str) and Path(item).parent==snapshot and Path(item).is_file()
+    if not all(exists(f) for f in ('config.json','tokenizer_config.json','tokenizer.json')) or not (exists('model.safetensors') or exists('pytorch_model.bin')):
+        raise ValueError('BENCHMARK_E5_NOT_CACHED')
+    return revision
