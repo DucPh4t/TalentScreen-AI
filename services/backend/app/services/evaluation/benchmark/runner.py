@@ -24,9 +24,19 @@ def assert_frozen(inputs):
     if current.manifest_hash!=inputs.manifest_hash or current.hashes!=inputs.hashes:
         raise ValueError('DATASET_HASH_MISMATCH')
 
+class ExperimentModelIdentity:
+    """Conservative exact-label pin shared by every call; no undocumented alias mapping."""
+    def __init__(self):
+        self.first=None
+        self.changed=False
+
+    def provenance(self):
+        return {'first_reported_model':self.first,
+                'model_comparability':'invalid_model_change' if self.changed else 'consistent' if self.first else 'unmeasured'}
+
 class RecordingProvider:
-    def __init__(self,provider,db,job_id,inputs,output):
-        self.provider=provider;self.db=db;self.job_id=job_id;self.inputs=inputs;self.output=output;self.results={}
+    def __init__(self,provider,db,job_id,inputs,output,model_identity):
+        self.provider=provider;self.db=db;self.job_id=job_id;self.inputs=inputs;self.output=output;self.results={};self.model_identity=model_identity
     async def complete(self,request):
         from sqlalchemy import select
         from app.db.models import LLMInvocation
@@ -50,6 +60,17 @@ class RecordingProvider:
         append_event(self.output/'admissions.jsonl',{'event':'provider_returned','invocation_id':str(pending.id),
             'reported_model':safe_model,'input_tokens':result.input_tokens,'output_tokens':result.output_tokens,
             'cached_input_tokens':result.cached_input_tokens,'provider_latency_ms':result.latency_ms,'at':now()})
+        identity=self.model_identity
+        if safe_model not in request.strict_reservation_policy.accepted_reported_models or (identity.first is not None and safe_model!=identity.first):
+            identity.changed=True
+            append_event(self.output/'admissions.jsonl',{'event':'model_identity_changed','invocation_id':str(pending.id),
+                'first_reported_model':identity.first,'reported_model':safe_model,'at':now()})
+            from app.services.llm.exceptions import LLMModelChangedError
+            raise LLMModelChangedError()
+        if identity.first is None:
+            identity.first=safe_model
+            append_event(self.output/'admissions.jsonl',{'event':'model_identity_pinned','invocation_id':str(pending.id),
+                'reported_model':safe_model,'at':now()})
         return result
 
 class BenchmarkMockRecordingProvider(RecordingProvider):pass
@@ -104,7 +125,7 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
         budget_period_id=period.id,started_at=now(),counts={'planned':len(selection.combinations)})
     atomic_json(output/'manifest.json',manifest)
     strict=StrictReservationPolicy(period.id,budget_plan.cap_usd,budget_plan.bound,budget_plan.model)
-    stop=None;interrupted=False;records=[]
+    stop=None;interrupted=False;records=[];model_identity=ExperimentModelIdentity()
     with scripted_embeddings(embedding_mode=='scripted'):
         setup_start=time.perf_counter();device=None
         try:
@@ -134,7 +155,7 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                     sanitized_version_id=item.sanitized_version_id,rubric_version_id=item.rubric_version_id),item.ctx,execution_policy=policies[profile])
                 await db.commit()
                 run=await db.get(AssessmentRun,response.id)
-                wrapper=(BenchmarkMockRecordingProvider if is_mock else DeepSeekRecordingProvider)(provider,db,run.job_id,inputs,output)
+                wrapper=(BenchmarkMockRecordingProvider if is_mock else DeepSeekRecordingProvider)(provider,db,run.job_id,inputs,output,model_identity)
                 with trace_span('benchmark_combination',metadata={'experiment_id':str(context.experiment_id),'benchmark_profile':profile,
                     'case_id_sha256':hashlib.sha256(case_id.encode()).hexdigest()}) as span:
                     trace_id=uuid.UUID(span.run_id) if span.run_id else None
@@ -184,12 +205,14 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                 await db.commit()
             status='interrupted' if interrupted else ('accepted' if observations else 'failed')
             source={k:run.snapshot[k] for k in ('application_id','document_id','sanitized_version_id','sanitized_sha256','rubric_version_id','application_generation')} if run else {}
-            record=RunRecord(case_id=case_id,profile=profile,status=status,error_code=stop or (run.failure_code if run else None),
+            context_limit_code='ASSESSMENT_CONTEXT_LIMIT' if run and (run.execution_trace or {}).get('error_code')=='ASSESSMENT_CONTEXT_LIMIT' else None
+            record=RunRecord(case_id=case_id,profile=profile,status=status,error_code=stop or (run.failure_code if run else None) or context_limit_code,
                 run_id=run.id if run else None,job_id=run.job_id if run else None,source_snapshot_hash=digest(source) if source else None,
                 source_ids={k:str(v) for k,v in source.items()},policy_hash=policies[profile].digest,criteria=observations,
                 diagnostics=diagnostic.snapshot(),invocations=tuple(invocations),tool_execution_count=(run.execution_trace or {}).get('tool_execution_count',0) if run else 0,
                 repair_count=(run.execution_trace or {}).get('repair_count',0) if run else 0,trace_id=trace_id)
             append_record(output/'runs.jsonl',record);records.append(record)
+            manifest=manifest.model_copy(update={'provenance':{**manifest.provenance,**model_identity.provenance()}})
             atomic_json(output/'manifest.json',manifest.model_copy(update={'counts':{'planned':len(selection.combinations),'recorded':len(records)}}))
     await db.refresh(period)
     all_invocations=[i for r in records for i in r.invocations]

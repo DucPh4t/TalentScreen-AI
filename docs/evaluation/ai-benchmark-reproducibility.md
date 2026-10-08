@@ -98,7 +98,7 @@ Profiles may be a comma-separated subset. `--cases` and `--split` are mutually e
 
 The wrapper owns the exact labeled container ID, random database credentials, DB ownership comment/nonce and marked temporary storage. Names or an environment toggle alone cannot authorize mutation. It applies migrations only to that DB and stops only its owned container. It does not read real Downloads CVs, mutate the application's database or attest that a human approved a synthetic fixture.
 
-One DEVELOPMENT budget period caps the whole experiment across requisitions. Every outbound call reserves first, then records a fsynced metadata-only admission. Unknown outcomes/missing usage/model mismatches retain funds and stop further calls. Zero usage remains zero; absent cache usage remains unmeasured and uses conservative miss pricing. Reported costs are **peak-rate token estimates**, not provider invoices.
+One DEVELOPMENT budget period caps the whole experiment across requisitions. Every outbound call reserves first, then records a fsynced metadata-only admission. The first reported model identifier is pinned across every call and combination; a later identifier change is journaled, stops the batch and marks comparability invalid. No undocumented alias-equivalence mapping is assumed. Unknown outcomes/missing usage/model mismatches retain funds and stop further calls. Zero usage remains zero; absent cache usage remains unmeasured and uses conservative miss pricing. Reported costs are **peak-rate token estimates**, not provider invoices.
 
 SIGINT/TERM forwards cancellation to the child, writes partial records/financial state, then cleans up. A hard kill leaves a running manifest and unresolved admissions: reports flag uncertainty, never silently infer free calls. No automatic retry starts another fresh paid experiment. Full 60×4 live preflight exceeds the initial USD5 cap under the conservative four-call bound; the measured 12-combination probe is not that full experiment.
 
@@ -106,10 +106,13 @@ Manual LangSmith spans export fixed enums/counters, experiment UUID, hashed case
 
 ## Reading the metrics
 
-- Reliability includes planned, attempted, accepted, failed, skipped, interrupted and missing records.
+- Reliability includes planned, attempted, accepted, failed, skipped, interrupted and missing records. Completed manifests must agree with journals and counts; missing admission/result evidence downgrades contradictory reports and prevents financial reconciliation.
 - Numeric MAE/kappa use only pairs with numeric expected/observed anchors; `null/null` never inflates agreement. Degenerate kappa is null.
 - Status agreement has accepted-only and all-planned denominators. Conflicts, correct abstention, false zero and unsupported scores have separate denominators.
 - Span Recall@5/10 flattens/deduplicates the **ranked pre-pack chunk pool**, then takes the first k spans. Source order within a chunk can place a relevant span beyond k. This is not chunk Recall@k.
+- Unexecuted retrieval is `null`, excluded from measured retrieval denominators; an executed empty pack remains measured zero. Failures still count against reliability.
+- Durable context diagnostics record original/delivered/excluded initial spans and characters, context limits and size truncation. RAG packing additionally records eligible/packed/size-excluded chunk counts. Exclusion by retrieval selection is distinct from size truncation. Historical journals without these fields remain unmeasured; nothing is reconstructed.
+- Annotated citation precision counts observed citations belonging to criterion-specific reference evidence over all citations for annotation-complete criteria. Cited sufficient-group coverage requires all spans of an alternative group for observed assessed/conflicting criteria with complete annotated groups. These are synthetic-reference support checks, separate from structural citation scope and packed-evidence availability; incomplete annotations and mock LLM quality remain unmeasured.
 - Sufficient-group coverage checks all spans in an alternative group, in the delivered initial/final pack. It may be 100% even when span Recall@10 is lower. Full-text ranking is unmeasured.
 - Paired deltas use only overlapping accepted cases, cluster bootstrap (1,000 samples, recorded seed). Too-small/degenerate intervals are null. Counterfactual rates require complete pairs.
 - Setup/model device is separate from per-run timing; indexing is reused for the same approved snapshot. One shuffled run cannot establish stable latency differences or model variance. Queue time/invoice are unmeasured.

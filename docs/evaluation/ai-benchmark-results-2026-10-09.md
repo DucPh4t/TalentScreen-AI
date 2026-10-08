@@ -46,13 +46,19 @@ Span Recall@k flattens ranked chunk span IDs before cutting off at k; it is not 
 
 Hybrid did **not** outperform dense on this dataset's span ranking. All profiles delivered the sufficient groups; the data does not establish a selective-retrieval or tool-recovery advantage. No improvement percentage or global winner is claimed. A future version should include longer CVs with more than four competing project chunks per criterion and independently adjudicated labels; freeze it before tuning.
 
+## Post-review report reconciliation
+
+The evaluator was rerun **offline on the original journals**, without further paid calls. All 12 live and 240 offline combinations have complete result/admission journals, no integrity errors, and reconciled peak-rate estimates. Annotated citation precision and cited sufficient-group coverage are 15/15 per live profile for these three anchor-0 cases; this is authored-reference support, not independently adjudicated semantic accuracy. Mock citation quality remains unmeasured.
+
+These original runs predate durable context-size instrumentation. Their context/truncation measurements are explicitly **unmeasured**; they were not reconstructed after database cleanup. New service regressions verify partial truncation and a zero-call context-limit outcome. A later experiment must collect these fields before making context-coverage claims.
+
 ## Safety, trace and validation evidence
 
 Regression covers immutable policies/legacy prompts, source/criterion scope, stale snapshots, gold separation, unknown spend, usage bounds, missing/zero/cache usage, duplicate/torn journals, interrupted runs, evaluator denominators, paired clusters, escaping and tracing outages. Synthetic approvals are explicitly machine-authored fixtures, never independent HR attestations.
 
 LangSmith received metadata-only trace roots for the live probe. Cloud verification uses read-only HTTP and checks empty inputs/outputs plus experiment/profile correlation. The short-timeout SDK read initially failed; this did not affect assessments. Exact confirmed counts are in the aggregate JSON.
 
-Frontend: **22/22 tests passed**, production Next.js build passed. No HR UI screen or public experimental profile selector was added. Backend regression and default-off real-E5 collection were verified in disposable PostgreSQL; CI clears provider/trace keys and never downloads weights or calls a paid model. No migration is required by this benchmark.
+Frontend: **22/22 tests passed**, production Next.js build passed. No HR UI screen or public experimental profile selector was added. **417 backend tests passed**; one real-E5 test is opt-in and its separate smoke passed. Backend regression and default-off real-E5 collection were verified in disposable PostgreSQL; CI clears provider/trace keys and never downloads weights or calls a paid model. No migration is required by this benchmark.
 
 ## Limits and next evidence
 

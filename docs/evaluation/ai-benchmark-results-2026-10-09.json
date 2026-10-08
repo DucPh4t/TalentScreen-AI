@@ -43,7 +43,11 @@
           "final_group_coverage": 1.0,
           "recovered_criteria": 0,
           "scope_violations": 0,
-          "citation_denominator": 15
+          "citation_denominator": 15,
+          "annotated_citation_denominator": 15,
+          "annotated_citation_precision": 1.0,
+          "cited_group_denominator": 15,
+          "cited_group_coverage": 1.0
         },
         "prevalidation": {
           "rejected_citations": 0,
@@ -76,6 +80,12 @@
             "p50_ms": 3398.3893,
             "p95_ms": 3440.69929
           }
+        },
+        "context": {
+          "measured_runs": 0,
+          "unmeasured_runs": 3,
+          "size_truncated_runs": 0,
+          "context_limit_runs": 0
         },
         "queue_ms": null,
         "model_calls": 3,
@@ -130,7 +140,11 @@
           "final_group_coverage": 1.0,
           "recovered_criteria": 0,
           "scope_violations": 0,
-          "citation_denominator": 15
+          "citation_denominator": 15,
+          "annotated_citation_denominator": 15,
+          "annotated_citation_precision": 1.0,
+          "cited_group_denominator": 15,
+          "cited_group_coverage": 1.0
         },
         "prevalidation": {
           "rejected_citations": 0,
@@ -163,6 +177,12 @@
             "p50_ms": 3292.1334,
             "p95_ms": 3614.39271
           }
+        },
+        "context": {
+          "measured_runs": 0,
+          "unmeasured_runs": 3,
+          "size_truncated_runs": 0,
+          "context_limit_runs": 0
         },
         "queue_ms": null,
         "model_calls": 3,
@@ -217,7 +237,11 @@
           "final_group_coverage": 1.0,
           "recovered_criteria": 0,
           "scope_violations": 0,
-          "citation_denominator": 15
+          "citation_denominator": 15,
+          "annotated_citation_denominator": 15,
+          "annotated_citation_precision": 1.0,
+          "cited_group_denominator": 15,
+          "cited_group_coverage": 1.0
         },
         "prevalidation": {
           "rejected_citations": 0,
@@ -250,6 +274,12 @@
             "p50_ms": 3503.2754,
             "p95_ms": 3780.00623
           }
+        },
+        "context": {
+          "measured_runs": 0,
+          "unmeasured_runs": 3,
+          "size_truncated_runs": 0,
+          "context_limit_runs": 0
         },
         "queue_ms": null,
         "model_calls": 3,
@@ -304,7 +334,11 @@
           "final_group_coverage": 1.0,
           "recovered_criteria": 0,
           "scope_violations": 0,
-          "citation_denominator": 15
+          "citation_denominator": 15,
+          "annotated_citation_denominator": 15,
+          "annotated_citation_precision": 1.0,
+          "cited_group_denominator": 15,
+          "cited_group_coverage": 1.0
         },
         "prevalidation": {
           "rejected_citations": 0,
@@ -337,6 +371,12 @@
             "p50_ms": 4024.8473,
             "p95_ms": 4479.29483
           }
+        },
+        "context": {
+          "measured_runs": 0,
+          "unmeasured_runs": 3,
+          "size_truncated_runs": 0,
+          "context_limit_runs": 0
         },
         "queue_ms": null,
         "model_calls": 3,
@@ -618,6 +658,8 @@
       "planned": 12,
       "records": 12,
       "missing_records": 0,
+      "manifest_status": "complete",
+      "integrity_errors": [],
       "admitted_invocations": 12,
       "unresolved_admissions": 0,
       "financial_reconciled": true
@@ -687,7 +729,11 @@
           "final_group_coverage": 1.0,
           "recovered_criteria": 0,
           "scope_violations": 0,
-          "citation_denominator": 0
+          "citation_denominator": 0,
+          "annotated_citation_denominator": 0,
+          "annotated_citation_precision": null,
+          "cited_group_denominator": 0,
+          "cited_group_coverage": null
         },
         "prevalidation": {
           "rejected_citations": 0,
@@ -720,6 +766,12 @@
             "p50_ms": 55.647149999999996,
             "p95_ms": 69.1678
           }
+        },
+        "context": {
+          "measured_runs": 0,
+          "unmeasured_runs": 60,
+          "size_truncated_runs": 0,
+          "context_limit_runs": 0
         },
         "queue_ms": null,
         "model_calls": 60,
@@ -774,7 +826,11 @@
           "final_group_coverage": 1.0,
           "recovered_criteria": 0,
           "scope_violations": 0,
-          "citation_denominator": 0
+          "citation_denominator": 0,
+          "annotated_citation_denominator": 0,
+          "annotated_citation_precision": null,
+          "cited_group_denominator": 0,
+          "cited_group_coverage": null
         },
         "prevalidation": {
           "rejected_citations": 0,
@@ -807,6 +863,12 @@
             "p50_ms": 251.97445,
             "p95_ms": 354.7822699999999
           }
+        },
+        "context": {
+          "measured_runs": 0,
+          "unmeasured_runs": 60,
+          "size_truncated_runs": 0,
+          "context_limit_runs": 0
         },
         "queue_ms": null,
         "model_calls": 60,
@@ -861,7 +923,11 @@
           "final_group_coverage": 1.0,
           "recovered_criteria": 0,
           "scope_violations": 0,
-          "citation_denominator": 0
+          "citation_denominator": 0,
+          "annotated_citation_denominator": 0,
+          "annotated_citation_precision": null,
+          "cited_group_denominator": 0,
+          "cited_group_coverage": null
         },
         "prevalidation": {
           "rejected_citations": 0,
@@ -894,6 +960,12 @@
             "p50_ms": 275.5713,
             "p95_ms": 465.08241499999986
           }
+        },
+        "context": {
+          "measured_runs": 0,
+          "unmeasured_runs": 60,
+          "size_truncated_runs": 0,
+          "context_limit_runs": 0
         },
         "queue_ms": null,
         "model_calls": 60,
@@ -948,7 +1020,11 @@
           "final_group_coverage": 1.0,
           "recovered_criteria": 0,
           "scope_violations": 0,
-          "citation_denominator": 0
+          "citation_denominator": 0,
+          "annotated_citation_denominator": 0,
+          "annotated_citation_precision": null,
+          "cited_group_denominator": 0,
+          "cited_group_coverage": null
         },
         "prevalidation": {
           "rejected_citations": 0,
@@ -981,6 +1057,12 @@
             "p50_ms": 272.4585,
             "p95_ms": 331.1015499999999
           }
+        },
+        "context": {
+          "measured_runs": 0,
+          "unmeasured_runs": 60,
+          "size_truncated_runs": 0,
+          "context_limit_runs": 0
         },
         "queue_ms": null,
         "model_calls": 60,
@@ -1148,6 +1230,8 @@
       "planned": 240,
       "records": 240,
       "missing_records": 0,
+      "manifest_status": "complete",
+      "integrity_errors": [],
       "admitted_invocations": 240,
       "unresolved_admissions": 0,
       "financial_reconciled": true
@@ -1237,5 +1321,11 @@
     "failed": 0
   },
   "frontend_build": "passed",
-  "new_migration_required": false
+  "new_migration_required": false,
+  "report_recomputed_after_review": "2026-10-09; existing journals only, no additional provider calls",
+  "backend_regression": {
+    "passed": 417,
+    "skipped_opt_in_real_e5": 1,
+    "failed": 0
+  }
 }

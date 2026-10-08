@@ -465,6 +465,9 @@ async def execute_assessment_job(
     )
     spans = (await db.execute(stmt_spans)).scalars().all()
     span_registry = {s.span_id: s for s in spans}
+    original_span_count = len(spans)
+    original_characters = sum(len(span.text) for span in spans)
+    packing_size_truncated = False
     evidence_ids_by_criterion: dict[str, set[str]] | None = None
     oversized_evidence_excluded = False
     excluded_span_count = 0
@@ -517,6 +520,7 @@ async def execute_assessment_job(
             run.completed_at = datetime.now(timezone.utc)
             await db.flush()
             return
+        packing_size_truncated = bool(pack.get("size_excluded_chunks", 0))
         pack_span_id_set = set(pack_span_ids)
         selected_span_ids = []
         evidence_chars = 0
@@ -526,6 +530,7 @@ async def execute_assessment_job(
                 selected_span_ids.append(span_id)
                 evidence_chars += span_chars
         oversized_evidence_excluded = bool(pack_span_ids) and not selected_span_ids
+        packing_size_truncated = packing_size_truncated or len(selected_span_ids) < len(pack_span_ids)
         selected_span_id_set = set(selected_span_ids)
         spans = [span_registry[span_id] for span_id in selected_span_ids]
         span_registry = {span.span_id: span for span in spans}
@@ -568,6 +573,18 @@ async def execute_assessment_job(
         spans = bounded_spans
         span_registry = {span.span_id: span for span in spans}
 
+    delivered_characters = sum(len(span.text) for span in spans)
+    context_character_limit = execution_policy.max_evidence_chars if execution_policy else MAX_ASSESSMENT_EVIDENCE_CHARS
+    if retrieval_strategy == "hybrid":
+        context_character_limit = min(context_character_limit, MAX_ASSESSMENT_EVIDENCE_CHARS)
+    safe_record(diagnostics, "record_context", original_span_count=original_span_count,
+                original_characters=original_characters, initial_delivered_span_count=len(spans),
+                initial_delivered_characters=delivered_characters,
+                initial_excluded_span_count=original_span_count-len(spans),
+                initial_excluded_characters=original_characters-delivered_characters,
+                character_limit=context_character_limit,
+                context_limit=oversized_evidence_excluded,
+                size_truncated=(excluded_span_count>0 or packing_size_truncated))
     source_span_ids = [span.span_id for span in spans]
     if evidence_ids_by_criterion is None:
         evidence_ids_by_criterion = {

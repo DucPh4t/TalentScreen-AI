@@ -44,3 +44,26 @@ def test_hard_kill_admission_is_uncertain_even_without_final_records(tmp_path):
     report=generate_reports(tmp_path,tmp_path/'report',DATA)
     assert report.journal['missing_records']==2
     assert report.journal['unresolved_admissions']==1 and not report.journal['financial_reconciled']
+
+
+@pytest.mark.parametrize('missing',['both','runs','admissions'])
+def test_complete_manifest_requires_complete_journal_evidence(tmp_path,missing):
+    from app.services.evaluation.benchmark.contracts import InvocationRecord
+    import uuid
+    inputs,refs,manifest,rows,*_=fixture_report()
+    manifest=manifest.model_copy(update={'status':'complete','counts':{'planned':2,'accepted':2},
+        'financial':{'spent_peak_estimate_usd':'0','held_usd':'0','unresolved_invocations':0}})
+    rows[1]=rows[0].model_copy(update={'profile':'hybrid'})
+    rows[0]=rows[0].model_copy(update={'invocations':(InvocationRecord(invocation_id=uuid.uuid4(),logical_step='test',attempt_no=1,status='succeeded',
+        requested_model='mock',input_tokens=0,output_tokens=0,reserved_usd=0,estimated_peak_usd=0),)})
+    atomic_json(tmp_path/'manifest.json',manifest)
+    if missing=='admissions':
+        for row in rows:append_record(tmp_path/'runs.jsonl',row)
+    elif missing=='runs':
+        from app.services.evaluation.benchmark.artifacts import append_event
+        append_event(tmp_path/'admissions.jsonl',{'event':'admitted','invocation_id':str(rows[0].invocations[0].invocation_id)})
+    report=generate_reports(tmp_path,tmp_path/'report',DATA)
+    assert report.status=='partial'
+    assert not report.journal['financial_reconciled']
+    assert report.journal['manifest_status']=='complete'
+    assert report.journal['integrity_errors']

@@ -42,10 +42,35 @@ def generate_reports(source,output,dataset):
     events=read_events(source/'admissions.jsonl')
     inputs=load_inputs(Path(dataset));refs=load_references(inputs.root,inputs)
     report=evaluate_records(inputs,refs,manifest,records)
+    all_ids=[str(i.invocation_id) for r in records for i in r.invocations]
     finalized={str(i.invocation_id) for r in records for i in r.invocations if i.status in {'succeeded','failed'}}
     admitted={e['invocation_id'] for e in events if e.get('event')=='admitted'}
-    journal={**report.journal,'admitted_invocations':len(admitted),'unresolved_admissions':len(admitted-finalized),
-        'financial_reconciled':manifest.status!='running' and not (admitted-finalized)}
-    report=report.model_copy(update={'journal':journal})
+    integrity=list(report.journal['integrity_errors'])
+    if len(all_ids)!=len(set(all_ids)):integrity.append('DUPLICATE_INVOCATION_RECORD')
+    if set(all_ids)-admitted:integrity.append('INVOCATION_ADMISSION_MISSING')
+    if admitted-set(all_ids):integrity.append('ADMITTED_INVOCATION_NOT_FINALIZED')
+    financial=manifest.financial
+    from decimal import Decimal,InvalidOperation
+    try:
+        spent=Decimal(str(financial['spent_peak_estimate_usd']))
+        held=Decimal(str(financial['held_usd']))
+        unresolved=financial['unresolved_invocations']
+        invocations=[i for r in records for i in r.invocations]
+        recorded_spend=sum((i.estimated_peak_usd or Decimal(0) for i in invocations),Decimal(0))
+        recorded_pending=sum(i.status in {'reserved','admitted','outcome_unknown'} for i in invocations)
+        recorded_held=sum((i.reserved_usd for i in invocations if i.status in {'reserved','admitted','outcome_unknown'}),Decimal(0))
+        # DB ledger amounts use eight decimals; compare at that precision.
+        quantum=Decimal('0.00000001')
+        if (not spent.is_finite() or not held.is_finite() or spent<0 or held<0 or type(unresolved) is not int
+            or spent.quantize(quantum)!=recorded_spend.quantize(quantum)
+            or held.quantize(quantum)!=recorded_held.quantize(quantum) or unresolved!=recorded_pending):
+            integrity.append('FINANCIAL_RECORDS_MISMATCH')
+    except (KeyError,ValueError,TypeError,InvalidOperation):
+        integrity.append('FINANCIAL_EVIDENCE_MISSING')
+    journal={**report.journal,'integrity_errors':integrity,'admitted_invocations':len(admitted),
+        'unresolved_admissions':len(admitted-finalized),
+        'financial_reconciled':manifest.status!='running' and report.journal['missing_records']==0 and not integrity
+            and not (admitted-finalized) and not (set(all_ids)-admitted)}
+    report=report.model_copy(update={'journal':journal,'status':'partial' if integrity and report.status=='complete' else report.status})
     write_reports(report,output)
     return report

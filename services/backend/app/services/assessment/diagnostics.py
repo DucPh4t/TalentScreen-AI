@@ -20,8 +20,10 @@ class AssessmentDiagnostics:
         self.criteria=frozenset(c for c in criterion_ids if isinstance(c,str) and CRITERION.fullmatch(c))
         self.stages={name:None for name in sorted(STAGES)}
         self.ranked={c:None for c in sorted(self.criteria)}
-        self.initial={c:[] for c in sorted(self.criteria)}
-        self.final={c:[] for c in sorted(self.criteria)}
+        self.initial={c:None for c in sorted(self.criteria)}
+        self.final={c:None for c in sorted(self.criteria)}
+        self.context=None
+        self.packing=None
         self.counters={'rejected_citations':0,'normalized_criteria':0,'schema_failures':0}
 
     @staticmethod
@@ -42,11 +44,21 @@ class AssessmentDiagnostics:
 
     def record_initial_evidence(self,mapping: dict[str,list[str]]) -> None:
         if isinstance(mapping,dict):
-            self.initial={c:self._spans(mapping.get(c,[])) for c in sorted(self.criteria)}
+            self.initial={c:self._spans(mapping[c]) if c in mapping and mapping[c] is not None else None for c in sorted(self.criteria)}
 
     def record_final_evidence(self,mapping: dict[str,list[str]]) -> None:
         if isinstance(mapping,dict):
-            self.final={c:self._spans(mapping.get(c,[])) for c in sorted(self.criteria)}
+            self.final={c:self._spans(mapping[c]) if c in mapping and mapping[c] is not None else None for c in sorted(self.criteria)}
+
+    def record_context(self, **values) -> None:
+        counts={'original_span_count','original_characters','initial_delivered_span_count','initial_delivered_characters',
+                'initial_excluded_span_count','initial_excluded_characters','character_limit'}
+        self.context={k:v for k,v in values.items() if k in counts and type(v) is int and v>=0}
+        self.context.update({k:v for k,v in values.items() if k in {'context_limit','size_truncated'} and type(v) is bool})
+
+    def record_packing(self, **values) -> None:
+        allowed={'eligible_chunks','packed_chunks','size_excluded_chunks','packed_characters','character_limit'}
+        self.packing={k:v for k,v in values.items() if k in allowed and type(v) is int and v>=0}
 
     def record_validation(self,*,rejected_citations: int,normalized_criteria: int,schema_failures: int) -> None:
         for name,value in (('rejected_citations',rejected_citations),('normalized_criteria',normalized_criteria),('schema_failures',schema_failures)):
@@ -54,7 +66,7 @@ class AssessmentDiagnostics:
 
     def snapshot(self) -> dict[str,Any]:
         return copy.deepcopy({'stage_ms':self.stages,'ranked_evidence':self.ranked,'initial_evidence':self.initial,
-                              'final_evidence':self.final,'counters':self.counters})
+                              'final_evidence':self.final,'context':self.context,'packing':self.packing,'counters':self.counters})
 
 
 def safe_record(recorder,method: str,*args,**kwargs):

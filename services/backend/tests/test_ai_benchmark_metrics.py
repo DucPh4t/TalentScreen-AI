@@ -93,3 +93,43 @@ def test_conflict_and_null_score_denominators_are_separate():
     assert q['null_reference_denominator']==2 and q['correct_abstention_rate']==.5
     assert q['false_zero_rate']==.5 and q['unsupported_score_rate']==.5
     assert q['conflict_denominator']==1 and q['conflict_agreement']==1
+
+
+
+def test_valid_but_irrelevant_citations_fail_annotated_support():
+    inputs,refs,manifest,rows,c,spans=fixture_report()
+    irrelevant='spn_'+'e'*24
+    rows[0]=rows[0].model_copy(update={'criteria':{**rows[0].criteria,c:CriterionObservation(status='assessed',score=0,evidence_ids=(irrelevant,))},
+        'diagnostics':{'initial_evidence':{c:spans+[irrelevant]},'final_evidence':{c:spans+[irrelevant]}}})
+    r=evaluate_records(inputs,refs,manifest,rows).profiles['dense']['retrieval']
+    assert r['scope_violations']==0 and r['final_group_coverage']==1
+    assert r['annotated_citation_denominator']==1 and r['annotated_citation_precision']==0
+    assert r['cited_group_denominator']==1 and r['cited_group_coverage']==0
+    refs['node-01']=refs['node-01'].model_copy(update={'criteria':{**refs['node-01'].criteria,
+        c:refs['node-01'].criteria[c].model_copy(update={'annotation_complete':False})}})
+    r=evaluate_records(inputs,refs,manifest,rows).profiles['dense']['retrieval']
+    assert r['annotated_citation_precision'] is None and r['cited_group_coverage'] is None
+    assert r['annotated_citation_denominator']==0 and r['cited_group_denominator']==0
+
+
+def test_mock_semantic_citation_quality_remains_unmeasured():
+    inputs,refs,manifest,rows,*_=fixture_report(provider='mock')
+    r=evaluate_records(inputs,refs,manifest,rows).profiles['dense']['retrieval']
+    assert r['annotated_citation_precision'] is None and r['cited_group_coverage'] is None
+
+
+def test_unexecuted_retrieval_excluded_from_quality_denominators():
+    from app.services.assessment.diagnostics import AssessmentDiagnostics
+    inputs,refs,manifest,rows,*_=fixture_report()
+    recorder=AssessmentDiagnostics(set(refs['node-01'].criteria))
+    rows[1]=rows[1].model_copy(update={'diagnostics':recorder.snapshot()})
+    r=evaluate_records(inputs,refs,manifest,rows).profiles['hybrid']['retrieval']
+    assert r['group_denominator']==0 and r['initial_group_coverage'] is None and r['final_group_coverage'] is None
+    assert r['ranked_criteria']==0
+    assert evaluate_records(inputs,refs,manifest,rows).profiles['hybrid']['counts']['failed']==1
+    # A real executed empty pack is measured zero, not unmeasured.
+    recorder.record_initial_evidence({c:[] for c in refs['node-01'].criteria})
+    recorder.record_final_evidence({c:[] for c in refs['node-01'].criteria})
+    rows[1]=rows[1].model_copy(update={'diagnostics':recorder.snapshot()})
+    r=evaluate_records(inputs,refs,manifest,rows).profiles['hybrid']['retrieval']
+    assert r['group_denominator']==5 and r['initial_group_coverage']==0 and r['final_group_coverage']==0

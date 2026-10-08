@@ -103,3 +103,94 @@ def test_torn_journal_is_explicit(tmp_path):
     p.write_text('{"case_id":')
     with pytest.raises(ValueError,match='INCOMPLETE'):
         read_records(p)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('bad_score',[True,'3',3.0])
+async def test_raw_score_types_fail_at_provider_to_service_boundary(bad_score,test_session_factory,experiment):
+    inputs,selection,plan,context,output=experiment
+    provider=BenchmarkMockProvider();original=provider.complete
+    async def malformed(request):
+        result=await original(request)
+        payload=next(json.loads(m['content']) for m in request.messages if m['role']=='user' and m['content'].lstrip().startswith('{'))
+        body=json.loads(result.content)
+        body['criteria'][0].update(status='assessed',score=bad_score,evidence=[payload['source_spans'][0]],missing_information=[])
+        result.content=json.dumps(body)
+        return result
+    provider.complete=malformed
+    async with test_session_factory() as db:
+        manifest=await run_experiment(db,inputs,selection,context,provider=provider,budget_plan=plan,output=output,embedding_mode='scripted')
+        rows=read_records(output/'runs.jsonl')
+        assert manifest.status=='partial'
+        assert all(r.status=='failed' and r.diagnostics['counters']['schema_failures']==2 for r in rows)
+        assert not (await db.scalars(select(CriterionAssessment).where(CriterionAssessment.run_id.in_([r.run_id for r in rows])))).all()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('change_within_combination',[False,True])
+async def test_alternating_served_models_stop_the_experiment(change_within_combination,test_session_factory,experiment,monkeypatch):
+    inputs,_,_,context,output=experiment
+    selection=select_runs(inputs,split=None,case_ids=('node-01','ai-01'),profiles=('full_text',),seed=1)
+    monkeypatch.setattr(get_settings(),'DEEPSEEK_MODEL','deepseek-flash')
+    plan=plan_budget(inputs,selection,{'full_text':benchmark_policy('full_text')},model='deepseek-flash',cap_usd=Decimal(5),bound=byte_bound())
+    provider=BenchmarkMockProvider();original=provider.complete
+    async def alternating(request):
+        result=await original(request)
+        result.reported_model='deepseek-flash' if len(provider.requests)==1 else 'deepseek-v4.1-flash'
+        if change_within_combination and len(provider.requests)==1:result.content='{}'
+        return result
+    provider.complete=alternating
+    async with test_session_factory() as db:
+        manifest=await run_experiment(db,inputs,selection,context,provider=provider,budget_plan=plan,output=output,embedding_mode='real')
+    rows=read_records(output/'runs.jsonl')
+    assert manifest.status=='partial' and manifest.stop_code=='LLMModelChangedError'
+    assert manifest.provenance['first_reported_model']=='deepseek-flash'
+    assert manifest.provenance['model_comparability']=='invalid_model_change'
+    assert len(provider.requests)==2
+    assert rows[0 if change_within_combination else 1].status=='failed'
+    events=[json.loads(s) for s in (output/'admissions.jsonl').read_text().splitlines()]
+    assert any(e.get('event')=='model_identity_changed' for e in events)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('all_oversize',[False,True])
+async def test_context_diagnostics_survive_disposable_database(all_oversize,test_session_factory,experiment,monkeypatch):
+    from app.services.evaluation.benchmark import seed
+    from app.services.assessment import service
+    from app.db.models import SanitizedVersion,SourceSpan
+    from app.services.sanitizer import build_source_spans_from_canonical
+    from sqlalchemy import delete
+    import hashlib
+    inputs,_,_,context,output=experiment
+    profile='hybrid' if all_oversize else 'full_text'
+    selection=select_runs(inputs,split=None,case_ids=('node-01',),profiles=(profile,),seed=1)
+    plan=plan_budget(inputs,selection,{profile:benchmark_policy(profile)},model='mock',cap_usd=Decimal(5),bound=byte_bound())
+    if all_oversize:monkeypatch.setattr(service,'MAX_ASSESSMENT_EVIDENCE_CHARS',1)
+    else:
+        original=seed.seed_cases
+        async def long_fixture(db,*args,**kwargs):
+            seeded=await original(db,*args,**kwargs)
+            for item in seeded.values():
+                version=await db.get(SanitizedVersion,item.sanitized_version_id)
+                version.canonical_text=('Synthetic technical evidence ' * 45 + '\n') * 24
+                version.sha256=hashlib.sha256(version.canonical_text.encode()).hexdigest()
+                await db.execute(delete(SourceSpan).where(SourceSpan.sanitized_version_id==version.id))
+                db.add_all(build_source_spans_from_canonical(version.id,version.canonical_text))
+            await db.flush()
+            return seeded
+        monkeypatch.setattr(seed,'seed_cases',long_fixture)
+    provider=BenchmarkMockProvider()
+    async with test_session_factory() as db:
+        await run_experiment(db,inputs,selection,context,provider=provider,budget_plan=plan,output=output,embedding_mode='scripted')
+    row=read_records(output/'runs.jsonl')[0]
+    ctx=row.diagnostics['context']
+    assert ctx['initial_excluded_span_count']>0
+    assert ctx['initial_delivered_characters']<=ctx['character_limit']
+    assert ctx['original_span_count']==ctx['initial_delivered_span_count']+ctx['initial_excluded_span_count']
+    assert ctx['original_characters']==ctx['initial_delivered_characters']+ctx['initial_excluded_characters']
+    assert ctx['context_limit']==all_oversize
+    if all_oversize:
+        assert not provider.requests and row.error_code=='ASSESSMENT_CONTEXT_LIMIT'
+        assert ctx['initial_delivered_span_count']==0
+    else:
+        assert len(provider.requests)==1 and ctx['initial_delivered_span_count']>0

@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 import uuid
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from app.domain.enums import CriterionOutcome, Recommendation
 
@@ -22,7 +22,7 @@ class CriterionAssessmentSchema(BaseModel):
 
     criterion_id: str = Field(pattern=r"^[a-z][a-z0-9_]{1,49}$")
     status: CriterionOutcome
-    score: Optional[int] = Field(default=None, ge=0, le=4)
+    score: Optional[StrictInt] = Field(default=None, ge=0, le=4)
     evidence: list[EvidenceItemSchema] = Field(default_factory=list, max_length=6)
     rationale: str = Field(min_length=1, max_length=1200)
     missing_information: list[str] = Field(default_factory=list, max_length=5)

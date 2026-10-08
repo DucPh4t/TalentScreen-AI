@@ -285,6 +285,8 @@ async def build_hybrid_assessment_pack(
     criterion_retrievals: dict[str, list[dict[str, Any]]] = {}
     selected_matches_by_id: dict[uuid.UUID, tuple[RetrievedChunkScore, list[str], str | None]] = {}
     total_chars = 0
+    eligible_chunk_ids = set()
+    size_excluded_chunk_ids = set()
     for criterion_id, candidates in candidate_matches_by_criterion.items():
         diverse_matches = _select_diverse_matches(
             candidates,
@@ -294,9 +296,11 @@ async def build_hybrid_assessment_pack(
         )
         criterion_results: list[dict[str, Any]] = []
         for match in diverse_matches:
+            eligible_chunk_ids.add(match.chunk_id)
             valid_span_ids = valid_span_ids_by_chunk_id[match.chunk_id]
             if match.chunk_id not in selected_matches_by_id:
                 if total_chars + len(match.text) > max_evidence_chars:
+                    size_excluded_chunk_ids.add(match.chunk_id)
                     continue
                 total_chars += len(match.text)
                 selected_matches_by_id[match.chunk_id] = (
@@ -337,6 +341,9 @@ async def build_hybrid_assessment_pack(
         dict.fromkeys(span_id for chunk in chunks for span_id in chunk["span_ids"])
     )
     fallback_needed = not chunks
+    safe_record(diagnostics, "record_packing", eligible_chunks=len(eligible_chunk_ids),
+                packed_chunks=len(chunks), size_excluded_chunks=len(size_excluded_chunk_ids),
+                packed_characters=total_chars, character_limit=max_evidence_chars)
 
     return {
         "strategy": "fulltext_fallback" if fallback_needed else "hybrid",
@@ -344,6 +351,7 @@ async def build_hybrid_assessment_pack(
         "criteria_retrieval_map": criterion_retrievals,
         "packed_chunks_count": len(chunks),
         "total_evidence_characters": total_chars,
+        "size_excluded_chunks": len(size_excluded_chunk_ids),
         "fallback_needed": fallback_needed,
         "chunks": chunks,
         "source_span_ids": source_span_ids,
