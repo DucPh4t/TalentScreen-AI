@@ -4,9 +4,9 @@ import os
 from pathlib import Path
 import uuid
 import pytest
-from sqlalchemy import text, select, func
+from sqlalchemy import text, select, func, delete
 from app.config import get_settings
-from app.db.models import Application, AuditEvent, SanitizedVersion, SourceSpan, RequisitionMembership
+from app.db.models import Application, AuditEvent, SanitizedVersion, SourceSpan, RequisitionMembership, Organization, Requisition, AssessmentRun, RubricVersion
 from app.services.evaluation.benchmark.contracts import PROFILES
 from app.services.evaluation.benchmark.dataset import load_inputs, select_runs, canonical_case
 from app.services.evaluation.benchmark.isolation import IsolationContext, assert_isolated_database, cleanup_owned_container
@@ -32,6 +32,12 @@ async def owned_context(test_session_factory, tmp_path, monkeypatch):
         await db.commit()
     yield context
     async with test_session_factory() as db:
+        org_ids=select(Organization.id).where(Organization.name=='Synthetic AI Benchmark '+str(context.experiment_id))
+        req_ids=select(Requisition.id).where(Requisition.organization_id.in_(org_ids))
+        app_ids=select(Application.id).where(Application.requisition_id.in_(req_ids))
+        await db.execute(delete(AssessmentRun).where(AssessmentRun.application_id.in_(app_ids)))
+        await db.execute(delete(RubricVersion).where(RubricVersion.requisition_id.in_(req_ids)))
+        await db.execute(delete(Organization).where(Organization.id.in_(org_ids)))
         await db.execute(text('COMMENT ON DATABASE talentscreen_test IS NULL'))
         await db.commit()
 
@@ -114,3 +120,30 @@ def test_wrapper_interruption_cleans_exact_owned_resources(monkeypatch,tmp_path)
         isolation.run_in_isolation(['python','-c','pass'])
     assert stopped==['owned-id']
     assert not root.exists() and unrelated.is_dir()
+
+def test_wrapper_forwards_term_and_waits_before_cleanup(monkeypatch,tmp_path):
+    import signal
+    import app.services.evaluation.benchmark.isolation as isolation
+    root=tmp_path/'term-owned';root.mkdir()
+    owner=None;events=[]
+    def fake(args):
+        nonlocal owner
+        if args[0]=='run':owner=args[args.index('--label')+1].split('=',1)[1];return 'owned-id'
+        if args[0]=='port':return '127.0.0.1:54321'
+        if args[0]=='inspect':return owner
+        if args[0]=='stop':events.append('cleanup')
+        return ''
+    class Child:
+        returncode=130
+        def poll(self):return None
+        def send_signal(self,sig):events.append('signal')
+        def wait(self,timeout=None):
+            if not events:
+                signal.getsignal(signal.SIGTERM)(signal.SIGTERM,None)
+            events.append('wait');return 130
+    monkeypatch.setattr(isolation.tempfile,'mkdtemp',lambda **kw:str(root))
+    monkeypatch.setattr(isolation,'_docker',fake)
+    monkeypatch.setattr(isolation.subprocess,'run',lambda *a,**k:type('Result',(),{'returncode':0})())
+    monkeypatch.setattr(isolation.subprocess,'Popen',lambda *a,**k:Child())
+    assert isolation.run_in_isolation(['python','child'])==130
+    assert events==['signal','wait','wait','cleanup']

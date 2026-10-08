@@ -120,3 +120,65 @@ class BudgetPlan(Contract):
     total_upper_usd: Decimal = Field(ge=0)
     cap_usd: Decimal = Field(gt=0,le=5)
     admitted: bool
+
+import uuid
+
+class CriterionObservation(Contract):
+    status: Literal['assessed','insufficient_evidence','conflicting_evidence']
+    score: StrictInt | None = Field(default=None,ge=0,le=4)
+    evidence_ids: tuple[str,...] = ()
+    clarification_count: StrictInt = Field(default=0,ge=0)
+
+class InvocationRecord(Contract):
+    invocation_id: uuid.UUID
+    logical_step: str
+    attempt_no: StrictInt
+    status: str
+    requested_model: str
+    reported_model: str | None = None
+    input_tokens: StrictInt | None = Field(default=None,ge=0)
+    output_tokens: StrictInt | None = Field(default=None,ge=0)
+    cached_input_tokens: StrictInt | None = Field(default=None,ge=0)
+    provider_latency_ms: StrictInt | None = Field(default=None,ge=0)
+    reserved_usd: Decimal = Field(ge=0)
+    estimated_peak_usd: Decimal | None = Field(default=None,ge=0)
+    rate_card_version: str | None = None
+
+class RunRecord(Contract):
+    case_id: str
+    profile: ProfileName
+    status: Literal['accepted','failed','skipped','interrupted']
+    error_code: str | None = None
+    run_id: uuid.UUID | None = None
+    job_id: uuid.UUID | None = None
+    source_snapshot_hash: str | None = None
+    source_ids: dict[str,str] = Field(default_factory=dict)
+    policy_hash: str
+    criteria: dict[str,CriterionObservation] = Field(default_factory=dict)
+    diagnostics: dict = Field(default_factory=dict)
+    invocations: tuple[InvocationRecord,...] = ()
+    tool_execution_count: StrictInt = Field(default=0,ge=0)
+    repair_count: StrictInt = Field(default=0,ge=0)
+    trace_id: uuid.UUID | None = None
+
+class RunManifest(Contract):
+    schema_version: Literal['ai-benchmark-run.v1'] = 'ai-benchmark-run.v1'
+    experiment_id: uuid.UUID
+    status: Literal['running','complete','partial','interrupted']
+    mode: Literal['contract_only','live_model']
+    model_quality: Literal['unmeasured','synthetic_reference_only']
+    provider: Literal['mock','deepseek']
+    requested_model: str
+    embedding_mode: Literal['real','scripted']
+    selection: RunSelection
+    dataset_hash: str
+    dataset_files: dict[str,str]
+    policies: dict[str,dict]
+    provenance: dict
+    budget_plan: BudgetPlan
+    budget_period_id: uuid.UUID
+    started_at: str
+    completed_at: str | None = None
+    financial: dict = Field(default_factory=dict)
+    counts: dict = Field(default_factory=dict)
+    stop_code: str | None = None

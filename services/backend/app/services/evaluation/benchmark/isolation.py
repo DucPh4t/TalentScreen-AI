@@ -106,7 +106,15 @@ def run_in_isolation(command: list[str]) -> int:
     storage.mkdir(mode=0o700)
     container_id=None
     previous=signal.getsignal(signal.SIGTERM)
-    def terminate(signum,frame): raise SystemExit(128+signum)
+    child=None
+    def terminate(signum,frame):
+        if child is not None and child.poll() is None:
+            child.send_signal(signal.SIGTERM)
+            try:child.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                child.kill();child.wait()
+            return
+        raise SystemExit(128+signum)
     signal.signal(signal.SIGTERM,terminate)
     try:
         container_id=_docker(['run','--rm','--label',f'{LABEL}={experiment_id}',
@@ -133,7 +141,11 @@ def run_in_isolation(command: list[str]) -> int:
         env={**os.environ,**context.private_environment(),'PYTHONPATH':'services/backend','APP_ENV':'sandbox',
              'PILOT_STAGE':'','JEV_MODE':'off','JEV_API_KEY':''}
         subprocess.run([sys.executable,'-m','alembic','upgrade','head'],env=env,check=True)
-        return subprocess.run(command,env=env,check=False).returncode
+        child=subprocess.Popen(command,env=env)
+        try:return child.wait()
+        except KeyboardInterrupt:
+            terminate(signal.SIGTERM,None)
+            return 130
     finally:
         signal.signal(signal.SIGTERM,previous)
         if container_id:
