@@ -21,6 +21,8 @@ import { SkeletonTable, Skeleton } from "@/components/Skeleton";
 import QuestionBankSetup from "@/components/QuestionBankSetup";
 import { stageLabels } from "@/lib/workflow";
 import BatchDropzone from "@/components/BatchDropzone";
+import ApplicationList from "@/components/ApplicationList";
+import { filterApplicationList, shortlistEvidenceFallback } from "@/lib/application-list";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -172,12 +174,11 @@ export default function RequisitionDetailPage({ params }: PageProps) {
   }, [activeTab, id]);
 
   const queueByApplication = new Map(reviewQueue.map((item) => [item.application_id, item]));
-  const displayedApplications = pendingOnly
-    ? applications.filter((item) => {
-        const queueItem = queueByApplication.get(item.id);
-        return queueItem && (queueItem.sanitized_status !== "approved" || queueItem.risk_flags.length > 0);
-      })
-    : applications;
+  const displayedApplications = filterApplicationList(applications, reviewQueue, {
+    search, stage: canReviewIndependently ? "" : stageFilter, pendingOnly, queueUnavailable: Boolean(queueError),
+  });
+  const privacyReviewCount = reviewQueue.filter(item => item.sanitized_status !== "approved" || item.risk_flags.length > 0).length;
+  function resetApplicationFilters() { setSearch(""); setStageFilter(""); setPendingOnly(false); }
 
   async function handleStatusChange(nextStatus: string) {
     if (!requisition) return;
@@ -489,14 +490,14 @@ export default function RequisitionDetailPage({ params }: PageProps) {
           onClick={() => setActiveTab("applications")}
         >
           <IconFileText size={16} />
-          <span>Danh Sách Ứng Viên ({applicationsLoadError ? "—" : applications.length})</span>
+          <span>Hồ sơ ({applicationsLoadError ? "—" : applications.length})</span>
         </button>
         <button
           className={`tab-btn ${activeTab === "shortlist" ? "active" : ""}`}
           onClick={() => setActiveTab("shortlist")}
         >
           <IconSparkles size={16} />
-          <span>Bảng Xếp Hạng & Shortlist (AI)</span>
+          <span>Đánh giá tham khảo</span>
           {shortlist && (
             <span className="badge badge-open" style={{ fontSize: "0.65rem", padding: "0.15rem 0.4rem", marginLeft: "0.35rem" }}>
               {shortlist.shortlisted_candidates} ưu tiên
@@ -508,7 +509,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
           onClick={() => setActiveTab("jd_rubric")}
         >
           <IconSparkles size={16} />
-          <span>Thiết lập JD, tiêu chí và câu hỏi</span>
+          <span>JD & tiêu chí</span>
         </button>
         <button
           className={`tab-btn ${activeTab === "comparison" ? "active" : ""}`}
@@ -528,27 +529,22 @@ export default function RequisitionDetailPage({ params }: PageProps) {
       {/* Tab 1: Applications (Strict Spec 01 FIFO Order) */}
       {activeTab === "applications" && (
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
-            <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <IconShield size={14} color="#34d399" />
-              <span>Thứ tự hiển thị: <strong style={{ color: "var(--text-primary)" }}>Thời gian tiếp nhận tăng dần (FIFO)</strong>. HR vẫn cần rà soát từng hồ sơ.</span>
+          <section className="candidate-list-header" aria-label="Bộ lọc hồ sơ">
+            <div className="candidate-list-heading"><div><h2>Hồ sơ ứng tuyển</h2><p>Theo thời gian tiếp nhận · Mở hồ sơ để đối chiếu CV và bằng chứng.</p></div><span className="candidate-result-count" role="status" aria-live="polite">{applicationsLoadError ? "Chưa tải được danh sách" : `${displayedApplications.length} / ${applications.length} hồ sơ`}</span></div>
+            <div className="candidate-toolbar">
+              <label className="candidate-search">Tìm mã hồ sơ<input className="form-input" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nhập mã CAND-…" /></label>
+              {!canReviewIndependently && <label>Bước tiếp theo<select className="form-input" value={stageFilter} disabled={Boolean(queueError)} onChange={event => setStageFilter(event.target.value)}><option value="">Tất cả công việc</option>{Object.entries(stageLabels).map(([stage, label]) => <option key={stage} value={stage}>{label}</option>)}</select></label>}
+              <button type="button" className="btn btn-outline" onClick={() => void loadData(true)}>Làm mới</button>
             </div>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <span className="badge badge-subtle">Tổng: {applicationsLoadError ? "—" : applications.length} hồ sơ</span>
-              <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(queueError)} onClick={() => setPendingOnly(!pendingOnly)}>
-                {pendingOnly ? "Hiện tất cả" : `Chờ rà soát (${reviewQueue.filter((item) => item.sanitized_status !== "approved" || item.risk_flags.length > 0).length})`}
-              </button>
-            </div>
-          </div>
-
-          <div className="workflow-actions"><label>Tìm mã hồ sơ<input className="form-input" value={search} onChange={e => setSearch(e.target.value)} placeholder="CAND-…" /></label><label>Lọc công việc<select className="form-input" value={stageFilter} onChange={e => setStageFilter(e.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(stageLabels).map(([stage,label]) => <option key={stage} value={stage}>{label}</option>)}</select></label><button className="btn btn-secondary" onClick={() => void loadData(true)}>Làm mới danh sách</button></div>
+            <div className="candidate-filter-footer"><label className="candidate-review-filter"><input type="checkbox" checked={pendingOnly} disabled={Boolean(queueError)} onChange={event => setPendingOnly(event.target.checked)} />Chỉ CV cần rà soát{!queueError && ` (${privacyReviewCount})`}</label>{(search || stageFilter || pendingOnly) && <button type="button" className="btn btn-quiet btn-sm" onClick={resetApplicationFilters}>Xóa bộ lọc</button>}</div>
+          </section>
           {queueError && <p role="alert" className="notice notice-error">{queueError}</p>}
 
           {applicationsLoadError ? (
             <div className="card" role="alert"><h3>Không tải được danh sách hồ sơ</h3><p className="muted">{applicationsLoadError}</p><button type="button" className="btn btn-secondary" onClick={() => void loadData()}>Thử lại</button></div>
           ) : applications.length === 0 ? (
             <div className="card" style={{ padding: "2.5rem 1.5rem", textAlign: "center" }}>
-              <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(56, 189, 248, 0.12)", color: "var(--accent-cyan)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
+              <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "var(--accent-soft)", color: "var(--accent-cyan)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
                 <IconUpload size={24} color="var(--accent-cyan)" />
               </div>
               <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.35rem" }}>Chưa có hồ sơ nào được tiếp nhận</h3>
@@ -568,96 +564,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
               )}
             </div>
           ) : (
-            <div className="card" style={{ padding: "0.5rem" }}>
-              <div className="table-wrapper" style={{ border: "none" }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Mã hồ sơ</th>
-                      <th>Thời Gian Nộp (FIFO)</th>
-                      <th>Trạng Thái Hồ Sơ</th>
-                      <th>CV đã che / Cảnh báo</th>
-                      {!canReviewIndependently && <><th>Tiến độ công việc</th><th>Đánh giá AI</th><th>Quyết định HR</th></>}
-                      <th style={{ textAlign: "right" }}>Thao Tác</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedApplications.filter(app => app.public_label.toLowerCase().includes(search.trim().toLowerCase()) && (!stageFilter || queueByApplication.get(app.id)?.workflow_stage === stageFilter)).map((app, index) => (
-                      <tr key={app.id}>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                              #{index + 1}
-                            </span>
-                            <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--accent-cyan)", fontSize: "0.9rem" }}>
-                              {app.public_label}
-                            </span>
-                            {queueByApplication.get(app.id)?.is_duplicate && (
-                              <span className="badge badge-subtle" title="Tệp CV hoặc liên hệ trùng với hồ sơ khác bạn có quyền xem. HR cần kiểm tra; hệ thống không tự gộp ứng viên." style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem" }}>
-                                Nghi trùng · {queueByApplication.get(app.id)?.application_history_count} hồ sơ
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td style={{ fontSize: "0.825rem", color: "var(--text-secondary)" }}>
-                          {new Date(app.received_at).toLocaleString("vi-VN")}
-                        </td>
-                        <td>
-                          <span className={`badge badge-${app.status}`}>
-                            {app.status === "active" ? "ĐANG XỬ LÝ" : app.status === "tombstoned" ? "ĐÃ ĐÁNH DẤU XÓA" : app.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`badge ${queueByApplication.get(app.id)?.sanitized_status === "approved" ? "badge-open" : "badge-paused"}`}>
-                            {queueError ? "Chưa xác định" : queueByApplication.get(app.id)?.sanitized_status === "approved" ? "Đã rà soát" : queueByApplication.get(app.id)?.sanitized_status === "draft" ? "Chờ rà soát" : "Chưa sẵn sàng"}
-                          </span>
-                          {queueByApplication.get(app.id)?.risk_flags.includes("contact_data") && <small role="alert" style={{ display: "block", color: "var(--rose-text)" }}>Còn dấu hiệu thông tin liên hệ</small>}
-                          {queueByApplication.get(app.id)?.risk_flags.includes("parse_quality") && <small style={{ display: "block", color: "var(--rose-text)" }}>Cần kiểm tra chất lượng trích xuất</small>}
-                        </td>
-                        {!canReviewIndependently && <><td>
-                          <span className="badge badge-subtle" style={{ fontFamily: "var(--font-mono)", fontSize: "0.725rem" }}>
-                            {stageLabels[queueByApplication.get(app.id)?.workflow_stage || ""] || "Chưa xác định"}
-                          </span>
-                          {queueByApplication.get(app.id)?.sla_breached && (
-                            <div style={{ marginTop: "0.25rem" }}>
-                              <span className="badge badge-paused" style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.3)" }}>
-                                ⚠️ Chờ duyệt {queueByApplication.get(app.id)?.hours_in_stage}h (Quá SLA)
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          {app.current_assessment_run_id ? (
-                            <span className="badge badge-open">
-                              <IconCheckCircle size={12} color="#34d399" />
-                              <span>Có bản đánh giá</span>
-                            </span>
-                          ) : (
-                            <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>Chưa chạy</span>
-                          )}
-                        </td>
-                        <td>
-                          {app.current_decision_id ? (
-                            <span className="badge badge-rec-advance">Đã Có Quyết Định</span>
-                          ) : (
-                            <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>Chờ duyệt</span>
-                          )}
-                        </td></>}
-                        <td style={{ textAlign: "right" }}>
-                          {canReviewIndependently && <Link href={`/applications/${app.id}/independent-review`} className="btn btn-outline btn-sm" style={{ marginRight: "0.4rem" }}>
-                            Chấm độc lập
-                          </Link>}
-                          {!canReviewIndependently && <Link href={`/applications/${app.id}`} className="btn btn-secondary btn-sm">
-                            <span>Không Gian Xét Duyệt</span>
-                            <IconArrowRight size={14} />
-                          </Link>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <ApplicationList applications={displayedApplications} queue={reviewQueue} queueUnavailable={Boolean(queueError)} independent={canReviewIndependently} onResetFilters={resetApplicationFilters} />
           )}
         </div>
       )}
@@ -671,7 +578,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <IconSparkles size={18} color="var(--accent-cyan)" />
-                  <h2 className="card-title">Bảng Xếp Hạng & Phân Tầng Ứng Viên (AI Shortlist Engine)</h2>
+                  <h2 className="card-title">Đối chiếu mức đáp ứng JD</h2>
                 </div>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "0.25rem" }}>
                   Tự động lọc, xếp thứ hạng và phân nhóm ứng viên dựa trên điểm chuẩn hóa, độ phủ bằng chứng và tiêu chuẩn cốt lõi (Core Competencies).
@@ -717,8 +624,8 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                   style={{
                     padding: "0.85rem 1rem",
                     borderRadius: "var(--radius-sm)",
-                    background: shortlistTierFilter === "recommend" ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.08)",
-                    border: `1px solid ${shortlistTierFilter === "recommend" ? "var(--emerald-border)" : "rgba(16, 185, 129, 0.2)"}`,
+                    background: shortlistTierFilter === "recommend" ? "var(--emerald-border)" : "var(--emerald-bg)",
+                    border: `1px solid ${shortlistTierFilter === "recommend" ? "var(--emerald-border)" : "var(--emerald-border)"}`,
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                   }}
@@ -735,8 +642,8 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                   style={{
                     padding: "0.85rem 1rem",
                     borderRadius: "var(--radius-sm)",
-                    background: shortlistTierFilter === "borderline" ? "rgba(56, 189, 248, 0.2)" : "rgba(56, 189, 248, 0.08)",
-                    border: `1px solid ${shortlistTierFilter === "borderline" ? "var(--accent-cyan)" : "rgba(56, 189, 248, 0.2)"}`,
+                    background: shortlistTierFilter === "borderline" ? "var(--border-glow)" : "var(--accent-soft)",
+                    border: `1px solid ${shortlistTierFilter === "borderline" ? "var(--accent-cyan)" : "var(--border-glow)"}`,
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                   }}
@@ -753,8 +660,8 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                   style={{
                     padding: "0.85rem 1rem",
                     borderRadius: "var(--radius-sm)",
-                    background: shortlistTierFilter === "core_fail" ? "rgba(245, 158, 11, 0.2)" : "rgba(245, 158, 11, 0.08)",
-                    border: `1px solid ${shortlistTierFilter === "core_fail" ? "var(--amber-border)" : "rgba(245, 158, 11, 0.2)"}`,
+                    background: shortlistTierFilter === "core_fail" ? "var(--amber-border)" : "var(--amber-bg)",
+                    border: `1px solid ${shortlistTierFilter === "core_fail" ? "var(--amber-border)" : "var(--amber-border)"}`,
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                   }}
@@ -771,8 +678,8 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                   style={{
                     padding: "0.85rem 1rem",
                     borderRadius: "var(--radius-sm)",
-                    background: shortlistTierFilter === "below_threshold" ? "rgba(148, 163, 184, 0.2)" : "rgba(148, 163, 184, 0.08)",
-                    border: `1px solid ${shortlistTierFilter === "below_threshold" ? "var(--text-primary)" : "rgba(148, 163, 184, 0.2)"}`,
+                    background: shortlistTierFilter === "below_threshold" ? "var(--border-medium)" : "var(--bg-surface-subtle)",
+                    border: `1px solid ${shortlistTierFilter === "below_threshold" ? "var(--text-primary)" : "var(--border-medium)"}`,
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                   }}
@@ -833,7 +740,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                     {shortlist.candidates
                       .filter(c => shortlistTierFilter === "all" || c.tier === shortlistTierFilter)
                       .map((c) => {
-                        const rankColor = c.rank === 1 ? "#fbbf24" : c.rank === 2 ? "#94a3b8" : c.rank === 3 ? "#d97706" : "var(--accent-cyan)";
+                        const rankColor = c.rank === 1 ? "var(--accent-olive)" : "var(--text-secondary)";
                         const tierBadgeClass =
                           c.tier === "recommend" ? "badge-open" :
                           c.tier === "borderline" ? "badge-subtle" :
@@ -850,11 +757,11 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                                   width: "28px",
                                   height: "28px",
                                   borderRadius: "50%",
-                                  background: c.rank <= 3 ? `${rankColor}22` : "var(--bg-surface-elevated)",
+                                  background: c.rank <= 3 ? "var(--accent-soft)" : "var(--bg-surface-subtle)",
                                   color: rankColor,
                                   fontWeight: 800,
                                   fontSize: "0.85rem",
-                                  border: `1px solid ${rankColor}55`,
+                                  border: "1px solid var(--border-subtle)",
                                 }}>
                                   #{c.rank}
                                 </span>
@@ -944,7 +851,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                                   ))}
                                 </div>
                               ) : (
-                                <span style={{ color: "var(--emerald-text)", fontSize: "0.78rem" }}>Đầy đủ bằng chứng</span>
+                                <span style={{ color: "var(--text-secondary)", fontSize: "0.78rem" }}>{shortlistEvidenceFallback(c)}</span>
                               )}
                             </td>
                             <td style={{ textAlign: "right" }}>
@@ -968,7 +875,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
         <div className="card" style={{ padding: "1.25rem" }}>
           {!canCompare ? (
             <div style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
-              <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(245, 158, 11, 0.12)", color: "var(--amber-text)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
+              <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "var(--amber-bg)", color: "var(--amber-text)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
                 <IconShield size={24} color="var(--amber-text)" />
               </div>
               <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.5rem" }}>
@@ -1105,7 +1012,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                 )}
                 {rubric?.status === "approved" && (
                   <span className="badge badge-open">
-                    <IconCheckCircle size={12} color="#34d399" />
+                    <IconCheckCircle size={12} color="var(--emerald-text)" />
                     <span>Đã Duyệt Chính Thức</span>
                   </span>
                 )}
@@ -1255,8 +1162,8 @@ export default function RequisitionDetailPage({ params }: PageProps) {
             </div>
 
             <div style={{
-              background: "rgba(56, 189, 248, 0.08)",
-              border: "1px solid rgba(56, 189, 248, 0.2)",
+              background: "var(--accent-soft)",
+              border: "1px solid var(--border-glow)",
               padding: "0.75rem 1rem",
               borderRadius: "var(--radius-sm)",
               fontSize: "0.8rem",
@@ -1299,8 +1206,8 @@ export default function RequisitionDetailPage({ params }: PageProps) {
           <div className="modal-card" style={{ maxWidth: "460px" }}>
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "rgba(244, 63, 94, 0.12)", color: "#be123c", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <IconAlertTriangle size={18} color="#be123c" />
+                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "var(--rose-bg)", color: "var(--rose-text)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <IconAlertTriangle size={18} color="var(--rose-text)" />
                 </div>
                 <h2 className="modal-title">Xác Nhận Đóng Đợt Tuyển Dụng</h2>
               </div>

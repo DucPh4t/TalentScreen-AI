@@ -48,6 +48,12 @@ jobs:
           alembic upgrade head
       - name: Backend regression tests
         run: pytest services/backend/tests -q
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: apps/web
+      - name: Frontend workflow unit tests
+        run: npm test
+        working-directory: apps/web
       - name: Frontend build
-        run: npm ci && npm run build
+        run: npm run build
         working-directory: apps/web

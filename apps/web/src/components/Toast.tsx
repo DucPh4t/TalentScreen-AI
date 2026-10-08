@@ -157,39 +157,39 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
       case 'success':
         return {
           icon: IconCheckCircle,
-          border: 'rgba(16, 185, 129, 0.45)',
-          glow: 'rgba(16, 185, 129, 0.15)',
-          badgeColor: '#047857',
-          badgeBg: 'rgba(16, 185, 129, 0.12)',
-          barBg: '#10b981'
+          border: 'var(--emerald-border)',
+          glow: 'transparent',
+          badgeColor: 'var(--emerald-text)',
+          badgeBg: 'var(--emerald-bg)',
+          barBg: 'var(--emerald-text)'
         };
       case 'error':
         return {
           icon: IconAlertTriangle,
-          border: 'rgba(244, 63, 94, 0.45)',
-          glow: 'rgba(244, 63, 94, 0.15)',
-          badgeColor: '#be123c',
-          badgeBg: 'rgba(244, 63, 94, 0.12)',
-          barBg: '#f43f5e'
+          border: 'var(--rose-border)',
+          glow: 'transparent',
+          badgeColor: 'var(--rose-text)',
+          badgeBg: 'var(--rose-bg)',
+          barBg: 'var(--rose-text)'
         };
       case 'warning':
         return {
           icon: IconAlertTriangle,
-          border: 'rgba(245, 158, 11, 0.45)',
-          glow: 'rgba(245, 158, 11, 0.15)',
-          badgeColor: '#b45309',
-          badgeBg: 'rgba(245, 158, 11, 0.12)',
-          barBg: '#f59e0b'
+          border: 'var(--amber-border)',
+          glow: 'transparent',
+          badgeColor: 'var(--amber-text)',
+          badgeBg: 'var(--amber-bg)',
+          barBg: 'var(--amber-text)'
         };
       case 'info':
       default:
         return {
           icon: IconShield,
-          border: 'rgba(13, 148, 136, 0.45)',
-          glow: 'rgba(13, 148, 136, 0.15)',
-          badgeColor: '#0f766e',
-          badgeBg: 'rgba(13, 148, 136, 0.12)',
-          barBg: '#0d9488'
+          border: 'var(--border-glow)',
+          glow: 'transparent',
+          badgeColor: 'var(--accent-olive)',
+          badgeBg: 'var(--accent-soft)',
+          barBg: 'var(--accent-olive)'
         };
     }
   };

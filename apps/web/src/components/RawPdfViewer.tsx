@@ -113,7 +113,7 @@ export default function RawPdfViewer({ file }: RawPdfViewerProps) {
       {loadError ? (
         <p role="alert" style={{ margin: "1rem", color: "var(--rose-text)" }}>Không thể hiển thị PDF. {loadError}</p>
       ) : (
-        <div style={{ display: "flex", justifyContent: "center", padding: "1rem", minHeight: "18rem", background: "#e8ebef" }}>
+        <div style={{ display: "flex", justifyContent: "center", padding: "1rem", minHeight: "18rem", background: "var(--bg-table-header)" }}>
           <canvas ref={canvasRef} aria-label={`Trang ${pageNumber} của CV gốc`} style={{ maxWidth: "100%", height: "auto", background: "white", boxShadow: "0 2px 14px rgba(0,0,0,.16)" }} />
         </div>
       )}

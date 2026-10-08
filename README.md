@@ -94,7 +94,7 @@ Tools cannot browse the web, send messages, modify records, or record a hiring d
 | Prepare correspondence | Generate invitation, clarification, or rejection templates; edit and explicitly approve a version attributed to the reviewer. Changed decisions/sources invalidate drafts. No LLM agent or automatic email delivery is used. |
 | Manage data | Track retention settings and deletion requests through their processing states. |
 
-The Vietnamese interface supports desktop, tablet, and phone layouts. Navigation focuses on **Overview / Requisitions / Data & privacy**. Technical execution details are collapsed by default; the old training page redirects to the dashboard.
+The Vietnamese interface uses warm neutral surfaces, black navigation and muted olive accents, with desktop, tablet, and phone layouts. The candidate queue uses a concise desktop table and mobile cards; see [UI verification and screenshots](docs/reviews/2026-10-08-candidate-list-ux.md). Navigation focuses on **Overview / Requisitions / Data & privacy**. Technical execution details are collapsed by default; the old training page redirects to the dashboard.
 
 <details>
 <summary>Mobile candidate workspace</summary>

@@ -7,11 +7,16 @@ import { api } from "../lib/api";
 import { useToast } from "./Toast";
 import { IconBarChart, IconFileText, IconShield, IconX, IconChevronRight } from "./Icons";
 
-const navigation = [
-  { href: "/dashboard", label: "Tổng quan", icon: IconBarChart },
-  { href: "/requisitions", label: "Đợt tuyển dụng", icon: IconFileText },
-  { href: "/retention", label: "Dữ liệu & riêng tư", icon: IconShield },
+const navigationGroups = [
+  { label: "Tuyển dụng", items: [
+    { href: "/dashboard", label: "Tổng quan", icon: IconBarChart },
+    { href: "/requisitions", label: "Đợt tuyển & JD", icon: IconFileText },
+  ] },
+  { label: "Quản trị dữ liệu", items: [
+    { href: "/retention", label: "Dữ liệu & riêng tư", icon: IconShield },
+  ] },
 ];
+const navigation = navigationGroups.flatMap(group => group.items);
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -52,13 +57,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav id="workspace-navigation" className={`workspace-navigation ${menuOpen ? "is-open" : ""}`} aria-label="Điều hướng chính"
           onKeyDown={event => { if (event.key === "Escape") { setMenuOpen(false); document.querySelector<HTMLButtonElement>(".mobile-menu-toggle")?.focus(); } }}>
-          <p className="navigation-caption">Không gian làm việc</p>
-          {navigation.map(({ href, label, icon: Icon }) => {
+          {navigationGroups.map(group => <div className="navigation-group" key={group.label}>
+          <p className="navigation-caption">{group.label}</p>
+          {group.items.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href) || (href === "/requisitions" && pathname.startsWith("/applications"));
             return <Link key={href} href={href} className={`workspace-nav-link ${active ? "active" : ""}`} aria-current={pathname.startsWith(href) ? "page" : undefined} onClick={() => setMenuOpen(false)}>
               <Icon size={19} /><span>{label}</span>
             </Link>;
           })}
+          </div>)}
         </nav>
         <div className="sidebar-assurance"><IconShield size={18} /><div><strong>HR quyết định cuối cùng</strong><p>AI hỗ trợ bằng chứng và đánh giá.</p></div></div>
         <div className="sidebar-product-meta"><span className="status-marker status-open" /> Không gian nội bộ</div>

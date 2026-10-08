@@ -89,8 +89,8 @@ export default function RetentionPage() {
         <div className="kpi-card">
           <div className="kpi-header">
             <span className="kpi-label">Tệp tạm</span>
-            <div className="kpi-icon-pill" style={{ background: "rgba(16, 185, 129, 0.1)", color: "#34d399" }}>
-              <IconTrash size={18} color="#34d399" />
+            <div className="kpi-icon-pill" style={{ background: "var(--emerald-bg)", color: "var(--emerald-text)" }}>
+              <IconTrash size={18} color="var(--emerald-text)" />
             </div>
           </div>
           <div className="kpi-val">{policy ? `${policy.temp_file_ttl_hours} giờ` : "—"}</div>
@@ -102,8 +102,8 @@ export default function RetentionPage() {
         <div className="kpi-card">
           <div className="kpi-header">
             <span className="kpi-label">Bản sao lưu</span>
-            <div className="kpi-icon-pill" style={{ background: "rgba(99, 102, 241, 0.1)", color: "#818cf8" }}>
-              <IconShield size={18} color="#818cf8" />
+            <div className="kpi-icon-pill" style={{ background: "var(--accent-soft)", color: "var(--accent-olive)" }}>
+              <IconShield size={18} color="var(--accent-olive)" />
             </div>
           </div>
           <div className="kpi-val">{policy ? `${policy.backup_retention_days} ngày` : "—"}</div>
@@ -124,7 +124,7 @@ export default function RetentionPage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
               <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "rgba(56, 189, 248, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "var(--accent-soft)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconLock size={16} color="var(--accent-cyan)" />
                 </div>
                 <div>
@@ -138,8 +138,8 @@ export default function RetentionPage() {
               </div>
 
               <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "rgba(16, 185, 129, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconCheckCircle size={16} color="#34d399" />
+                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "var(--emerald-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconCheckCircle size={16} color="var(--emerald-text)" />
                 </div>
                 <div>
                   <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
@@ -152,7 +152,7 @@ export default function RetentionPage() {
               </div>
 
               <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "rgba(244, 63, 94, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "var(--rose-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconTrash size={16} color="var(--rose-text)" />
                 </div>
                 <div>
@@ -166,8 +166,8 @@ export default function RetentionPage() {
               </div>
 
               <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "rgba(99, 102, 241, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconShield size={16} color="#818cf8" />
+                <div style={{ width: "32px", height: "32px", borderRadius: "var(--radius-sm)", background: "var(--accent-soft)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconShield size={16} color="var(--accent-olive)" />
                 </div>
                 <div>
                   <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.25rem" }}>

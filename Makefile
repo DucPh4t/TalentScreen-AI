@@ -53,4 +53,5 @@ test-backend:
 	bash scripts/test_backend_isolated.sh
 
 test: test-backend
+	cd apps/web && npm test
 	cd apps/web && npm run build

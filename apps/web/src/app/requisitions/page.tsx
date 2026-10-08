@@ -197,7 +197,7 @@ export default function RequisitionsPage() {
           <div className="empty-work" role="alert"><IconAlertTriangle size={22} /><h3>Không tải được đợt tuyển dụng</h3><p>{loadError}</p><button className="btn btn-secondary" onClick={() => void loadData()}>Thử lại</button></div>
         ) : filteredRequisitions.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '4rem 1.5rem' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(56, 189, 248, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem auto' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem auto' }}>
               <IconFileText size={24} color="var(--accent-teal)" />
             </div>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.4rem' }}>Không tìm thấy đợt tuyển dụng nào</h3>

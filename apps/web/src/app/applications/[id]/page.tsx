@@ -710,8 +710,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
             </div>
           ) : !assessmentRun ? (
             <div className="card" style={{ textAlign: "center", padding: "4rem 1.5rem" }}>
-              <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "rgba(56, 189, 248, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem auto" }}>
-                <IconSparkles size={28} color="#38bdf8" />
+              <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "var(--accent-soft)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem auto" }}>
+                <IconSparkles size={28} color="var(--accent-olive)" />
               </div>
               <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>
                 {progress?.stage === "analyzing" ? "AI đang phân tích hồ sơ" : progress?.stage === "error" ? "Phân tích gặp lỗi" : "Hồ sơ chưa có kết quả đánh giá AI"}
@@ -736,10 +736,10 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
           ) : (
             <div>
               {/* Quick Win 1: Candidate One-Page Summary (Executive Summary) */}
-              <div className="card" style={{ marginBottom: "1.5rem", borderLeft: "4px solid var(--accent-cyan)", background: "linear-gradient(180deg, rgba(56, 189, 248, 0.04) 0%, var(--bg-surface) 100%)" }}>
+              <div className="card" style={{ marginBottom: "1.5rem", borderLeft: "4px solid var(--accent-cyan)", background: "linear-gradient(180deg, var(--accent-soft) 0%, var(--bg-surface) 100%)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                    <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "rgba(56, 189, 248, 0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "var(--accent-soft)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <IconSparkles size={18} color="var(--accent-cyan)" />
                     </div>
                     <div>
@@ -807,8 +807,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                       {/* Key Strengths */}
                       <div style={{
                         padding: "0.9rem",
-                        background: "rgba(16, 185, 129, 0.05)",
-                        border: "1px solid rgba(16, 185, 129, 0.2)",
+                        background: "var(--emerald-bg)",
+                        border: "1px solid var(--emerald-border)",
                         borderRadius: "var(--radius-md)"
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.6rem", fontWeight: 700, fontSize: "0.825rem", color: "var(--emerald-text)" }}>
@@ -829,8 +829,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                       {/* Gaps / Questions */}
                       <div style={{
                         padding: "0.9rem",
-                        background: "rgba(245, 158, 11, 0.05)",
-                        border: "1px solid rgba(245, 158, 11, 0.2)",
+                        background: "var(--amber-bg)",
+                        border: "1px solid var(--amber-border)",
                         borderRadius: "var(--radius-md)"
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.6rem", fontWeight: 700, fontSize: "0.825rem", color: "var(--amber-text)" }}>
@@ -851,8 +851,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                       {/* Recommended Interview Focus */}
                       <div style={{
                         padding: "0.9rem",
-                        background: "rgba(56, 189, 248, 0.05)",
-                        border: "1px solid rgba(56, 189, 248, 0.2)",
+                        background: "var(--accent-soft)",
+                        border: "1px solid var(--border-glow)",
                         borderRadius: "var(--radius-md)"
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.6rem", fontWeight: 700, fontSize: "0.825rem", color: "var(--accent-cyan)" }}>
@@ -1356,7 +1356,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                       flexWrap: "wrap",
                       gap: "0.5rem",
                       padding: "0.65rem 0.85rem",
-                      background: "rgba(245, 158, 11, 0.12)",
+                      background: "var(--amber-bg)",
                       border: "1px solid var(--amber-border)",
                       borderRadius: "var(--radius-sm)",
                       fontSize: "0.8rem",
@@ -1382,8 +1382,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                       alignItems: "center",
                       gap: "0.4rem",
                       padding: "0.45rem 0.75rem",
-                      background: "rgba(16, 185, 129, 0.08)",
-                      border: "1px solid rgba(16, 185, 129, 0.2)",
+                      background: "var(--emerald-bg)",
+                      border: "1px solid var(--emerald-border)",
                       borderRadius: "var(--radius-sm)",
                       fontSize: "0.775rem",
                       color: "var(--emerald-text)"
@@ -1437,18 +1437,18 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
           </div>
 
           {/* Versioned candidate correspondence templates */}
-          <div className="card" style={{ borderLeft: "4px solid #8b5cf6" }}>
+          <div className="card" style={{ borderLeft: "4px solid var(--accent-olive)" }}>
             <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "rgba(139, 92, 246, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <IconMail size={20} color="#a78bfa" />
+                <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "var(--accent-soft)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <IconMail size={20} color="var(--accent-olive)" />
                 </div>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <h2 className="card-title" style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0 }}>
                       Thư phản hồi ứng viên
                     </h2>
-                    <span className="badge" style={{ background: "rgba(139, 92, 246, 0.2)", color: "#c4b5fd", border: "1px solid rgba(139, 92, 246, 0.3)" }}>
+                    <span className="badge" style={{ background: "var(--accent-soft)", color: "var(--accent-olive)", border: "1px solid var(--border-glow)" }}>
                       {emailDraft?.status === "approved" ? `HR đã duyệt · v${emailDraft.version_no}` : "Thư nháp — chưa duyệt"}
                     </span>
                   </div>
@@ -1563,8 +1563,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                           disabled={emailDraft.status !== "approved" || editingEmailDraft}
                           title="Sao chép tiêu đề và nội dung thư vào bộ nhớ tạm"
                           style={{
-                            background: copiedEmail ? "rgba(16, 185, 129, 0.2)" : undefined,
-                            borderColor: copiedEmail ? "rgba(16, 185, 129, 0.5)" : undefined,
+                            background: copiedEmail ? "var(--emerald-border)" : undefined,
+                            borderColor: copiedEmail ? "var(--emerald-border)" : undefined,
                             color: copiedEmail ? "var(--emerald-text)" : undefined,
                           }}
                         >
@@ -1713,8 +1713,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               </div>
             ) : (
               <div style={{ textAlign: "center", padding: "3rem 1.5rem" }}>
-                <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(56, 189, 248, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
-                  <IconMessageSquare size={24} color="#38bdf8" />
+                <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "var(--accent-soft)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem auto" }}>
+                  <IconMessageSquare size={24} color="var(--accent-olive)" />
                 </div>
                 <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "0.35rem" }}>Chưa tạo bộ câu hỏi phỏng vấn riêng</h3>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: "1.25rem" }}>
@@ -1917,8 +1917,8 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
               </div>
 
               <div style={{
-                background: "rgba(56, 189, 248, 0.06)",
-                border: "1px solid rgba(56, 189, 248, 0.18)",
+                background: "var(--accent-soft)",
+                border: "1px solid var(--border-glow)",
                 padding: "1rem",
                 borderRadius: "var(--radius-sm)",
                 fontSize: "0.8rem",

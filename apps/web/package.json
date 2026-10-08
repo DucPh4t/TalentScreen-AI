@@ -8,7 +8,8 @@
     "prebuild": "node scripts/copy-pdf-worker.mjs",
     "build": "next build",
     "start": "next start -p 2004",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "next": "15.5.27",
