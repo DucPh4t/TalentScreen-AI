@@ -11,6 +11,8 @@ This developer tool calls `create_assessment_run` and `execute_assessment_job`, 
 | `hybrid` | Dense + PostgreSQL lexical search, RRF k=60 | Disabled |
 | `hybrid_agent` | Same hybrid pack | Up to two read-only executions |
 
+`--retrieval-version v1|v2` selects a pinned internal retrieval policy; the default is `v1`. Dataset versions and retrieval versions are independent. See [pipeline configurations and serialized packing](rag-pipeline-versions.md). Each model turn now fits whole evidence spans within the complete 65,536-byte UTF-8 request and 24,000 unique evidence characters; fixed overhead that cannot fit fails before admission. Old request-packing behavior requires its historical Git commit.
+
 All profiles share rubric/CV versions, prompt `assessment-v1.6.0` + `assessment-agent.v1`, schema, temperature 0, thinking disabled, output limit 4,096 tokens and scoring policy. Profile order is shuffled with seed 20261008, concurrency 1, one repetition. The neutral prompt is immutable; comparing different prompts would confound retrieval effects.
 
 ```mermaid
@@ -128,6 +130,7 @@ Manual LangSmith spans export fixed enums/counters, experiment UUID, hashed case
 - Status agreement has accepted-only and all-planned denominators. Conflicts, correct abstention, false zero and unsupported scores have separate denominators.
 - Span Recall@5/10 flattens/deduplicates the **ranked pre-pack chunk pool**, then takes the first k spans. Source order within a chunk can place a relevant span beyond k. This is not chunk Recall@k.
 - Unexecuted retrieval is `null`, excluded from measured retrieval denominators; an executed empty pack remains measured zero. Failures still count against reliability.
+- Durable request-budget diagnostics record actual serialized bytes, byte/character limits and excluded whole spans per initial/tools/repair phase. Optional diagnostics cannot change business outcomes.
 - Durable context diagnostics record original/delivered/excluded initial spans and characters, context limits and size truncation. RAG packing additionally records eligible/packed/size-excluded chunk counts. Exclusion by retrieval selection is distinct from size truncation. Historical journals without these fields remain unmeasured; nothing is reconstructed.
 - Annotated citation precision counts observed citations belonging to criterion-specific reference evidence over all citations for annotation-complete criteria. Cited sufficient-group coverage requires all spans of an alternative group for observed assessed/conflicting criteria with complete annotated groups. These are synthetic-reference support checks, separate from structural citation scope and packed-evidence availability; incomplete annotations and mock LLM quality remain unmeasured.
 - Sufficient-group coverage checks all spans in an alternative group, in the delivered initial/final pack. It may be 100% even when span Recall@10 is lower. Full-text ranking is unmeasured.
@@ -135,4 +138,4 @@ Manual LangSmith spans export fixed enums/counters, experiment UUID, hashed case
 - Setup/model device is separate from per-run timing; indexing is reused for the same approved snapshot. One shuffled run cannot establish stable latency differences or model variance. Queue time/invoice are unmeasured.
 - Mock validates pipeline contracts; model accuracy, human agreement and live tool-recovery remain unmeasured. Real E5 retrieval can be measured independently of the mock LLM.
 
-See [v1 measured results](ai-benchmark-results-2026-10-09.md) and [v2 long-context stress results](ai-benchmark-v2-results-2026-10-09.md) for exact observed scopes and limits.
+See [controlled V1/V2 packing and retrieval comparison](rag-packing-results-2026-10-09.md), [v1 measured results](ai-benchmark-results-2026-10-09.md) and [v2 long-context stress results](ai-benchmark-v2-results-2026-10-09.md) for exact observed scopes and limits.

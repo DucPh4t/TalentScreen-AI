@@ -65,7 +65,9 @@ bash scripts/run_ai_benchmark_isolated.sh run \
 
 Replaying the first attempt additionally requires the pinned tokenizer proof artifacts in the isolated checkout's ignored cache. Expect a partial result until serialized-aware packing is improved. Changing to a paid provider requires a separate authorized/admitted experiment; neither mock result establishes that condition.
 
-## Next work, not implemented by this change
+## Work identified by this historical diagnostic
+
+Items 1–2 were subsequently implemented and measured in the [controlled packing/retrieval comparison](rag-packing-results-2026-10-09.md). This historical journal and its failures remain unchanged; items 3–4 remain unmeasured.
 
 1. Make evidence packing aware of the complete serialized request budget, without relaxing financial or citation constraints.
 2. Improve ranking on the development split through section/contribution-aware chunks, queries and optional reranking; keep current stress fixtures frozen. Separate public-test diagnostic reuse from any genuinely unseen holdout.
