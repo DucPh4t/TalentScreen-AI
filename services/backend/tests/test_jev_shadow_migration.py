@@ -61,4 +61,4 @@ async def test_current_migrations_include_jev_output_and_optional_interview_bank
     assert bank_nullable == "YES"
     assert scorecard_table == "interview_scorecards"
     assert requisition_budget_column == ("uuid", "YES")
-    assert revision == "0c84e9d57a62"
+    assert revision == "b6d12f84a901"

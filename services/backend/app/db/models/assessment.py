@@ -60,6 +60,7 @@ class AssessmentRun(Base, PrimaryKeyMixin):
     failure_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     result_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     secondary_model_output: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    rerank_output: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     execution_trace: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 

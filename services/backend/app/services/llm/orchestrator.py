@@ -175,7 +175,7 @@ async def admit_invocation(db: AsyncSession, *, job_id: uuid.UUID, request: Comp
     period=await get_or_create_active_budget_period(db,scope,for_update=True)
     if strict or financial:
         budget_policy=financial or strict
-        if get_settings().APP_ENV!='sandbox' or period.id!=budget_policy.budget_period_id or period.limit_usd!=budget_policy.cap_usd:
+        if (strict and get_settings().APP_ENV!='sandbox') or period.id!=budget_policy.budget_period_id or period.limit_usd!=budget_policy.cap_usd:
             raise PreconditionViolationError('BENCHMARK_BUDGET_PERIOD_MISMATCH')
     if strict or financial or policy.enabled:
         pending=await db.scalar(select(BudgetReservation.id).where(BudgetReservation.budget_period_id==period.id,
