@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-09
 - **Baseline:** `190bf7d` on `main`
-- **Status:** Written specification approved by the user; the separate implementation plan awaits review.
+- **Status:** Written specification approved by the user; implementation plan approved and executed on 2026-10-09; activation evidence is tracked separately.
 - **Audience:** Product owner and implementation agent.
 - **Authorization boundary:** This is a design artifact. Product implementation follows written-spec approval and review of a separate implementation plan.
 

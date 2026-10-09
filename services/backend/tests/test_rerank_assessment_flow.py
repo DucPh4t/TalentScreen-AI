@@ -98,3 +98,56 @@ async def test_actual_two_multi_criterion_tools_and_repair_share_call_caps(test_
         assert {s['stage'] for s in run.rerank_output['stages']}=={'initial','tool_1','tool_2'}
 
 from tests.test_ai_benchmark_isolation import owned_context
+
+
+@pytest.mark.asyncio
+async def test_initial_rerank_pool_uses_identical_baseline_anchor_query(test_session_factory,agent_context,fresh_period,monkeypatch):
+    from app.services.assessment.service import execute_assessment_job
+    from app.services.llm.call_policy import JevReservationPolicy
+    from app.services.evaluation.benchmark.mock_provider import BenchmarkMockProvider,scripted_embeddings
+    from app.services.assessment.policy import benchmark_policy
+    from app.services import retrieval
+    monkeypatch.setattr(get_settings(),'JEV_DATA_PROCESSING_APPROVED',True)
+    captured=[];original=retrieval.collect_hybrid_candidates
+    async def capture(*args,**kwargs):
+        captured.append(kwargs['anchor_terms'])
+        return await original(*args,**kwargs)
+    monkeypatch.setattr(retrieval,'collect_hybrid_candidates',capture)
+    async with test_session_factory() as db:
+        run,p,_=await rerank_context(db,agent_context)
+        criterion=await db.scalar(select(RubricCriterion).where(RubricCriterion.rubric_version_id==run.rubric_version_id))
+        criterion.anchors={**criterion.anchors,'0':{'description':'No API implementation','qualifying_evidence':['explicit limitation'],
+            'disqualifying_evidence':['unsupported framework claim']}}
+        ep=benchmark_policy('hybrid',retrieval_version='v2')
+        run.snapshot={**run.snapshot,'assessment_execution_policy':ep.to_snapshot(),'assessment_execution_policy_hash':ep.digest,
+            'assessment_prompt_version':ep.assessment_prompt_version}
+        await db.commit()
+        financial=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        with scripted_embeddings(True):
+            await execute_assessment_job(db,run.job_id,provider_override=BenchmarkMockProvider(),
+                rerank_provider_override=ChoiceProvider(),rerank_financial_policy=financial)
+        assert run.status=='succeeded'
+        assert captured[0]==retrieval._flatten_text_values(criterion.anchors)
+
+
+@pytest.mark.asyncio
+async def test_shadow_supplied_full_pool_keeps_baseline_top30_scope(test_session_factory,agent_context):
+    import uuid
+    from app.services.reranking.contracts import RerankStageResult
+    from app.services import retrieval
+    async with test_session_factory() as db:
+        run,p,pools=await rerank_context(db,agent_context);pair=pools['api_design'][0]
+        pool=[RetrievedChunkScore(uuid.uuid4(),i,pair.text,list(pair.span_ids),i+1,None,1/(60+i)) for i in range(31)]
+        # Distinct actual spans make a beyond-30 section eligible for diversity.
+        from app.db.models import SourceSpan
+        from app.services.sanitizer import build_source_spans_from_canonical
+        late=build_source_spans_from_canonical(run.sanitized_version_id,'Late unrelated section')[0]
+        late_id='late_scope_test';db.add(SourceSpan(span_id=late_id,full_hash=late.full_hash,sanitized_version_id=run.sanitized_version_id,
+            start_cp=0,end_cp=len(late.text),text=late.text,section_label='late-section',language='en'))
+        pool[-1].span_ids=[late_id]
+        await db.flush()
+        criteria=[{'id':'api_design','name':pair.criterion.label,'description':pair.criterion.description}]
+        expected=await build_hybrid_assessment_pack(db,run.sanitized_version_id,criteria,pipeline_version='v2',candidates_by_criterion={'api_design':pool[:30]})
+        result=RerankStageResult(stage='initial',mode='shadow',ordered_pair_ids_by_criterion={},selected_pair_ids_by_criterion={})
+        actual=await build_hybrid_assessment_pack(db,run.sanitized_version_id,criteria,pipeline_version='v2',candidates_by_criterion={'api_design':pool},rerank_result=result)
+        assert canonical(actual)==canonical(expected)

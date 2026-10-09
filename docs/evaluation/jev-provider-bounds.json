@@ -16,5 +16,5 @@
     "https://openrouter.ai/blog/insights/what-is-jev/",
     "https://docs.typesafe.ai/models"
   ],
-  "contract_probe_status": "pending; runtime identity/usage verification remains mandatory"
+  "contract_probe_status": "passed on 2026-10-09; requested typesafe/jev-1.13, served typesafe/jev-1.13-20260917; runtime checks remain mandatory"
 }

@@ -10,7 +10,7 @@
 
 **Spec:** [2026-10-09-jev-reranking-design.md](../specs/2026-10-09-jev-reranking-design.md), approved by the user after commit `f2450e1`.
 
-**Execution:** Native implementation by the current agent, task-by-task; written-plan review is pending. This document is not an implementation-complete claim.
+**Execution:** Native implementation by the current agent, task-by-task; written plan approved by the user on 2026-10-09. This document is not an implementation-complete claim.
 
 ## Global Constraints
 
@@ -178,4 +178,4 @@ For DB tests use `bash scripts/test_backend_isolated.sh <test paths>` from the w
 - [ ] Configure isolated test dependencies/env; confirm the baseline suite before product edits. No paid API calls during baseline verification.
 - [x] Self-review completed: all spec sections map to Tasks 1–8, types/signatures match across tasks, five Review Focus items have named test requirements, and no placeholder implementation decision remains.
 
-This plan awaits user review. It does not authorize model-quality claims, real-applicant hard gating, or declaring implementation complete before the recorded checks.
+This plan was approved for implementation. It does not authorize model-quality claims, real-applicant hard gating, or declaring implementation complete before the recorded checks.

@@ -1,0 +1,356 @@
+{
+  "synthetic_only": true,
+  "release_mode": "off",
+  "code_under_test": "2db463c",
+  "subsequent_shadow_bug_fixed": true,
+  "quality_comparison_valid_against_off": false,
+  "reason": "Initial query anchor flattening and shadow top30 scope mismatch found after live run; fixed and covered by regression, not rerun because an unknown provider outcome stops further paid calls.",
+  "paid_probe": {
+    "status": "passed",
+    "spent_usd": "0.00003490",
+    "held_usd": "0E-8",
+    "source_code": {
+      "git_sha": "e739d8bf11bf36a9853bcbcf8daf3363a1a6f595",
+      "git_dirty": false,
+      "git_provenance_status": "available"
+    }
+  },
+  "arms": {
+    "mock-shadow": {
+      "counts": {
+        "planned": 6,
+        "accepted": 6,
+        "failed": 0,
+        "skipped": 0,
+        "interrupted": 0
+      },
+      "code": "2db463c22906d25541e6267936dd0204d97aeed6",
+      "dataset_hash": "3ce4710160259f8d8f2b2d75ef21ec7e07119add4d6cdc33eb4ebb92eee2d464",
+      "financial": {
+        "spent_peak_estimate_usd": "0.00626276",
+        "held_usd": "0E-8",
+        "unresolved_invocations": 0,
+        "invoice_usd": null,
+        "jev_first_reported_model": "typesafe/jev-1.13-20260917",
+        "jev_model_changed": false
+      },
+      "groups_delivered": 18,
+      "group_denominator": 30,
+      "limiting_delivered": 18,
+      "limiting_denominator": 30,
+      "conflict_delivered": 0,
+      "conflict_denominator": 0,
+      "status_agreement": null,
+      "numeric_mae": null,
+      "rerank_p50_ms": 3811.5,
+      "rerank_p95_ms": 4897.25,
+      "rerank_completed_stage_n": 6,
+      "tool_calls": 0,
+      "repairs": 0,
+      "reported_limiting_omissions": 0,
+      "context_chars": [
+        2160,
+        2160,
+        2145,
+        2145,
+        1880,
+        1880
+      ],
+      "same_ranked_pool_as_shadow": true,
+      "group_losses_vs_shadow": []
+    },
+    "mock-rerank": {
+      "counts": {
+        "planned": 6,
+        "accepted": 6,
+        "failed": 0,
+        "skipped": 0,
+        "interrupted": 0
+      },
+      "code": "2db463c22906d25541e6267936dd0204d97aeed6",
+      "dataset_hash": "3ce4710160259f8d8f2b2d75ef21ec7e07119add4d6cdc33eb4ebb92eee2d464",
+      "financial": {
+        "spent_peak_estimate_usd": "0.00625870",
+        "held_usd": "0E-8",
+        "unresolved_invocations": 0,
+        "invoice_usd": null,
+        "jev_first_reported_model": "typesafe/jev-1.13-20260917",
+        "jev_model_changed": false
+      },
+      "groups_delivered": 24,
+      "group_denominator": 30,
+      "limiting_delivered": 24,
+      "limiting_denominator": 30,
+      "conflict_delivered": 0,
+      "conflict_denominator": 0,
+      "status_agreement": null,
+      "numeric_mae": null,
+      "rerank_p50_ms": 3776.0,
+      "rerank_p95_ms": 4436.0,
+      "rerank_completed_stage_n": 6,
+      "tool_calls": 0,
+      "repairs": 0,
+      "reported_limiting_omissions": 0,
+      "context_chars": [
+        2172,
+        2172,
+        2375,
+        2375,
+        2273,
+        2273
+      ],
+      "same_ranked_pool_as_shadow": true,
+      "group_losses_vs_shadow": [
+        {
+          "case_id": "v2-node-01",
+          "profile": "hybrid",
+          "criterion": "backend_implementation",
+          "reference_status": "assessed",
+          "reference_score": 0
+        },
+        {
+          "case_id": "v2-node-01",
+          "profile": "hybrid",
+          "criterion": "security",
+          "reference_status": "assessed",
+          "reference_score": 0
+        },
+        {
+          "case_id": "v2-node-01",
+          "profile": "hybrid_agent",
+          "criterion": "backend_implementation",
+          "reference_status": "assessed",
+          "reference_score": 0
+        },
+        {
+          "case_id": "v2-node-01",
+          "profile": "hybrid_agent",
+          "criterion": "security",
+          "reference_status": "assessed",
+          "reference_score": 0
+        }
+      ]
+    },
+    "mock-gate_experiment": {
+      "counts": {
+        "planned": 6,
+        "accepted": 6,
+        "failed": 0,
+        "skipped": 0,
+        "interrupted": 0
+      },
+      "code": "2db463c22906d25541e6267936dd0204d97aeed6",
+      "dataset_hash": "3ce4710160259f8d8f2b2d75ef21ec7e07119add4d6cdc33eb4ebb92eee2d464",
+      "financial": {
+        "spent_peak_estimate_usd": "0.00626230",
+        "held_usd": "0E-8",
+        "unresolved_invocations": 0,
+        "invoice_usd": null,
+        "jev_first_reported_model": "typesafe/jev-1.13-20260917",
+        "jev_model_changed": false
+      },
+      "groups_delivered": 26,
+      "group_denominator": 30,
+      "limiting_delivered": 26,
+      "limiting_denominator": 30,
+      "conflict_delivered": 0,
+      "conflict_denominator": 0,
+      "status_agreement": null,
+      "numeric_mae": null,
+      "rerank_p50_ms": 3670.0,
+      "rerank_p95_ms": 4024.75,
+      "rerank_completed_stage_n": 6,
+      "tool_calls": 0,
+      "repairs": 0,
+      "reported_limiting_omissions": 1,
+      "context_chars": [
+        2222,
+        2313,
+        2425,
+        2425,
+        2323,
+        2323
+      ],
+      "same_ranked_pool_as_shadow": true,
+      "group_losses_vs_shadow": [
+        {
+          "case_id": "v2-node-01",
+          "profile": "hybrid",
+          "criterion": "backend_implementation",
+          "reference_status": "assessed",
+          "reference_score": 0
+        },
+        {
+          "case_id": "v2-node-01",
+          "profile": "hybrid",
+          "criterion": "security",
+          "reference_status": "assessed",
+          "reference_score": 0
+        }
+      ]
+    },
+    "deepseek-off": {
+      "counts": {
+        "planned": 1,
+        "accepted": 1,
+        "failed": 0,
+        "skipped": 0,
+        "interrupted": 0
+      },
+      "code": "2db463c22906d25541e6267936dd0204d97aeed6",
+      "dataset_hash": "3ce4710160259f8d8f2b2d75ef21ec7e07119add4d6cdc33eb4ebb92eee2d464",
+      "financial": {
+        "spent_peak_estimate_usd": "0.00229468",
+        "held_usd": "0E-8",
+        "unresolved_invocations": 0,
+        "invoice_usd": null
+      },
+      "groups_delivered": 3,
+      "group_denominator": 5,
+      "limiting_delivered": 3,
+      "limiting_denominator": 5,
+      "conflict_delivered": 0,
+      "conflict_denominator": 0,
+      "status_agreement": 0.6,
+      "numeric_mae": 0.0,
+      "rerank_p50_ms": null,
+      "rerank_p95_ms": null,
+      "rerank_completed_stage_n": 0,
+      "tool_calls": 0,
+      "repairs": 0,
+      "reported_limiting_omissions": 0,
+      "context_chars": [
+        2110
+      ],
+      "same_ranked_pool_as_shadow": false,
+      "group_losses_vs_shadow": [
+        {
+          "case_id": "v2-node-01",
+          "profile": "hybrid",
+          "criterion": "backend_implementation",
+          "reference_status": "assessed",
+          "reference_score": 0
+        }
+      ]
+    },
+    "deepseek-shadow": {
+      "counts": {
+        "planned": 1,
+        "accepted": 1,
+        "failed": 0,
+        "skipped": 0,
+        "interrupted": 0
+      },
+      "code": "2db463c22906d25541e6267936dd0204d97aeed6",
+      "dataset_hash": "3ce4710160259f8d8f2b2d75ef21ec7e07119add4d6cdc33eb4ebb92eee2d464",
+      "financial": {
+        "spent_peak_estimate_usd": "0.00255821",
+        "held_usd": "0E-8",
+        "unresolved_invocations": 0,
+        "invoice_usd": null,
+        "jev_first_reported_model": "typesafe/jev-1.13-20260917",
+        "jev_model_changed": false
+      },
+      "groups_delivered": 3,
+      "group_denominator": 5,
+      "limiting_delivered": 3,
+      "limiting_denominator": 5,
+      "conflict_delivered": 0,
+      "conflict_denominator": 0,
+      "status_agreement": 0.6,
+      "numeric_mae": 0.0,
+      "rerank_p50_ms": 3865.0,
+      "rerank_p95_ms": 3865.0,
+      "rerank_completed_stage_n": 1,
+      "tool_calls": 0,
+      "repairs": 0,
+      "reported_limiting_omissions": 0,
+      "context_chars": [
+        2160
+      ],
+      "same_ranked_pool_as_shadow": true,
+      "group_losses_vs_shadow": []
+    },
+    "deepseek-rerank": {
+      "counts": {
+        "planned": 1,
+        "accepted": 1,
+        "failed": 0,
+        "skipped": 0,
+        "interrupted": 0
+      },
+      "code": "2db463c22906d25541e6267936dd0204d97aeed6",
+      "dataset_hash": "3ce4710160259f8d8f2b2d75ef21ec7e07119add4d6cdc33eb4ebb92eee2d464",
+      "financial": {
+        "spent_peak_estimate_usd": "0.00285693",
+        "held_usd": "0E-8",
+        "unresolved_invocations": 0,
+        "invoice_usd": null,
+        "jev_first_reported_model": "typesafe/jev-1.13-20260917",
+        "jev_model_changed": false
+      },
+      "groups_delivered": 5,
+      "group_denominator": 5,
+      "limiting_delivered": 5,
+      "limiting_denominator": 5,
+      "conflict_delivered": 0,
+      "conflict_denominator": 0,
+      "status_agreement": 1.0,
+      "numeric_mae": 0.0,
+      "rerank_p50_ms": 4176.0,
+      "rerank_p95_ms": 4176.0,
+      "rerank_completed_stage_n": 1,
+      "tool_calls": 0,
+      "repairs": 0,
+      "reported_limiting_omissions": 0,
+      "context_chars": [
+        2364
+      ],
+      "same_ranked_pool_as_shadow": true,
+      "group_losses_vs_shadow": []
+    },
+    "deepseek-gate_experiment": {
+      "counts": {
+        "planned": 1,
+        "accepted": 0,
+        "failed": 1,
+        "skipped": 0,
+        "interrupted": 0
+      },
+      "code": "2db463c22906d25541e6267936dd0204d97aeed6",
+      "dataset_hash": "3ce4710160259f8d8f2b2d75ef21ec7e07119add4d6cdc33eb4ebb92eee2d464",
+      "financial": {
+        "spent_peak_estimate_usd": "0.00028379",
+        "held_usd": "0.00275251",
+        "unresolved_invocations": 1,
+        "invoice_usd": null,
+        "jev_first_reported_model": "typesafe/jev-1.13-20260917",
+        "jev_model_changed": false
+      },
+      "groups_delivered": 0,
+      "group_denominator": 0,
+      "limiting_delivered": 0,
+      "limiting_denominator": 0,
+      "conflict_delivered": 0,
+      "conflict_denominator": 0,
+      "status_agreement": null,
+      "numeric_mae": null,
+      "rerank_p50_ms": null,
+      "rerank_p95_ms": null,
+      "rerank_completed_stage_n": 0,
+      "tool_calls": 0,
+      "repairs": 0,
+      "reported_limiting_omissions": 0,
+      "context_chars": [
+        null
+      ],
+      "same_ranked_pool_as_shadow": false,
+      "group_losses_vs_shadow": []
+    }
+  },
+  "spent_peak_estimate_usd": "0.02681227",
+  "held_usd": "0.00275251",
+  "invoice_usd": null,
+  "pair_fixture_ndcg": null,
+  "independent_holdout": false
+}

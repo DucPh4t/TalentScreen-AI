@@ -27,12 +27,13 @@ TalentScreen AI turns a job description and candidate CV into a criterion-by-cri
 | Capability | Implementation | Why it matters |
 |---|---|---|
 | **Versioned hybrid RAG** | Local multilingual E5, pgvector cosine search, PostgreSQL lexical search, RRF, and separate V1/V2 indexes | Retrieves evidence for each approved criterion within the current CV snapshot. |
+| **Optional evidence reranking** | Jev Choice judgments over scoped criterion–passage pairs, protected evidence selection, private journal | Separates passage relevance from applicant scoring; default off and gated by measured results. |
 | **Bounded tool-calling agent** | Five-node LangGraph workflow, two read-only tools, explicit model/tool/repair limits | Searches for additional evidence without accessing other candidates or taking hiring actions. |
 | **Grounded structured output** | Pydantic contracts, exact span/quote validation, criterion-scoped citations | Rejects references outside the supplied evidence; missing or conflicting evidence stays `null`. |
 | **Reliable execution and cost control** | Background jobs, frozen input versions, reserve-before-call ledger, full serialized request fitting | Rejects stale results and limits outbound calls, context size, and spend. |
 | **Reproducible evaluation** | Actual-service ablations, frozen synthetic inputs, invocation journals, offline metrics | Separates retrieval availability, model quality, integration reliability, and cost uncertainty. |
 
-Latest recorded verification, **9 October 2026**: [446 backend tests passed, one opt-in test skipped](docs/reviews/2026-10-09-rag-packing-verification.md); [480/480 E5 + mock benchmark runs accepted](docs/evaluation/rag-packing-results-2026-10-09.md). These measure software behavior and retrieval, not real hiring accuracy.
+Latest recorded verification, **9 October 2026**: [498 backend tests passed, one opt-in test skipped; 23 frontend tests and production build passed](docs/reviews/2026-10-09-jev-reranking-verification.md); [480/480 E5 + mock benchmark runs accepted](docs/evaluation/rag-packing-results-2026-10-09.md). These measure software behavior and retrieval, not real hiring accuracy.
 
 ## Product workflow
 
@@ -69,6 +70,7 @@ flowchart LR
     DB <--> WORKER["Background worker"]
     WORKER --> FILES
     WORKER <--> LLM["DeepSeek adapter / local mock"]
+    WORKER -. "optional evidence ranking" .-> JEV["Jev Choice evaluator"]
     WORKER -. "metadata only" .-> TRACE["LangSmith"]
 ```
 
@@ -96,7 +98,8 @@ The approved rubric's labels, descriptions, anchors, and bilingual terms drive r
 2. Build a versioned index. **V1** groups adjacent section-local spans; **V2** indexes individual spans and deduplicates exact repeated text within a section. Both split oversized spans losslessly at 480 tokens.
 3. Encode passages/queries with pinned `intfloat/multilingual-e5-base`, using `passage: ` / `query: ` prefixes and normalized **768-dimensional vectors**. CPU, Apple MPS, and CUDA are supported.
 4. Fuse dense and lexical ranks using **RRF, k=60**. V2 prioritizes approved bilingual skill terms in an 800-character query and retrieves up to 30 candidates per channel; V1 retains its legacy query and ten-candidate pool.
-5. Select up to four section-diverse chunks per criterion, resolve canonical spans, and fit the complete model request. Each turn is bounded to **65,536 UTF-8 bytes** and **24,000 unique evidence characters**. Eviction removes whole spans and updates citation scope; quotes are never shortened.
+5. Optionally evaluate criterion–passage pairs with **Jev**, before selecting up to four chunks per criterion. Off keeps RRF; shadow observes; rerank changes selection; hard gating is restricted to internal synthetic experiments. [Limits and rollback](docs/runbooks/jev-reranking.md).
+6. Select up to four section-diverse chunks per criterion, resolve canonical spans, and fit the complete model request. Each turn is bounded to **65,536 UTF-8 bytes** and **24,000 unique evidence characters**. Eviction removes whole spans and updates citation scope; quotes are never shortened.
 
 Versioned indexes coexist. New runs pin their retrieval/embedding configuration and packing version; older snapshots retain V1 retrieval. Hybrid failures produce an explicit failed/manual-review path, without silently switching to full-text or another provider.
 
@@ -144,6 +147,8 @@ The evaluator also supports numeric MAE, weighted kappa, status agreement, and c
 An earlier **12-run live DeepSeek probe** verified integration on three synthetic cases (USD 0.023525 peak-rate estimate). It used the earlier retrieval setup; it does not validate live V2 quality.
 
 [Controlled results and provenance](docs/evaluation/rag-packing-results-2026-10-09.md) · [Earlier live probe](docs/evaluation/ai-benchmark-results-2026-10-09.md) · [Reproduction protocol](docs/evaluation/ai-benchmark-reproducibility.md)
+
+A later **live Jev experiment** completed 21/22 synthetic assessment runs plus a successful contract probe. It exposed negative-evidence losses, a now-fixed off/shadow query mismatch, and one unresolved provider admission. **Jev remains off**; these results do not validate activation or HR replacement. [Full results and limitations](docs/evaluation/jev-reranking-results-2026-10-09.md).
 
 ## Quickstart
 

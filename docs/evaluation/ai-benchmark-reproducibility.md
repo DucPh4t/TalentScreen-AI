@@ -48,7 +48,7 @@ The 36 development and 24 public-test cases keep identity variants in the same c
 
 ## Local prerequisites
 
-Run from the repository root. Install backend dependencies from the existing lockfile, start Docker and install LibreOffice for PDF/DOCX smoke tests. The `.env` remains untracked. Mock requires no cloud key. Live execution uses the configured **direct DeepSeek endpoint**, `deepseek-flash`, and existing API key; Jev is forced off in the child. OpenRouter is not a supported route for this benchmark's verified rate card.
+Run from the repository root. Install backend dependencies from the existing lockfile, start Docker and install LibreOffice for PDF/DOCX smoke tests. The `.env` remains untracked. Mock requires no cloud key. Live execution uses the configured **direct DeepSeek endpoint**, `deepseek-flash`, and existing API key; Legacy Jev secondary scoring is forced off in the child; passage reranking is separately opt-in as described below. OpenRouter is not a supported route for this benchmark's verified rate card.
 
 Real embedding runs require the cached `intfloat/multilingual-e5-base` snapshot. The benchmark resolves the local alias to an immutable cache SHA and pins it in the child. On the measured Mac run it was `d128750597153bb5987e10b1c3493a34e5a4502a`, device `mps:0`, 768-dimensional normalized vectors. The wrapper sets offline Hub/Transformers flags before imports. It never silently downloads weights or changes the user's `.env`.
 
@@ -139,3 +139,21 @@ Manual LangSmith spans export fixed enums/counters, experiment UUID, hashed case
 - Mock validates pipeline contracts; model accuracy, human agreement and live tool-recovery remain unmeasured. Real E5 retrieval can be measured independently of the mock LLM.
 
 See [controlled V1/V2 packing and retrieval comparison](rag-packing-results-2026-10-09.md), [v1 measured results](ai-benchmark-results-2026-10-09.md) and [v2 long-context stress results](ai-benchmark-v2-results-2026-10-09.md) for exact observed scopes and limits.
+
+## Optional Jev passage experiments
+
+Use `--retrieval-version v2` and only `hybrid` / `hybrid_agent` profiles. `--rerank-mode off` remains default; explicit alternatives are `shadow`, `rerank`, and synthetic-only `gate_experiment`. `--reranker-provider scripted` is an offline all-unclear contract double; `jev` requires the verified alpha decisions endpoint, local key, accepted snapshot, current rate/context proof, and egress approval. Never report scripted judgments as live quality.
+
+```bash
+bash scripts/run_ai_benchmark_isolated.sh plan \
+  --dataset fixtures/ai_benchmark/v2 --retrieval-version v2 \
+  --provider mock --embedding-mode real --profiles hybrid \
+  --cases v2-node-01 --rerank-mode shadow --reranker-provider jev \
+  --max-cost-usd 0.03
+```
+
+Inspect the combined conservative primary + Jev bound before replacing `plan` with `run --output reports/ai-benchmark/<fresh-name>`. The single experiment cap must be ≤USD 1 and includes probe calls. Multiple isolated arms need an outer allocation record whose total, including every probe/failed or unknown call, stays within that same cap. Each arm's independent cap does not by itself enforce an aggregate spend limit. Never auto-expand the scope/cap after a result.
+
+Live primary comparisons require real cached E5 and unchanged case/JD/rubric/prompt inputs. The extended versioned manifest pins primary/reranker identities and bounds. `rerank.jsonl` is a private metadata/probability sidecar; `admissions.jsonl` records both providers. Existing offline `report --input <run-directory>` checks financial consistency. Pair category design references live separately under `fixtures/rerank_benchmark/v1`, with hash checks; they do not enter model payloads. Ungraded NDCG stays null. Per-criterion evaluator records must declare `input_pair_ids` to avoid treating other criteria's labels as omissions.
+
+Final release analysis must report failures and missing runs, limiting/conflict group retention, full group delivery, actual tool calls, latency, held spend, and synthetic-reference limitations. See [recorded experiment](jev-reranking-results-2026-10-09.md).

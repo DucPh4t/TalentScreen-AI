@@ -520,14 +520,14 @@ async def execute_assessment_job(
             )
             rerank_kwargs={}
             if rerank_policy.enabled:
-                from app.services.retrieval import collect_hybrid_candidates
+                from app.services.retrieval import collect_hybrid_candidates, _flatten_text_values
                 from app.services.agent.tools import _anchor_query_terms
                 from app.services.reranking.service import rerank_retrieval_pool
                 candidates={}
                 for criterion in ordered_criteria:
                     candidates[criterion.criterion_id]=await collect_hybrid_candidates(db,run.sanitized_version_id,
                         criterion.label_vi,criterion.description_vi,bilingual_terms=criterion.bilingual_terms,
-                        anchor_terms=_anchor_query_terms(criterion.anchors),pipeline_version=pipeline_version,
+                        anchor_terms=_flatten_text_values(criterion.anchors),pipeline_version=pipeline_version,
                         channels=execution_policy.channels if execution_policy else frozenset({'dense','lexical'}))
                 result,pairs=await rerank_retrieval_pool(db=db,run=run,criteria=ordered_criteria,candidates=candidates,stage='initial',
                     focus_ids=tuple(focus_ids),provider_override=rerank_provider_override,financial_policy=rerank_financial_policy)

@@ -283,6 +283,8 @@ async def build_hybrid_assessment_pack(
         if candidates_by_criterion is not None:
             if criterion_id not in candidates_by_criterion:raise ValueError('RERANK_POOL_SCOPE_INVALID')
             matches = candidates_by_criterion[criterion_id]
+            if rerank_result is not None and rerank_result.mode == "shadow":
+                matches = matches[:30 if pipeline_version == "v2" else DENSE_CANDIDATE_LIMIT]
         else:
             matches = await hybrid_retrieve_for_criterion(
                 db,

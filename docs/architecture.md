@@ -11,7 +11,7 @@ TalentScreen AI is a modular FastAPI backend, a Next.js HR workspace, and a sepa
 | PostgreSQL | State, immutable versions, spans, vectors, jobs, invocation ledger, audit records | Retrieval/tools filter by authorized document/version before ranking. |
 | Private storage | Uploaded documents and processing artifacts | Raw access is explicitly controlled; documents are not repository assets. |
 | Worker | Extraction/OCR, indexing, assessment, interview processing, queued data operations | Runs independently of HTTP requests and records status/failure codes. |
-| Provider adapters | DeepSeek primary, local mock, optional Jev shadow | Structured validation and deterministic policy run in the application. |
+| Provider adapters | DeepSeek primary, local mock, optional Jev secondary shadow or evidence reranking | Structured validation and deterministic policy run in the application. |
 
 A database-backed queue avoids requiring Redis or a separate message broker in the local MVP. A modular monolith reduces deployment overhead while retaining boundaries around documents, retrieval, assessment, decisions, and providers. Multi-worker load behavior still requires representative operational testing.
 
@@ -116,3 +116,11 @@ Sources: [orchestrator](../services/backend/app/services/llm/orchestrator.py), [
 The benchmark accepts schema-limited rows and version manifests. It reports criterion-scoped retrieval/citation metrics, per-role/provider agreement, counterfactual checks, candidate-cluster bootstrap intervals, timing, and cost. Public fixtures are synthetic and visible; the CLI holdout flag is procedural friction, not access control.
 
 Dockerfiles and Compose configurations are present. Local software verification, independent hiring-quality validation, and public deployment readiness are separate checks. See [verification evidence](verification.md), [evaluation protocol](evaluation/rag-agent-benchmark-protocol.md), and [readiness gates](runbooks/rag-agent-readiness.md).
+
+## Optional passage reranking
+
+Hybrid V2 can pass its full RRF candidate pool to a bounded Jev Choice evaluator before selecting the evidence pack. Approved criterion descriptions and exact approved CV passages form independent pairs. The classifier distinguishes substantive, limiting, mention-only, unrelated, and unclear evidence; it does not set capability scores. Initial and agent-tool retrieval share the same run-scoped service.
+
+The frozen run policy controls endpoint, accepted served identities, rate provenance, body/time/call bounds, and selection. Atomic provider-aware admission commits budget and invocation records before HTTP. The private nullable `AssessmentRun.rerank_output` journal survives process restarts but never serializes raw CVs through the HR API. Missing historical policy fields retain off behavior and legacy snapshot hashes.
+
+`shadow` preserves baseline packing; `rerank` changes selection; `gate_experiment` requires both sandbox and an internal synthetic execution policy. Default is off. Unknown billing outcomes are held, not retried or silently cleared. An evidence-review notice appears when the authorized active result reports omitted limiting evidence. [Operational boundaries and rollback](runbooks/jev-reranking.md).
