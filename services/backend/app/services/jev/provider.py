@@ -120,12 +120,14 @@ class JevHTTPXProvider(BaseLLMProvider):
         api_url: Optional[str] = None,
         model: Optional[str] = None,
         client: Optional[httpx.AsyncClient] = None,
+        policy=None,
     ):
         settings = get_settings()
         self.api_key = api_key if api_key is not None else settings.JEV_API_KEY
         self.api_url = api_url or settings.JEV_BASE_URL or JEV_ENDPOINT
         self.model = model or settings.JEV_MODEL
         self._external_client = client
+        self.policy = policy
 
     def _mask_secret(self, message: str) -> str:
         return message.replace(self.api_key, "[REDACTED_API_KEY]") if self.api_key else message
@@ -136,9 +138,12 @@ class JevHTTPXProvider(BaseLLMProvider):
         state: str | dict[str, Any],
         questions: dict[str, JevQuestion | dict[str, Any]],
         timeout_seconds: float = 30.0,
+        requested_model: str | None = None,
+        purpose: str | None = None,
     ) -> JevDecisionResponse:
         settings = get_settings()
-        if settings.JEV_MODE != "shadow":
+        authorized_rerank = purpose == "jev_rerank" and self.policy is not None and self.policy.enabled
+        if not authorized_rerank and settings.JEV_MODE != "shadow":
             raise LLMProviderError("Jev is disabled; set JEV_MODE=shadow only after provider and data approval.")
         if not settings.JEV_DATA_PROCESSING_APPROVED:
             raise LLMProviderError("Jev external processing is not approved by the organization.")
@@ -148,7 +153,7 @@ class JevHTTPXProvider(BaseLLMProvider):
         try:
             request = JevDecisionRequest(
                 state=state,
-                model=self.model,
+                model=requested_model or self.model,
                 questions={
                     key: value if isinstance(value, JevQuestion) else JevQuestion.model_validate(value)
                     for key, value in questions.items()
@@ -163,10 +168,14 @@ class JevHTTPXProvider(BaseLLMProvider):
             "Accept": "application/json",
         }
         payload = request.model_dump(exclude_none=True)
+        from app.services.reranking.contracts import canonical
+        wire = canonical(payload).encode()
+        if authorized_rerank and (len(wire)>self.policy.max_body_bytes or len(canonical(payload["state"]).encode())>self.policy.max_state_bytes):
+            raise LLMProviderError("JEV_REQUEST_BOUND_EXCEEDED")
         started = time.monotonic()
         client = self._external_client or httpx.AsyncClient(timeout=timeout_seconds)
         try:
-            response = await client.post(self.api_url, headers=headers, json=payload)
+            response = await client.post(self.api_url, headers=headers, content=wire, timeout=timeout_seconds)
         except httpx.TimeoutException as exc:
             raise LLMTimeoutError("Timeout contacting Jev API.") from exc
         except httpx.RequestError as exc:
@@ -212,6 +221,15 @@ class JevHTTPXProvider(BaseLLMProvider):
                     raise LLMMalformedJSONError(f"Jev choice '{question_id}' is outside the allowed set.")
                 if set(answer["probabilities"]) != set(question.criteria or {}):
                     raise LLMMalformedJSONError(f"Jev choice probabilities '{question_id}' do not match its options.")
+        if authorized_rerank:
+            from app.services.reranking.contracts import PairJudgment
+            try:
+                for qid,answer in result.answers.items():
+                    if set(answer) != {'type','choice','probabilities','confidence'} or answer['type']!='choice':raise ValueError()
+                    PairJudgment(pair_id=qid,reported_model=result.model_version or result.model,
+                        **{k:v for k,v in answer.items() if k!='type'})
+            except ValueError as exc:
+                raise LLMMalformedJSONError('Invalid Jev reranking judgment.') from exc
         return result
 
     async def complete(self, request: CompletionRequest) -> CompletionResult:
@@ -227,6 +245,8 @@ class JevHTTPXProvider(BaseLLMProvider):
             state=envelope["state"],
             questions=envelope["questions"],
             timeout_seconds=request.timeout_seconds,
+            requested_model=request.model,
+            purpose=request.purpose,
         )
         usage = result.usage
         return CompletionResult(
@@ -242,6 +262,6 @@ class JevHTTPXProvider(BaseLLMProvider):
         )
 
 
-def get_jev_provider() -> JevHTTPXProvider:
+def get_jev_provider(*, policy=None) -> JevHTTPXProvider:
     """Create a provider; the evaluation method still enforces the off-by-default gate."""
-    return JevHTTPXProvider()
+    return JevHTTPXProvider(policy=policy,api_url=policy.endpoint if policy else None,model=policy.requested_model if policy else None)

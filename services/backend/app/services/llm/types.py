@@ -6,7 +6,9 @@ import re
 from decimal import Decimal
 import uuid
 from app.services.evaluation.benchmark.contracts import InputBound
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.services.llm.call_policy import JevReservationPolicy
 
 _TOOL_CALL_ID_RE = re.compile(r"^call_[A-Za-z0-9_-]{1,124}$")
 _TOOL_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
@@ -80,6 +82,8 @@ class CompletionRequest:
     manifest_id: Optional[str] = None
     provider: Literal["deepseek", "jev"] = "deepseek"
     strict_reservation_policy: Optional[StrictReservationPolicy] = None
+    purpose: Literal['primary', 'jev_secondary', 'jev_rerank'] | None = None
+    jev_reservation_policy: 'JevReservationPolicy | None' = None
 
 
 @dataclass(frozen=True)

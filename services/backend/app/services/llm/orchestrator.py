@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
+import re
 import hashlib
 import json
 import logging
@@ -15,10 +17,10 @@ from app.config import get_settings
 from app.services.observability import observed, record_trace_metadata
 from app.db.models import Application, AssessmentRun
 from app.db.models.document import SanitizedVersion
-from app.db.models.ops import LLMInvocation, BudgetReservation
+from app.db.models.ops import LLMInvocation, BudgetReservation, Job
 from app.domain.enums import BudgetScope, LLMInvocationStatus, SanitizedVersionStatus
 from app.services.llm.cost import (
-    RATE_CARD_VERSION,
+    RATE_CARD_VERSION, RATE_CARD_PRICING,
     calculate_actual_cost,
     calculate_jev_actual_cost,
     estimate_jev_request_cost,
@@ -50,6 +52,11 @@ MAX_ATTEMPTS_PER_STAGE = 2
 
 def _serialized_request_payload(request: CompletionRequest) -> str:
     """Canonical request material for accurate token estimates and idempotency hashes."""
+    if request.provider == 'jev':
+        envelope=json.loads(request.user_prompt)
+        if not isinstance(envelope,dict) or set(envelope)-{'model','state','questions'} or not {'state','questions'}<=set(envelope):
+            raise ValueError('JEV_REQUEST_INVALID')
+        return json.dumps({**envelope,'model':request.model},sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False)
     messages = request.messages if request.messages is not None else [
         {"role": "system", "content": request.system_prompt},
         {"role": "user", "content": request.user_prompt},
@@ -82,6 +89,7 @@ async def verify_llm_preconditions(
     task_kind: str,
     sanitized_version_id: Optional[uuid.UUID] = None,
     stage_attempt_no: int = 1,
+    max_external_calls: int | None = None,
 ) -> None:
     """Enforce strict safety and boundedness invariants before calling external LLM.
     Invariants:
@@ -96,7 +104,7 @@ async def verify_llm_preconditions(
         )
 
     # Invariant 2: Bounded total external calls per run
-    max_external_calls = get_settings().ASSESSMENT_MAX_EXTERNAL_CALLS
+    max_external_calls = max_external_calls or get_settings().ASSESSMENT_MAX_EXTERNAL_CALLS
     stmt_count = select(func.count(LLMInvocation.id)).where(LLMInvocation.job_id == job_id)
     total_calls = (await db.execute(stmt_count)).scalar() or 0
     if total_calls >= max_external_calls:
@@ -128,6 +136,79 @@ async def _resolve_requisition_id_for_job(db: AsyncSession, job_id: uuid.UUID) -
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+async def admit_invocation(db: AsyncSession, *, job_id: uuid.UUID, request: CompletionRequest,
+    logical_step: str, attempt_no: int, sanitized_version_id: uuid.UUID | None,
+    provider_name: str | None = None):
+    from app.services.llm.call_policy import InvocationBudgetPolicy,AdmittedInvocation
+    from app.services.reranking.policy import load_rerank_policy
+    job=await db.scalar(select(Job).where(Job.id==job_id).with_for_update())
+    if job is None or job.cancel_requested_at is not None:
+        raise PreconditionViolationError('JOB_CANCELLED_OR_MISSING')
+    run=await db.scalar(select(AssessmentRun).where(AssessmentRun.job_id==job_id))
+    snapshot=run.snapshot if run else {}
+    policy=load_rerank_policy(snapshot)
+    limits=InvocationBudgetPolicy.from_snapshot(snapshot)
+    if not policy.enabled:limits=InvocationBudgetPolicy(get_settings().ASSESSMENT_MAX_EXTERNAL_CALLS,0,get_settings().ASSESSMENT_MAX_EXTERNAL_CALLS)
+    is_rerank=request.purpose=='jev_rerank'
+    namespace=bool(re.fullmatch(r'jev_rerank_(initial|tool_[12])_[1-9][0-9]*',logical_step))
+    if is_rerank != namespace or (is_rerank and (request.provider!='jev' or not policy.enabled)):
+        raise PreconditionViolationError('INVOCATION_PURPOSE_MISMATCH')
+    if policy.enabled and request.provider=='jev' and not is_rerank:
+        raise PreconditionViolationError('JEV_PURPOSE_CONFLICT')
+    await verify_llm_preconditions(db,job_id,request.task_kind,sanitized_version_id,attempt_no,limits.total_limit)
+    rows=(await db.scalars(select(LLMInvocation).where(LLMInvocation.job_id==job_id))).all()
+    count=sum(i.logical_step.startswith('jev_rerank_') for i in rows)
+    if (is_rerank and count>=limits.rerank_limit) or (not is_rerank and len(rows)-count>=limits.primary_limit):
+        raise PreconditionViolationError('MAX_PROVIDER_CALLS_EXCEEDED')
+    if any(i.logical_step==logical_step and i.attempt_no==attempt_no for i in rows):
+        raise PreconditionViolationError('INVOCATION_ALREADY_ADMITTED')
+    strict=request.strict_reservation_policy
+    financial=request.jev_reservation_policy
+    if is_rerank and (financial is None or request.model!=policy.requested_model
+        or financial.accepted_models!=frozenset(policy.accepted_models)
+        or financial.provider_endpoint!=policy.endpoint or financial.rate_per_million_usd!=Decimal(str(policy.rate_per_million_usd))
+        or financial.rate_verified_at!=policy.rate_verified_at):
+        raise PreconditionViolationError('JEV_REQUEST_POLICY_MISMATCH')
+    if strict and financial:raise PreconditionViolationError('INVOCATION_PURPOSE_MISMATCH')
+    estimate=financial.input_reservation_tokens(request) if financial else strict.input_reservation_tokens(request) if strict else _estimate_input_tokens(request)
+    scope=BudgetScope.DEVELOPMENT if get_settings().APP_ENV=='sandbox' else BudgetScope.PILOT
+    period=await get_or_create_active_budget_period(db,scope,for_update=True)
+    if strict or financial:
+        budget_policy=financial or strict
+        if get_settings().APP_ENV!='sandbox' or period.id!=budget_policy.budget_period_id or period.limit_usd!=budget_policy.cap_usd:
+            raise PreconditionViolationError('BENCHMARK_BUDGET_PERIOD_MISMATCH')
+    if strict or financial or policy.enabled:
+        pending=await db.scalar(select(BudgetReservation.id).where(BudgetReservation.budget_period_id==period.id,
+            BudgetReservation.status.in_(('reserved','outcome_unknown')),BudgetReservation.amount_usd>0).limit(1))
+        if pending is not None:raise PreconditionViolationError('BENCHMARK_OUTCOME_PENDING')
+    if request.provider=='jev':
+        settings=get_settings()
+        if not settings.JEV_DATA_PROCESSING_APPROVED or (not is_rerank and settings.JEV_MODE!='shadow'):
+            raise PreconditionViolationError('JEV_EGRESS_DISABLED')
+        rate=financial.rate_per_million_usd if financial else settings.JEV_INPUT_PRICE_PER_MILLION_USD
+        if rate is None or (not financial and not settings.JEV_RATE_CARD_VERIFIED_AT):
+            raise PreconditionViolationError('JEV_RATE_CARD_UNVERIFIED')
+        cost=estimate_jev_request_cost(estimate,rate)
+        input_rate=Decimal(str(rate));output_rate=Decimal(0)
+        accepted=financial.accepted_models if financial else frozenset()
+    else:
+        cost=estimate_request_cost(estimate,request.max_output_tokens,request.model)
+        input_rate=RATE_CARD_PRICING[request.model]['input_cache_miss_per_million']
+        output_rate=RATE_CARD_PRICING[request.model]['output_per_million']
+        accepted=frozenset(strict.accepted_reported_models) if strict else frozenset()
+    req_id=await _resolve_requisition_id_for_job(db,job_id)
+    reservation=await reserve_budget(db,job_id,cost,scope,requisition_id=req_id)
+    now=datetime.now(timezone.utc)
+    invocation=LLMInvocation(id=uuid.uuid4(),job_id=job_id,logical_step=logical_step,attempt_no=attempt_no,
+        status=LLMInvocationStatus.RESERVED,provider=provider_name or request.provider,model_resolved=request.model,
+        request_hash=hashlib.sha256(_serialized_request_payload(request).encode()).hexdigest(),cost_reserved=cost,
+        rate_card_version=RATE_CARD_VERSION if request.provider!='jev' else policy.rate_verified_at,
+        admitted_at=now,created_at=now)
+    db.add(invocation)
+    await db.commit()
+    return AdmittedInvocation(invocation.id,reservation.id,cost,estimate,input_rate,output_rate,accepted)
+
+
 @observed("bounded_llm_call", run_type="llm", input_metadata=lambda args: {
     "job_id": str(args["job_id"]), "task_kind": args["request"].task_kind,
     "attempt_no": args["attempt_no"], "model": args["request"].model,
@@ -152,81 +233,16 @@ async def execute_bounded_llm_call(
     provider_override: Optional[BaseLLMProvider] = None,
 ) -> CompletionResult:
     """Execute a single bounded LLM call with budget reservation, invocation persistence, and cost settlement."""
-    now = datetime.now(timezone.utc)
-
-    # 1. Enforce preconditions
-    await verify_llm_preconditions(
-        db=db,
-        job_id=job_id,
-        task_kind=request.task_kind,
-        sanitized_version_id=sanitized_version_id,
-        stage_attempt_no=attempt_no,
-    )
-
-    # 2. Reserve budget
-    # Estimate the complete serialized request, including conversation history
-    # and JSON tool schemas, rather than only the legacy system/user strings.
-    serialized_request = _serialized_request_payload(request)
-    strict_policy = request.strict_reservation_policy
-    estimated_input_tokens = strict_policy.input_reservation_tokens(request) if strict_policy else _estimate_input_tokens(request)
-    if strict_policy:
-        if get_settings().APP_ENV != "sandbox":
-            raise PreconditionViolationError("BENCHMARK_REQUIRES_SANDBOX")
-        period = await get_or_create_active_budget_period(db, BudgetScope.DEVELOPMENT, for_update=True)
-        if period.id != strict_policy.budget_period_id or period.limit_usd != strict_policy.cap_usd:
-            raise PreconditionViolationError("BENCHMARK_BUDGET_PERIOD_MISMATCH")
-        pending = await db.scalar(select(BudgetReservation.id).where(
-            BudgetReservation.budget_period_id == period.id,
-            BudgetReservation.status.in_(("reserved", "outcome_unknown"))).limit(1))
-        if pending is not None:
-            raise PreconditionViolationError("BENCHMARK_OUTCOME_PENDING")
-    if request.provider == "jev":
-        settings = get_settings()
-        if settings.JEV_MODE != "shadow" or not settings.JEV_DATA_PROCESSING_APPROVED:
-            raise PreconditionViolationError("JEV_EGRESS_DISABLED: Jev shadow processing is not approved and enabled.")
-        if settings.JEV_INPUT_PRICE_PER_MILLION_USD is None or not settings.JEV_RATE_CARD_VERIFIED_AT:
-            raise PreconditionViolationError("JEV_RATE_CARD_UNVERIFIED: Jev budget rate must be verified before egress.")
-        estimated_cost = estimate_jev_request_cost(estimated_input_tokens, settings.JEV_INPUT_PRICE_PER_MILLION_USD)
-    else:
-        estimated_cost = estimate_request_cost(
-            input_tokens=estimated_input_tokens,
-            max_output_tokens=request.max_output_tokens,
-            model=request.model,
-        )
-    budget_scope = BudgetScope.DEVELOPMENT if get_settings().APP_ENV == "sandbox" else BudgetScope.PILOT
-    requisition_id = await _resolve_requisition_id_for_job(db, job_id)
-    reservation = await reserve_budget(
-        db,
-        job_id=job_id,
-        amount_usd=estimated_cost,
-        scope=budget_scope,
-        requisition_id=requisition_id,
-    )
-    await db.commit()  # commit reservation before network I/O
-
-    # 3. Create invocation record in RESERVED status
-    req_hash = hashlib.sha256(serialized_request.encode("utf-8")).hexdigest()
     llm = provider_override or get_llm_provider()
-    provider_name = type(llm).__name__
-    provider_label = "mock" if "mock" in provider_name.lower() else "jev" if "jev" in provider_name.lower() else "deepseek" if "deepseek" in provider_name.lower() else "custom"
-    record_trace_metadata({"provider": provider_label, "ls_provider": provider_label})
-
-    invocation = LLMInvocation(
-        id=uuid.uuid4(),
-        job_id=job_id,
-        logical_step=logical_step,
-        attempt_no=attempt_no,
-        status=LLMInvocationStatus.RESERVED,
-        provider=provider_name,
-        model_resolved=request.model,
-        request_hash=req_hash,
-        cost_reserved=float(estimated_cost),
-        rate_card_version=RATE_CARD_VERSION if request.provider != "jev" else None,
-        admitted_at=now,
-        created_at=now,
-    )
-    db.add(invocation)
-    await db.commit()
+    admission = await admit_invocation(db, job_id=job_id, request=request, logical_step=logical_step,
+        attempt_no=attempt_no, sanitized_version_id=sanitized_version_id, provider_name=type(llm).__name__)
+    invocation_id=admission.invocation_id
+    reservation_id=admission.reservation_id
+    estimated_input_tokens=admission.input_upper_tokens
+    strict_policy=request.strict_reservation_policy
+    jev_policy=request.jev_reservation_policy
+    provider_label='jev' if request.provider=='jev' else 'mock' if 'mock' in type(llm).__name__.lower() else 'deepseek'
+    record_trace_metadata({'provider':provider_label,'ls_provider':provider_label})
 
     # 4. Execute external provider call outside DB transaction
     result: Optional[CompletionResult] = None
@@ -236,12 +252,12 @@ async def execute_bounded_llm_call(
     try:
         record_trace_metadata({"external_call_count": 1})
         result = await llm.complete(request)
-        if strict_policy:
+        if strict_policy or jev_policy:
             if result.input_tokens is None or result.output_tokens is None:
                 raise LLMUsageUnavailableError()
-            if result.reported_model not in strict_policy.accepted_reported_models:
+            if result.reported_model not in admission.accepted_models:
                 raise LLMModelChangedError()
-            if result.input_tokens > strict_policy.bound.max_input_tokens or result.output_tokens > request.max_output_tokens:
+            if result.input_tokens > admission.input_upper_tokens or result.output_tokens > request.max_output_tokens:
                 raise LLMUsageBoundError()
     except (LLMAuthenticationError, LLMQuotaExhaustedError, LLMModelUnavailableError) as e:
         # Non-retryable configuration errors: zero actual cost if network call was not made/rejected
@@ -254,13 +270,13 @@ async def execute_bounded_llm_call(
         outcome_unknown = True
     except Exception as e:
         call_error = e
-        outcome_unknown = strict_policy is not None
+        outcome_unknown = strict_policy is not None or jev_policy is not None or request.purpose=="jev_rerank"
 
     # 5. Settle cost and persist invocation record in fresh transaction
     finished_now = datetime.now(timezone.utc)
     async with db.begin():
         # Refresh invocation
-        stmt_inv = select(LLMInvocation).where(LLMInvocation.id == invocation.id).with_for_update()
+        stmt_inv = select(LLMInvocation).where(LLMInvocation.id == invocation_id).with_for_update()
         inv_record = (await db.execute(stmt_inv)).scalar_one()
 
         if result is not None:
@@ -270,19 +286,17 @@ async def execute_bounded_llm_call(
         if outcome_unknown:
             inv_record.status = LLMInvocationStatus.OUTCOME_UNKNOWN
             inv_record.finished_at = finished_now
-            await settle_budget(db, reservation_id=reservation.id, outcome_unknown=True)
+            await settle_budget(db, reservation_id=reservation_id, outcome_unknown=True)
         elif call_error:
             inv_record.status = LLMInvocationStatus.FAILED
             inv_record.finished_at = finished_now
-            await settle_budget(db, reservation_id=reservation.id, actual_cost_usd=None)
+            await settle_budget(db, reservation_id=reservation_id, actual_cost_usd=None)
         else:
             # Success case
             if request.provider == "jev":
-                price = get_settings().JEV_INPUT_PRICE_PER_MILLION_USD
-                if price is None:
-                    raise ValueError("Jev price card became unavailable during settlement")
+                price = admission.input_rate_per_million_usd
                 actual_cost = calculate_jev_actual_cost(
-                    input_tokens=result.input_tokens or estimated_input_tokens,
+                    input_tokens=result.input_tokens if result.input_tokens is not None else estimated_input_tokens,
                     price_per_million_usd=price,
                 )
             else:
@@ -302,7 +316,7 @@ async def execute_bounded_llm_call(
             record_trace_metadata({"cost_actual_usd": float(actual_cost)})
             inv_record.finished_at = finished_now
 
-            await settle_budget(db, reservation_id=reservation.id, actual_cost_usd=actual_cost)
+            await settle_budget(db, reservation_id=reservation_id, actual_cost_usd=actual_cost)
 
     if call_error:
         raise call_error
