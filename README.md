@@ -1,146 +1,162 @@
 # TalentScreen AI
 
-**Evidence-grounded CV assessment with hybrid RAG, bounded AI agents, and human review.**
+**A recruitment workspace built with hybrid RAG, bounded AI agents, and human review.**
 
 [![CI](https://github.com/DucPh4t/TalentScreen-AI/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DucPh4t/TalentScreen-AI/actions/workflows/ci.yml)
 
-TalentScreen AI helps an HR team review applications against a versioned job description and role-specific scoring rubric. It retrieves relevant CV evidence, validates model citations, surfaces information gaps, and supports structured interviews. HR reviews the evidence and records the final decision.
+TalentScreen AI turns a job description and candidate CV into a criterion-by-criterion assessment with traceable evidence. Built for a university HR use case, it combines CV review, application comparison, structured interviews, and auditable human decisions. Users define their own JD and rubric for each vacancy.
 
-The project implements a complete local workflow across **Next.js, FastAPI, PostgreSQL/pgvector, multilingual E5, and LangGraph**, with DeepSeek as the configurable primary model and Jev as an optional secondary scorer.
+**Status:** local MVP with regression and benchmark evidence. AI assessments are advisory; HR decides. Hybrid RAG V2 is opt-in.
 
-**Status:** local MVP with automated regression coverage. Hybrid retrieval is opt-in; real hiring quality and production operations still require independent validation. See [validation status](#evaluation-and-validation-status).
-
-[Architecture](#architecture) · [RAG & agent](#rag-and-agent-design) · [Features](#product-workflow) · [Run locally](#run-locally) · [Tests](#evaluation-and-validation-status) · [Code walkthrough](#code-walkthrough)
-
-![HR dashboard with synthetic recruitment data](docs/reviews/hr-redesign-desktop-2026-10-07.jpg)
-
-*Recruitment dashboard with a review queue and recent requisitions. Screenshots use fictional synthetic records.*
-
-## The problem
-
-A useful recruitment assistant needs more than a similarity score. Reviewers need to know which job requirement was assessed, where the supporting evidence came from, what remains unknown, and whether a result is still valid after a CV or rubric changes.
-
-TalentScreen AI makes those requirements explicit: each assessment records the approved CV/rubric versions, prompt versions, and selected retrieval strategy. Missing evidence remains `null`; a model response cannot directly advance or reject an applicant.
+[Engineering](#engineering-highlights) · [Architecture](#architecture) · [RAG & agent](#rag-and-agent-workflow) · [Results](#evaluation-results) · [Quickstart](#quickstart) · [Code guide](#code-guide)
 
 ## Engineering highlights
 
-| Area | Implementation | Purpose |
-| --- | --- | --- |
-| Hybrid RAG | Versioned section/claim chunks, local multilingual E5, PostgreSQL lexical search + pgvector, reciprocal-rank fusion | Retrieve evidence for each approved rubric criterion. |
-| Bounded agent | LangGraph state machine with two allowlisted read-only tools, explicit call limits, and snapshot checks | Find additional evidence within the authorized record. |
-| Grounding | Pydantic schemas, exact span/quote validation, criterion-scoped citations | Reject malformed output and references outside the supplied evidence. |
-| Scoring policy | Deterministic Decimal arithmetic, approved weights and anchors, separate evidence coverage | Keep model observations distinct from application scoring policy. |
-| Reliability & cost | Background jobs, budget reservation/settlement, per-requisition cap, bounded repair | Limit spend and keep failure states visible. |
-| Evaluation | Actual-service benchmark, four RAG/agent ablations, synthetic references, paired cluster comparisons and invocation journals | Separate retrieval, model quality, reliability and measured/uncertain cost. |
+| Capability | Implementation | Why it matters |
+|---|---|---|
+| **Versioned hybrid RAG** | Local multilingual E5, pgvector cosine search, PostgreSQL lexical search, RRF, and separate V1/V2 indexes | Retrieves evidence for each approved criterion within the current CV snapshot. |
+| **Bounded tool-calling agent** | Five-node LangGraph workflow, two read-only tools, explicit model/tool/repair limits | Searches for additional evidence without accessing other candidates or taking hiring actions. |
+| **Grounded structured output** | Pydantic contracts, exact span/quote validation, criterion-scoped citations | Rejects references outside the supplied evidence; missing or conflicting evidence stays `null`. |
+| **Reliable execution and cost control** | Background jobs, frozen input versions, reserve-before-call ledger, full serialized request fitting | Rejects stale results and limits outbound calls, context size, and spend. |
+| **Reproducible evaluation** | Actual-service ablations, frozen synthetic inputs, invocation journals, offline metrics | Separates retrieval availability, model quality, integration reliability, and cost uncertainty. |
+
+Latest recorded verification, **9 October 2026**: [446 backend tests passed, one opt-in test skipped](docs/reviews/2026-10-09-rag-packing-verification.md); [480/480 E5 + mock benchmark runs accepted](docs/evaluation/rag-packing-results-2026-10-09.md). These measure software behavior and retrieval, not real hiring accuracy.
+
+## Product workflow
+
+1. **Define the vacancy.** Enter a JD; generate or edit 2–12 weighted criteria with 0–4 anchors; approve the rubric and open applications. Sending the JD to a model for rubric drafting requires explicit egress approval.
+2. **Review CVs.** Upload PDF/DOCX individually or in batches. Inspect the extracted/OCR and redacted text, then approve it before external assessment.
+3. **Assess evidence.** Eligible approvals queue jobs. Review criterion observations, citations, gaps, coverage, and advisory recommendations.
+4. **Screen applications.** Compare evidence and choose invite, request information, or do not continue—with a reason and versioned history.
+5. **Conduct interviews.** Plan rounds, assign interviewers, edit cited questions, submit independent scorecards, and record a human conclusion.
+6. **Prepare follow-up.** Edit and approve correspondence templates; manage retention and deletion requests.
+
+The Vietnamese UI supports desktop, tablet, and phone layouts; CVs may be Vietnamese, English, or mixed-language. Original CV access is role-gated and audited. Anonymized labels, duplicate hints, and review-SLA alerts support the queue without changing capability scores.
+
+<details>
+<summary><strong>View the HR workspace</strong></summary>
+
+![Candidate review queue on desktop](docs/reviews/candidate-list-desktop-2026-10-08.jpg)
+
+*Desktop candidate queue, captured with synthetic records on 8 October 2026.*
+
+<img src="docs/reviews/candidate-list-mobile-2026-10-08.jpg" alt="Responsive candidate queue with synthetic records" width="360" />
+
+[UI verification](docs/reviews/2026-10-08-candidate-list-ux.md) · [Screening and interview workflow](docs/hr-workflow.md)
+
+</details>
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    WEB["Next.js<br/>HR workspace"] <--> API["FastAPI<br/>Workflow API"]
-    API --> DB[("PostgreSQL + pgvector<br/>Jobs, versions, spans, audit")]
-    API --> FILES["Private<br/>document storage"]
-    DB <--> WORKER["Background worker<br/>CV + hybrid RAG + agent"]
-    WORKER <--> PRIMARY["DeepSeek<br/>or local mock"]
-    WORKER -. optional .-> JEV["Jev<br/>shadow scorer"]
+    HR["HR reviewer"] --> WEB["Next.js workspace"]
+    WEB <--> API["FastAPI workflow API"]
+    API <--> DB[("PostgreSQL + pgvector")]
+    API --> FILES["Private CV storage"]
+    DB <--> WORKER["Background worker"]
+    WORKER --> FILES
+    WORKER <--> LLM["DeepSeek adapter / local mock"]
+    WORKER -. "metadata only" .-> TRACE["LangSmith"]
 ```
 
-The backend is a **modular monolith** with a separate worker process. PostgreSQL stores workflow state, document provenance, vectors, invocation ledgers, and audit events. This keeps local setup manageable while separating slow document/model work from HTTP requests.
-
-The worker validates schemas and source citations before applying deterministic scoring; final HR decisions stay in the authenticated workflow.
-
-Read the [architecture walkthrough](docs/architecture.md) for data boundaries, state transitions, and implementation trade-offs.
-
-## RAG and agent design
-
-### Retrieval pipeline
-
-1. Extract and normalize the PDF/DOCX. Create a redacted document version and canonical source spans; HR approves that version before external assessment.
-2. V1 groups adjacent section-local spans targeting **300 tokens**. Opt-in V2 indexes individual canonical spans and deduplicates exact repeated text within a section. Both split oversized spans losslessly at **480 tokens**, preserving canonical citation targets.
-3. Encode passages and rubric queries with pinned `intfloat/multilingual-e5-base`: **768-dimensional normalized vectors**, with E5's `passage: ` and `query: ` prefixes. Local device selection supports CPU, Apple MPS, or CUDA when available.
-4. Search only the approved redacted version and pinned pipeline configuration. Retrieve up to **10 candidates per channel in V1**, or **30 in V2** with shorter bilingual skill queries; fuse with **RRF (`k=60`)** and select up to four section-diverse chunks per criterion.
-5. Resolve selected chunks back to canonical spans. The model may cite only spans supplied for the relevant criterion; the backend checks the complete quote against registered source text.
-
-Every model turn fits the complete serialized request within **65,536 UTF-8 bytes** and **24,000 unique evidence characters**, removing whole spans and updating citation scope. Tool/repair history obeys the same bound. See [pipeline versions, rollback and packing](docs/evaluation/rag-pipeline-versions.md).
-
-`RAG_MODE=full_text_baseline` is the default. `RAG_MODE=hybrid` enables E5 + lexical/vector retrieval. A hybrid retrieval failure produces an explicit failed/manual-review path; it does not silently expand context or switch providers.
-
-### Bounded evidence agent
-
-The assessment graph authorizes the input snapshot, calls the model, validates tool requests, and validates the final structured response. It may perform **two tool executions**, **three normal model turns**, and **one validation repair**, subject to the assessment-wide outbound-call ceiling (default: four).
-
-| Tool | Capability | Server-enforced boundary |
-| --- | --- | --- |
-| `retrieve_more_evidence` | Search for evidence for selected rubric criteria | Current approved CV snapshot; at most four approved criterion IDs per request; validated technical query hint. |
-| `get_source_spans` | Read exact canonical text for retrieved spans | At most eight span IDs exposed by the preceding retrieval, within the same snapshot. |
-
-Tools cannot browse the web, send messages, modify records, or record a hiring decision. The graph is transient: durable job/run status lives in PostgreSQL rather than a separate LangGraph checkpoint service. Optional LangSmith telemetry lets developers inspect actual graph-node, RAG, tool and model spans using metadata only. HR can request additional evidence for a selected criterion without a technical trace panel.
-
-### Model and scoring boundaries
-
-- **Mock:** default for local development and regression tests; no live LLM requests.
-- **DeepSeek:** configurable primary provider with structured responses and validated tool calls. API credentials stay in the untracked `.env` file.
-- **Jev 1.13:** optional structured secondary scorer in **shadow mode**, off by default. It requires separate configuration, processing approval, and a verified rate card. Its output stays separate from the primary assessment and the human decision.
-- **Backend policy:** computes observed score, evidence coverage, comparable score, and advisory recommendation. Incomplete/conflicting evidence is unscored; a comparable score is available only when all rubric criteria are assessed without conflicts.
-
-## Product workflow
-
-| Step | HR capability |
-| --- | --- |
-| Define a vacancy | Enter your own JD for any role; draft 2–12 JD-grounded criteria, edit weights/0–4 anchors, then approve the rubric. JD egress approval is a separate explicit action before external generation. |
-| Receive applications | Upload PDF/DOCX files individually or in batches; monitor extraction/OCR and scoped duplicate hints from file hashes or local contact fingerprints. Duplicate hints never change capability scores. |
-| Review privacy | Inspect and approve redacted text. Original-document access is role-gated, time-limited, and audited. |
-| Assess evidence | Inspect per-criterion observations, citations, gaps, coverage, and provider status. Approving a CV or replacement rubric queues eligible assessments with snapshot deduplication. |
-| Screen applications | Compare applications, persist each reviewer’s criterion checks, and record one justified screening outcome: invite, request information, or do not continue. Superseding a decision keeps its history. |
-| Conduct interviews | Prepare versioned rounds, focus criteria, assigned interviewers and a schedule; edit cited questions, save/submit independent human scorecards, and record a source-bound human conclusion after all assigned cards are submitted. |
-| Prepare correspondence | Edit and explicitly approve screening response templates. Invitations require usable schedule/join details; changed decisions, plans, conclusions or scorecards invalidate drafts. No automatic delivery or offer creation is used. |
-| Manage data | Track retention settings and deletion requests through their processing states. |
-
-See the [HR screening and interview workflow](docs/hr-workflow.md) for the exact sequence, permissions and freshness rules.
-
-The Vietnamese interface uses warm neutral surfaces, black navigation and muted olive accents, with desktop, tablet, and phone layouts. The candidate queue uses a concise desktop table and mobile cards; see [UI verification and screenshots](docs/reviews/2026-10-08-candidate-list-ux.md). Navigation focuses on **Overview / Requisitions / Data & privacy**. Technical execution details are collapsed by default; the old training page redirects to the dashboard.
-
-<details>
-<summary>Mobile candidate workspace</summary>
-<br />
-<img src="docs/reviews/hr-redesign-mobile-2026-10-07.jpg" alt="Mobile candidate assessment with synthetic data" width="390" />
-</details>
-
-## Technology stack
+The backend is a **modular monolith with a separate worker process**. PostgreSQL holds workflow state, versions, vectors, audits, and invocation budgets. Slow extraction and AI work run outside HTTP requests. Search is scoped to one approved CV/configuration. The transient LangGraph has no checkpointer; PostgreSQL stores durable job/run state.
 
 | Layer | Technology |
-| --- | --- |
-| Frontend | Next.js 15 App Router, React 19, TypeScript, responsive CSS, PDF.js viewer |
-| API & validation | FastAPI, Python 3.12, Pydantic v2 |
-| Database | PostgreSQL 16, pgvector, SQLAlchemy 2 async, Alembic |
-| Retrieval | Sentence Transformers, multilingual E5, PostgreSQL full-text search, RRF |
-| Agent & providers | LangGraph, DeepSeek adapter, optional Jev shadow adapter |
-| Developer observability | Optional LangSmith RunTree spans, metadata allowlist, local audit trace |
-| Documents & operations | PDF/DOCX extraction, Tesseract OCR, LibreOffice, Docker Compose, pytest, GitHub Actions |
+|---|---|
+| HR workspace | Next.js 15, React 19, TypeScript, responsive CSS, PDF.js |
+| API and validation | FastAPI, Python 3.12, Pydantic v2 |
+| Persistence | PostgreSQL 16, pgvector, async SQLAlchemy 2, Alembic |
+| Retrieval | Sentence Transformers, multilingual E5, lexical search, RRF |
+| Agent and inference | LangGraph, DeepSeek HTTP adapter, explicit local mock |
+| Developer observability | Optional LangSmith spans with a metadata allowlist |
+| Documents and tooling | PDF/DOCX extraction, Tesseract, LibreOffice, Docker, pytest, GitHub Actions |
 
-## Run locally
+[Architecture walkthrough](docs/architecture.md) · [Current retrieval versions and packing rules](docs/evaluation/rag-pipeline-versions.md)
 
-### Prerequisites
+## RAG and agent workflow
 
-Python **3.12**, [uv](https://docs.astral.sh/uv/), Node.js **20+**, npm, and Docker with Compose v2 are required. Install **LibreOffice** for DOCX page validation and **Tesseract** with English/Vietnamese language data for scanned PDF OCR.
+### 1. Retrieve evidence against the approved rubric
 
-### 1. Install and prepare the database
+The approved rubric's labels, descriptions, anchors, and bilingual terms drive retrieval over the approved, redacted CV.
+
+1. Preserve canonical source spans for immutable citation targets.
+2. Build a versioned index. **V1** groups adjacent section-local spans; **V2** indexes individual spans and deduplicates exact repeated text within a section. Both split oversized spans losslessly at 480 tokens.
+3. Encode passages/queries with pinned `intfloat/multilingual-e5-base`, using `passage: ` / `query: ` prefixes and normalized **768-dimensional vectors**. CPU, Apple MPS, and CUDA are supported.
+4. Fuse dense and lexical ranks using **RRF, k=60**. V2 prioritizes approved bilingual skill terms in an 800-character query and retrieves up to 30 candidates per channel; V1 retains its legacy query and ten-candidate pool.
+5. Select up to four section-diverse chunks per criterion, resolve canonical spans, and fit the complete model request. Each turn is bounded to **65,536 UTF-8 bytes** and **24,000 unique evidence characters**. Eviction removes whole spans and updates citation scope; quotes are never shortened.
+
+Versioned indexes coexist. New runs pin their retrieval/embedding configuration and packing version; older snapshots retain V1 retrieval. Hybrid failures produce an explicit failed/manual-review path, without silently switching to full-text or another provider.
+
+### 2. Use tools only when additional evidence is needed
+
+```mermaid
+flowchart TD
+    A["authorize: check snapshot"] --> M["model: bounded LLM call"]
+    M -->|tool request| T["tools: validate and execute"]
+    T --> M
+    M -->|structured response| V["validate: schema and citations"]
+    V -->|invalid, repair available| R["repair: one correction turn"]
+    R --> M
+    V -->|valid| DONE["Persist observations and deterministic scores"]
+```
+
+| Tool | Allowed operation | Boundary |
+|---|---|---|
+| `retrieve_more_evidence` | Search for evidence using a validated technical query hint | Current approved CV; at most four approved criterion IDs per request. |
+| `get_source_spans` | Read exact text for retrieved evidence | At most eight span IDs exposed by the preceding retrieval, within the same snapshot. |
+
+The graph permits **two tool executions, three normal model turns, and one repair**, subject to the assessment-wide outbound ceiling (default: four calls). Scope/limit violations stop execution. Tools cannot browse externally, write decisions, or send messages. Optional LangSmith traces export metadata, not CVs, prompts, model responses, or query text.
+
+### 3. Validate observations before calculating scores
+
+The backend validates structured observations and exact citations before Decimal-based scoring. **Observed score**, **coverage**, and **comparable score** stay separate; comparability requires complete assessment without missing/conflicting criteria. Valid citations do not prove correct interpretation—HR reviews the evidence and reasoning.
+
+## Evaluation results
+
+A controlled comparison used **60 frozen synthetic stress CVs** across Node.js, AI/ML, and Android in Vietnamese, English, and mixed-language formats. V1/V2 shared code, inputs, rubric, prompt/schema, E5 revision, seed, and request bound.
+
+| Profile | V1 sufficient-group coverage | V2 sufficient-group coverage | V2 Span Recall@10 |
+|---|---:|---:|---:|
+| Full-text baseline | 108/222 · 48.6% | 108/222 · 48.6% | Not applicable |
+| Dense retrieval | 30/222 · 13.5% | 193/222 · 86.9% | 99.8% |
+| Hybrid RAG | 45/222 · 20.3% | **210/222 · 94.6%** | **100.0%** |
+| Hybrid + bounded agent | 45/222 · 20.3% | 210/222 · 94.6% | 100.0% |
+
+**Measured:** actual E5/pgvector and the assessment service completed **480/480 mock-LLM runs**. Coverage requires all spans of an annotated sufficient evidence group to reach the model. On the public slice, hybrid V2 covered 86/87 groups (98.9%) after code freeze.
+
+The evaluator also supports numeric MAE, weighted kappa, status agreement, and counterfactual comparisons for live-model experiments; mock quality metrics remain unmeasured.
+
+**Limits:** coverage is not scoring accuracy. Mock made zero tool calls; agent recovery remains unmeasured. Visible synthetic references are not protected holdout or independent HR/IT labels. Real hiring quality, fairness, and production SLOs are not established.
+
+An earlier **12-run live DeepSeek probe** verified integration on three synthetic cases (USD 0.023525 peak-rate estimate). It used the earlier retrieval setup; it does not validate live V2 quality.
+
+[Controlled results and provenance](docs/evaluation/rag-packing-results-2026-10-09.md) · [Earlier live probe](docs/evaluation/ai-benchmark-results-2026-10-09.md) · [Reproduction protocol](docs/evaluation/ai-benchmark-reproducibility.md)
+
+## Quickstart
+
+Run commands from the repository root. Requirements: **Python 3.12**, **uv**, **Node.js 20+**, npm, and Docker with Compose v2. Install LibreOffice for DOCX page validation and Tesseract with English/Vietnamese language data for scanned CVs.
+
+### 1. Install and initialize
 
 ```bash
 git clone https://github.com/DucPh4t/TalentScreen-AI.git
 cd TalentScreen-AI
 cp .env.example .env
 make bootstrap
+```
+
+Generate a signing key with `openssl rand -hex 32` and set `SECRET_KEY` in `.env`. The first run can use the default `LLM_PROVIDER=mock`, with no external LLM calls. Credentials and candidate files remain outside Git.
+
+```bash
 make doctor
 docker compose up -d --wait postgres
 .venv/bin/alembic upgrade head
 ```
 
-Keep the default mock provider for a first run. Generate a random signing key locally and set `SECRET_KEY` in `.env`; do not commit this file. `make bootstrap` installs the pinned backend requirements and frontend dependencies. Hybrid mode additionally downloads the pinned E5 weights on first use.
+### 2. Create a local account
 
-### 2. Create a local administrator
-
-Run from the repository root; the password prompt keeps the value out of shell history.
+Choose a password interactively; this snippet creates or updates `local-admin` without putting the password in shell history.
 
 ```bash
 PYTHONPATH=services/backend .venv/bin/python - <<'PY'
@@ -150,15 +166,15 @@ from app.cli import create_admin
 
 asyncio.run(create_admin(
     login="local-admin",
-    password=getpass.getpass("Choose an admin password: "),
+    password=getpass.getpass("Admin password: "),
     display_name="Local Administrator",
 ))
 PY
 ```
 
-### 3. Start the services
+### 3. Start API, worker, and frontend
 
-Run each command in a separate terminal, from the repository root:
+Use one terminal for each command:
 
 ```bash
 make dev-backend
@@ -166,102 +182,84 @@ make dev-worker
 make dev-web
 ```
 
-Open **http://localhost:2004**. Backend API docs are at **http://127.0.0.1:8000/docs**. If port 8000 is occupied, use matching overrides: `make dev-backend BACKEND_PORT=8001` and `make dev-web BACKEND_PORT=8001`.
+Open [localhost:2004](http://localhost:2004) and sign in as `local-admin`. API docs: [127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). If port 8000 is occupied, pass the same `BACKEND_PORT=8001` to both `make dev-backend` and `make dev-web`.
 
-### Optional configuration
+Keep the worker running for extraction/assessments. Follow the [HR workflow](docs/hr-workflow.md) to create a vacancy and try a synthetic CV.
 
-| Setting | Default | Effect |
-| --- | --- | --- |
-| `LLM_PROVIDER` | `mock` | Set `deepseek` and configure `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` for the primary API provider. |
-| `RAG_MODE` | `full_text_baseline` | Set `hybrid` to enable local E5 + lexical/vector retrieval. |
-| `RAG_PIPELINE_VERSION` | `v1` | Select `v2` for claim-level indexing and concise bilingual queries on new hybrid runs; old snapshots retain their pinned version. |
-| `EMBEDDING_DEVICE` | `auto` | Select `cpu`, `mps`, or `cuda` explicitly when needed. |
-| `JEV_MODE` | `off` | `shadow` enables separately approved/configured secondary scoring. |
-| `LANGSMITH_TRACING` | `false` | Enable developer-only metadata tracing after setting `LANGSMITH_API_KEY`; see the [setup and verification runbook](docs/runbooks/langsmith-observability.md). |
+### 4. Enable RAG V2 and a live provider
 
-Restart the backend and worker after changing configuration. See [`.env.example`](.env.example) for all settings and [readiness gates](docs/runbooks/rag-agent-readiness.md) before real-data use.
+| Setting | Repository default | Optional configuration |
+|---|---|---|
+| `LLM_PROVIDER` | `mock` | Set `deepseek`, configure `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, and provider/budget settings. |
+| `RAG_MODE` | `full_text_baseline` | Set `hybrid` for E5 + lexical/vector retrieval. |
+| `RAG_PIPELINE_VERSION` | `v1` | Set `v2` for the improved span index and bilingual query; `v1` rolls back new runs. |
+| `EMBEDDING_DEVICE` | `auto` | Explicit `cpu`, `mps`, or `cuda` when needed. |
+| `LANGSMITH_TRACING` | `false` | Enable developer metadata traces after configuring your own key/project. |
 
-## Evaluation and validation status
+Restart **API and worker** after changing settings. Hybrid first use may download pinned E5 weights; offline benchmarks require a populated cache. Provider configuration alone does not verify live inference.
 
-**Production-pipeline benchmark, 2026-10-09:** actual E5/pgvector retrieval ran over **60 synthetic CVs × four profiles (240 service runs)** with a mock LLM. Separately, a paid DeepSeek probe completed **12/12 runs** over three predetermined synthetic cases, with a settled peak-rate token estimate of **USD 0.023525** and no unresolved funds. These are different experiments: mock is contract/retrieval evidence; the small live probe is integration evidence. Hybrid did not beat dense span ranking on this dataset, and the live agent made no tool calls; no quality-improvement claim is made.
+<details>
+<summary>Optional secondary scorer</summary>
 
-Compare **full text / dense / hybrid / hybrid + bounded agent**, using common immutable prompt/schema, frozen input versions, local E5 on Apple MPS, explicit status/numeric denominators, paired cluster bootstrap, and metadata-only LangSmith correlation. All reference labels are synthetic design expectations, not independent HR agreement.
+Jev 1.13 is an optional shadow adapter, disabled by default. Separate credentials, processing approval, and verified pricing are required; it cannot alter the primary assessment or human decision. See [settings](.env.example).
 
-**Versioned RAG improvement:** the same frozen long-context collection ran on a clean commit with actual E5 and a mock LLM: **480/480 service runs**, comparing V1/V2 under the same serialized-byte packing fix. Hybrid initial sufficient-group coverage increased from **45/222 (20.3%) to 210/222 (94.6%)** overall; on the public synthetic slice, **24/87 to 86/87 (98.9%)**. Span Recall@10 reached 100% for V2 hybrid, while complete evidence delivery remained lower. These are evidence-availability measurements, not model scoring accuracy. Public labels are visible synthetic expectations, not protected holdout or independent HR/IT judgments. **446 backend tests passed; one opt-in E5 test was skipped**, with real E5 exercised separately by the benchmark. [Controlled comparison, denominators and limits](docs/evaluation/rag-packing-results-2026-10-09.md).
+</details>
 
-The [earlier six-case stress diagnostic](docs/evaluation/ai-benchmark-v2-results-2026-10-09.md) is retained as historical failure evidence: poor ranking and a request exceeding the byte gate motivated the packing and retrieval changes. Mock still makes zero tool calls; live agent recovery and real hiring quality remain unmeasured.
-
-[Measured results and limitations](docs/evaluation/ai-benchmark-results-2026-10-09.md) · [Reproduce the experiments](docs/evaluation/ai-benchmark-reproducibility.md) · [Aggregate JSON](docs/evaluation/ai-benchmark-results-2026-10-09.json)
+## Verification and benchmark commands
 
 ```bash
-# Developer contract test through real services, in an owned disposable DB
+# Disposable PostgreSQL/pgvector DB, backend tests, frontend tests and build.
+make test
+
+# Actual-service contract smoke: no paid calls, scripted embedding test double.
 bash scripts/run_ai_benchmark_isolated.sh run \
   --dataset fixtures/ai_benchmark/v1 --provider mock --profiles all \
   --cases node-01,ai-01,android-01 --embedding-mode scripted \
   --output reports/ai-benchmark/new-smoke --max-cost-usd 5
+
+# Real cached E5, frozen stress data, mock LLM; start with development.
+bash scripts/run_ai_benchmark_isolated.sh run \
+  --dataset fixtures/ai_benchmark/v2 --provider mock --profiles all \
+  --split development --embedding-mode real --retrieval-version v2 \
+  --output reports/ai-benchmark/new-rag-v2 --max-cost-usd 5
 ```
 
-```bash
-# Disposable database, migrations, backend regression suite, frontend build
-make test
+Each experiment needs a new output directory. See [prerequisites, tokenizer proof, journals, and reporting](docs/evaluation/ai-benchmark-reproducibility.md). CI tests backend/frontend and builds Next.js with external providers/tracing disabled; real E5 measurement runs separately.
 
-# Exercise the evaluator on committed synthetic data; no model API calls
-.venv/bin/python scripts/run_rag_benchmark.py \
-  --dataset fixtures/rag_benchmark/synthetic.jsonl \
-  --output /tmp/talentscreen-rag-benchmark.json
-```
+## Code guide
 
-**Screening/interview workflow verification, 2026-10-08:** 338 backend tests and 22 frontend tests passed; the production frontend build and isolated migration upgrade/downgrade passed. Browser QA exercised the synthetic screening-to-interview flow, two-window scorecard conflicts, saved scheduling, and 390/820/1440 px layouts. Model calls were mocked; this is workflow evidence rather than proof of hiring accuracy. See the [review and verification ledger](docs/reviews/2026-10-08-hr-interview-workflow-b.md).
-
-**Workflow repair verification, 2026-10-08:** 275 backend tests passed, migration upgrade/downgrade roundtrip passed, and the production frontend build passed. This run uses synthetic fixtures and mocked model calls; see [scope, evidence and remaining issues](docs/reviews/2026-10-08-workflow-repairs.md).
-
-**Local verification, 2026-10-07:** 242 backend tests passed, migrations from an empty database passed, and the production frontend build passed. UI verification covered 320, 390, 820, and 1440 px layouts, authentication, keyboard dialog behavior, the recruitment queue, JD/rubric views, and the candidate workspace. See [verification evidence](docs/verification.md).
-
-The benchmark reports criterion-scoped Recall@5/10, sufficient-evidence coverage, citation validity, unsupported claims, MAE, weighted kappa, counterfactual invariance, latency, and cost. Reports separate role families and providers rather than averaging models into a hiring score.
-
-| Evidence | Current state |
-| --- | --- |
-| Workflow, access boundaries, schemas, migrations, cost controls | Automated regression coverage with isolated PostgreSQL/pgvector and mocked model/embedding paths. |
-| Synthetic end-to-end workflow and responsive UI | Exercised locally; dated review and screenshots committed. |
-| Retrieval/scoring quality against independent HR/IT labels | Not established; representative, protected holdout data is still required. |
-| Live-provider quality, fairness, production SLOs and deletion/restore drills | Not established by the automated suite or synthetic benchmark. |
-
-The committed benchmark is **synthetic harness data**, including visible holdout-shaped fixtures; it is not a protected hiring holdout and its metric values are not production-quality claims. Redaction rules can miss identifiers. Public deployment and use of AI scores for real applicants require the [G1–G7 readiness gates](docs/runbooks/rag-agent-readiness.md). ATS integration, email delivery, calendar synchronization, and dossier export are future work. Local interview scheduling and human interview conclusions are implemented; a proposed hire does not create an offer. Correspondence templates are implemented with versioned human approval.
-
-## Code walkthrough
-
-A suggested review path for the implementation:
-
-| Read | What to inspect |
-| --- | --- |
-| [Embedding and chunking](services/backend/app/services/embedding.py) → [retrieval](services/backend/app/services/retrieval.py) | Pinned configuration, section boundaries, document filters, and rank fusion. |
-| [Assessment graph](services/backend/app/services/agent/assessment_graph.py) → [tools](services/backend/app/services/agent/tools.py) | State transitions, tool allowlist, stale snapshot rejection, and bounded repair. |
-| [Versioned prompts](services/backend/app/services/assessment/prompt.py) → [validator](services/backend/app/services/assessment/validator.py) → [scoring](services/backend/app/services/assessment/scoring.py) | Model-output contracts, exact citations, and deterministic advisory scores. |
-| [Invocation orchestration](services/backend/app/services/llm/orchestrator.py) → [budget ledger](services/backend/app/services/llm/ledger.py) | Reserve-before-call, settlement, unknown outcomes, and requisition spend caps. |
-| [Actual-service benchmark CLI](scripts/run_ai_benchmark.py) → [runner/evaluator](services/backend/app/services/evaluation/benchmark) → [reproduction protocol](docs/evaluation/ai-benchmark-reproducibility.md) | Four controlled profiles, owned isolation, synthetic-label separation, financial uncertainty and honest denominators. The older [offline aggregator](scripts/run_rag_benchmark.py) remains compatible. |
-| [JD rubric drafting](services/backend/app/services/rubric_drafting.py) → [correspondence](services/backend/app/services/email_draft.py) | JD-grounded structured generation, explicit egress review, content filtering and versioned human approval. |
-| [HR workspace](apps/web/src/components/DashboardHome.tsx) → [candidate review](apps/web/src/app/applications/[id]/page.tsx) | Queue states, evidence review, overrides, and decision controls. |
-
-## Repository map
+| Start here | Review focus |
+|---|---|
+| [Embedding/indexing](services/backend/app/services/embedding.py) → [retrieval](services/backend/app/services/retrieval.py) | Immutable span targets, index versioning, document filters, query construction, RRF. |
+| [LangGraph](services/backend/app/services/agent/assessment_graph.py) → [tools](services/backend/app/services/agent/tools.py) | Authorization, bounded tool calls, stale inputs, validation and repair. |
+| [Request fitter](services/backend/app/services/agent/request_budget.py) → [invocation ledger](services/backend/app/services/llm/ledger.py) | Complete UTF-8 request accounting, whole-span eviction, budget reservation and settlement. |
+| [Prompts](services/backend/app/services/assessment/prompt.py) → [validator](services/backend/app/services/assessment/validator.py) → [scoring](services/backend/app/services/assessment/scoring.py) | Versioned prompts, exact citations, deterministic scoring and abstention. |
+| [Benchmark runner/evaluator](services/backend/app/services/evaluation/benchmark) | Controlled profiles, label separation, owned isolation, metrics and financial reconciliation. |
 
 ```text
 apps/web/                     Next.js HR workspace
 services/backend/app/
-  api/v1/                     Authenticated workflow endpoints
-  services/agent/             Bounded LangGraph graph and read-only tools
-  services/evaluation/benchmark/  Actual-service runner, ablations and reports
-  services/assessment/        Versioned prompts, validation, scoring
-  services/llm/               Provider adapters and invocation/budget ledger
-  services/evaluation/        Metric implementations
-services/backend/alembic/      Versioned database migrations
+  api/v1/                     Workflow and authentication endpoints
+  services/agent/             LangGraph and scoped evidence tools
+  services/assessment/        Prompts, validation, scoring and snapshots
+  services/llm/               Provider adapters and invocation ledger
+  services/evaluation/        Metrics and actual-service benchmark
+services/backend/alembic/      Database migrations
 services/backend/tests/        Regression and integration tests
-scripts/                      Local tooling, smoke tests, benchmark CLI
-fixtures/                     Synthetic test and benchmark inputs
-docs/                         Architecture, evidence, protocols, runbooks
+scripts/                      Local tooling and benchmark entry points
+fixtures/                     Synthetic test and evaluation data
+docs/                         Architecture, results, workflow and runbooks
 ```
 
-[Detailed architecture](docs/architecture.md) · [Verification evidence](docs/verification.md) · [Approved RAG/agent design](docs/superpowers/specs/2026-10-06-rag-agent-talent-screen-design.md) · [Original MVP plan](talentscreen-mvp-plan/README.md)
+## Scope and next validation
 
----
+Next: bounded live V2/tool-recovery evaluation, independent HR/IT labels, and operational verification. Email delivery, ATS/calendar integrations, and dossier export remain future work. Interview conclusions do not create offers. Public deployment and real-data use require the [G1–G7 readiness gates](docs/runbooks/rag-agent-readiness.md).
 
-**Tiếng Việt:** TalentScreen AI hỗ trợ HR rà soát CV theo JD và rubric động, truy xuất bằng chứng bằng hybrid RAG, dùng agent gọi tool có giới hạn và kiểm tra trích dẫn trước khi tính điểm tham khảo. HR kiểm duyệt và quyết định cuối cùng. Bản hiện tại có luồng local và kiểm thử hồi quy; chất lượng cho tuyển dụng thật vẫn cần đánh giá độc lập.
+[Detailed workflow](docs/hr-workflow.md) · [Latest verification](docs/reviews/2026-10-09-rag-packing-verification.md) · [LangSmith setup](docs/runbooks/langsmith-observability.md) · [Full configuration](.env.example)
+
+<details>
+<summary>Giới thiệu tiếng Việt</summary>
+
+TalentScreen AI hỗ trợ HR đối chiếu CV với JD và rubric đã duyệt. Hybrid RAG tìm bằng chứng theo tiêu chí; agent chỉ đọc dữ liệu trong hồ sơ hiện tại. Điểm AI mang tính tham khảo, thiếu/mâu thuẫn bằng chứng giữ điểm trống, HR quyết định cuối cùng. Dự án có kiểm thử và benchmark; chất lượng tuyển dụng thật cần đánh giá độc lập.
+
+</details>
