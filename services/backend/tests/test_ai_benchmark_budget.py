@@ -183,3 +183,17 @@ async def test_graph_threads_strict_policy_to_every_request(test_session_factory
         await run_assessment_agent(db=db,run=run,rubric_criteria=criteria,initial_pack={'source_span_ids':[],'criteria_retrieval_map':{}},
             provider_override=provider,strict_reservation_policy=policy)
     assert len(provider.requests)==1 and provider.requests[0].strict_reservation_policy is policy
+
+
+@pytest.mark.asyncio
+async def test_new_fractional_budget_matches_reloaded_decimal_cap(test_session_factory,monkeypatch):
+    cap=Decimal('0.14863554')
+    monkeypatch.setattr(get_settings(),'DEV_EVAL_BUDGET_USD',float(cap))
+    async with test_session_factory() as db:
+        await db.execute(update(BudgetPeriod).where(BudgetPeriod.scope==BudgetScope.DEVELOPMENT).values(
+            period_end=datetime.now(timezone.utc)-timedelta(seconds=1)))
+        period=await get_or_create_active_budget_period(db,BudgetScope.DEVELOPMENT)
+        assert period.limit_usd==cap
+        await db.commit()
+        await db.refresh(period)
+        assert period.limit_usd==cap

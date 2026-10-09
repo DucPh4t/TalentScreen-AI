@@ -31,3 +31,17 @@ def test_design_references_distinguish_negation_from_skill_mentions():
         assert dataset.design_labels[f'pair-{i:02}-2']=='mention_only'
         assert dataset.sufficient_groups[f'skill_{i:02}']==((f'pair-{i:02}-0',),)
     assert len(dataset.limiting_pair_ids)==12
+
+
+def test_per_criterion_record_uses_only_its_own_reference_scope():
+    from app.services.evaluation.benchmark.reranking import load_pair_references,evaluate_rerank_records
+    dataset=load_pair_references(ROOT/'fixtures/rerank_benchmark/v1')
+    ids=[f'pair-00-{i}' for i in range(5)]
+    record={'case_id':'one','status':'ok','input_pair_ids':ids,'ranked_pair_ids':ids,
+            'selected_pair_ids':ids[:4],'baseline_coverage':1.0}
+    report=evaluate_rerank_records(dataset,[record],seed=1)
+    for metric in ('limiting_retention','contradictory_group_retention','recall_at_5','recall_at_10','sufficient_group_delivery'):
+        assert report[metric]==1.0,metric
+    assert report['false_exclusion_rate']==0.0
+    with pytest.raises(ValueError,match='SCOPE'):
+        evaluate_rerank_records(dataset,[{**record,'selected_pair_ids':['pair-01-0']}],seed=1)

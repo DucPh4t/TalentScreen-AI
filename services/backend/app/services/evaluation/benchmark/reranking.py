@@ -123,21 +123,31 @@ def evaluate_rerank_records(dataset:PairReferenceDataset,records:list[dict],*,se
     # Records are evaluator-only: case_id, mode, status, ranked_pair_ids, selected_pair_ids,
     # unscored_pair_ids, predicted_categories, elapsed_ms and optional paired baseline coverage.
     complete=[r for r in records if r['status']=='ok'];keys={p.pair_id for p in dataset.input_pairs}
-    if any(set(r.get('ranked_pair_ids',()))-keys or set(r.get('selected_pair_ids',()))-keys for r in records):raise ValueError('RERANK_RECORD_SCOPE_INVALID')
-    relevant={pid for pid,label in dataset.design_labels.items() if label in {'substantive_evidence','limiting_evidence'}}
+    for r in records:
+        scope=set(r.get('input_pair_ids',keys))
+        if (not scope or scope-keys or set(r.get('ranked_pair_ids',()))-scope
+            or set(r.get('selected_pair_ids',()))-scope or set(r.get('unscored_pair_ids',()))-scope
+            or set(r.get('predicted_categories',{}))-scope):
+            raise ValueError('RERANK_RECORD_SCOPE_INVALID')
     exclusions=possible=negative_kept=negative_possible=conflict_kept=conflict_possible=0
     recall5=[];recall10=[];coverage=[];ndcg=[];pairs=[]
     for r in complete:
         selected=set(r['selected_pair_ids']);ranked=r['ranked_pair_ids']
+        scope=set(r.get('input_pair_ids',keys))
+        relevant={pid for pid,label in dataset.design_labels.items() if pid in scope and label in {'substantive_evidence','limiting_evidence'}}
+        limiting=set(dataset.limiting_pair_ids)&scope
+        conflicts=[g for g in dataset.contradictory_pair_groups if set(g)<=scope]
+        sufficient={cid:tuple(g for g in groups if set(g)<=scope) for cid,groups in dataset.sufficient_groups.items()}
+        sufficient={cid:groups for cid,groups in sufficient.items() if groups}
         possible+=len(relevant);exclusions+=len(relevant-set(ranked))
-        negative_possible+=len(dataset.limiting_pair_ids);negative_kept+=len(set(dataset.limiting_pair_ids)&selected)
-        conflict_possible+=len(dataset.contradictory_pair_groups);conflict_kept+=sum(set(g)<=selected for g in dataset.contradictory_pair_groups)
+        negative_possible+=len(limiting);negative_kept+=len(limiting&selected)
+        conflict_possible+=len(conflicts);conflict_kept+=sum(set(g)<=selected for g in conflicts)
         recall5.append(rate(len(relevant&set(ranked[:5])),len(relevant)));recall10.append(rate(len(relevant&set(ranked[:10])),len(relevant)))
-        cv_covered=sum(any(set(g)<=selected for g in groups) for groups in dataset.sufficient_groups.values())
-        cv_rate=rate(cv_covered,len(dataset.sufficient_groups));coverage.append(cv_rate)
+        cv_covered=sum(any(set(g)<=selected for g in groups) for groups in sufficient.values())
+        cv_rate=rate(cv_covered,len(sufficient));coverage.append(cv_rate)
         if cv_rate is not None and r.get('baseline_coverage') is not None:pairs.append((r['case_id'],r['baseline_coverage'],cv_rate))
         if dataset.independent_grades:
-            grades=dataset.independent_grades
+            grades={pid:g for pid,g in dataset.independent_grades.items() if pid in scope}
             dcg=sum((2**grades.get(pid,0)-1)/math.log2(i+2) for i,pid in enumerate(ranked[:4]))
             ideal=sum((2**g-1)/math.log2(i+2) for i,g in enumerate(sorted(grades.values(),reverse=True)[:4]))
             if ideal:ndcg.append(dcg/ideal)

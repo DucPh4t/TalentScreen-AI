@@ -66,7 +66,7 @@ async def get_or_create_active_budget_period(
             scope=scope,
             period_start=p_start,
             period_end=p_end,
-            limit_usd=configured_limit,
+            limit_usd=Decimal(str(configured_limit)),
             reserved_usd=0.0,
             spent_usd=0.0,
             rate_card_version=RATE_CARD_VERSION,
