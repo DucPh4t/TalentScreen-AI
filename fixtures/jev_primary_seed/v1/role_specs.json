@@ -1,0 +1,62 @@
+{
+  "schema_version": "talentscreen.jev-primary-seed.role-specs.v1",
+  "anchor_scale": {
+    "0": "A directly described attempt at the criterion's basic task failed in a material way and the CV provides no recovery; absence of evidence is never 0.",
+    "1": "A narrow contribution is described, but it was guided, incomplete, or handled only a basic part of the criterion.",
+    "2": "A bounded task for the criterion was implemented independently with a basic correct result.",
+    "3": "An end-to-end feature for the criterion is documented, including relevant integration, tests, edge cases, or debugging.",
+    "4": "Complexity, trade-offs, and a measured/reproducible outcome are documented for the criterion; do not infer impact that the CV does not state."
+  },
+  "roles": [
+    {
+      "role_id": "backend_node_nestjs",
+      "title": "Thực tập sinh Backend Node.js/NestJS",
+      "jd_text": "Tham gia xây dựng và bảo trì API nội bộ bằng Node.js/NestJS; tích hợp PostgreSQL; viết kiểm thử; xử lý lỗi và phối hợp bàn giao qua Git. Đây là JD hư cấu chỉ dùng cho fixture.",
+      "criteria": [
+        {"criterion_id": "node_api", "label": "API Node.js/NestJS", "description": "Triển khai endpoint, validation, authorization hoặc xử lý lỗi phù hợp với yêu cầu.", "evidence_scope": "Phần việc cá nhân, hành vi endpoint, xử lý biên và tích hợp."},
+        {"criterion_id": "node_data", "label": "Lưu trữ dữ liệu", "description": "Tương tác với PostgreSQL hoặc persistence layer cho một luồng nghiệp vụ.", "evidence_scope": "Truy vấn, schema/migration, transaction hoặc tính đúng đắn dữ liệu."},
+        {"criterion_id": "node_testing", "label": "Kiểm thử và gỡ lỗi", "description": "Kiểm thử, tái hiện lỗi, xử lý lỗi hoặc bàn giao kỹ thuật.", "evidence_scope": "Test cá nhân, case biên, debugging và kết quả được nêu rõ."}
+      ]
+    },
+    {
+      "role_id": "ai_ml_intern",
+      "title": "Thực tập sinh AI/ML",
+      "jd_text": "Hỗ trợ chuẩn bị dữ liệu và thực nghiệm mô hình bằng Python; chọn cách đánh giá phù hợp; lưu cấu hình để người khác tái lập kết quả. Đây là JD hư cấu chỉ dùng cho fixture.",
+      "criteria": [
+        {"criterion_id": "ml_python_data", "label": "Python và dữ liệu", "description": "Thực hiện xử lý dữ liệu hoặc pipeline học máy bằng Python.", "evidence_scope": "Thao tác dữ liệu cụ thể, kiểm soát leakage và phần việc cá nhân."},
+        {"criterion_id": "ml_evaluation", "label": "Thiết kế đánh giá", "description": "Đánh giá mô hình bằng phép đo và cách chia dữ liệu phù hợp.", "evidence_scope": "Metric, split, baseline, giới hạn hoặc kết quả được ghi rõ."},
+        {"criterion_id": "ml_reproducibility", "label": "Tái lập thực nghiệm", "description": "Ghi cấu hình/mã để thực nghiệm có thể được chạy lại.", "evidence_scope": "Seed, config, script, version hoặc artifact được mô tả."}
+      ]
+    },
+    {
+      "role_id": "dotnet_fullstack_intern",
+      "title": "Thực tập sinh .NET Full-stack",
+      "jd_text": "Phát triển một luồng chức năng với C#/.NET, kết nối API và cơ sở dữ liệu, phối hợp giao diện với backend, kiểm thử và bàn giao qua Git. Đây là JD hư cấu chỉ dùng cho fixture.",
+      "criteria": [
+        {"criterion_id": "dotnet_feature", "label": "Triển khai .NET", "description": "Viết chức năng ứng dụng bằng C#/.NET.", "evidence_scope": "Phần việc, luồng xử lý, validation hoặc lỗi được xử lý."},
+        {"criterion_id": "dotnet_integration", "label": "Tích hợp API và dữ liệu", "description": "Nối API/service với persistence và/hoặc giao diện.", "evidence_scope": "Request/response, schema, migration, transaction hoặc luồng end-to-end."},
+        {"criterion_id": "dotnet_testing", "label": "Kiểm thử và bàn giao", "description": "Kiểm thử chức năng và bàn giao thay đổi có thể kiểm tra lại.", "evidence_scope": "Test cụ thể, lỗi đã sửa, Git/CI hoặc tài liệu bàn giao."}
+      ]
+    },
+    {
+      "role_id": "android_intern",
+      "title": "Thực tập sinh Android",
+      "jd_text": "Xây dựng màn hình/chức năng Android bằng Kotlin hoặc Java; quản lý trạng thái/lifecycle; tích hợp API hoặc lưu trữ cục bộ; kiểm thử và gỡ lỗi. Đây là JD hư cấu chỉ dùng cho fixture.",
+      "criteria": [
+        {"criterion_id": "android_feature", "label": "Chức năng Android", "description": "Triển khai một tính năng/màn hình Android bằng Kotlin hoặc Java.", "evidence_scope": "Tác vụ người dùng, phần việc cá nhân và hành vi chức năng."},
+        {"criterion_id": "android_lifecycle_api", "label": "Lifecycle và dữ liệu", "description": "Xử lý lifecycle/state và API hoặc persistence phù hợp.", "evidence_scope": "ViewModel/state, navigation, API, cache hoặc lưu cục bộ."},
+        {"criterion_id": "android_testing", "label": "Kiểm thử và gỡ lỗi", "description": "Kiểm thử hoặc xử lý lỗi trong ứng dụng Android.", "evidence_scope": "Test cụ thể, tái hiện lỗi, lifecycle/rotation hoặc debugging."}
+      ]
+    },
+    {
+      "role_id": "java_spring_backend_intern",
+      "title": "Thực tập sinh Backend Java/Spring",
+      "jd_text": "Phát triển REST API bằng Java/Spring; thao tác dữ liệu quan hệ; viết kiểm thử và gỡ lỗi cho chức năng backend. Đây là JD hư cấu chỉ dùng cho fixture.",
+      "criteria": [
+        {"criterion_id": "spring_api", "label": "API Java/Spring", "description": "Triển khai REST endpoint và quy tắc nghiệp vụ bằng Spring.", "evidence_scope": "Controller/service, validation, status/error handling và phần việc cá nhân."},
+        {"criterion_id": "spring_data", "label": "Dữ liệu quan hệ", "description": "Lưu/truy vấn dữ liệu bằng SQL/JPA hoặc công cụ tương đương.", "evidence_scope": "Entity/query, schema, transaction, migration hoặc tính nhất quán."},
+        {"criterion_id": "spring_testing", "label": "Kiểm thử và gỡ lỗi", "description": "Viết test hoặc xử lý lỗi cho chức năng Spring.", "evidence_scope": "Unit/integration test, mock, lỗi tái hiện hoặc sửa lỗi."}
+      ]
+    }
+  ]
+}
