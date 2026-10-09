@@ -109,3 +109,21 @@ async def rerank_candidates(*,db,run,policy,stage,candidates_by_criterion,focus_
     await persist_rerank_stage(db,run,result,policy=policy)
     record_trace_metadata({'rerank_mode':policy.mode,'result_count':len(result.judgments),'rerank_elapsed_ms':result.elapsed_ms})
     return result
+
+
+async def rerank_retrieval_pool(*,db,run,criteria,candidates,stage,focus_ids=(),provider_override=None,financial_policy=None):
+    from .prompt import pairs_from_candidates
+    policy=load_rerank_policy(run.snapshot)
+    pairs=pairs_from_candidates([criterion_from_row(c) for c in criteria],candidates,
+        sanitized_version_id=run.sanitized_version_id,rubric_version_id=run.rubric_version_id)
+    spans={s.span_id:s.section_label for s in (await db.scalars(select(SourceSpan).where(SourceSpan.sanitized_version_id==run.sanitized_version_id))).all()}
+    for c,ps in pairs.items():
+        updated=[]
+        for p in ps:
+            labels={spans[s] for s in p.span_ids if s in spans and spans[s]}
+            if len(labels)>1 or any(s not in spans for s in p.span_ids):raise RerankError('HYBRID_RETRIEVAL_PROVENANCE_INVALID')
+            updated.append(p.model_copy(update={'section':next(iter(labels)) if labels else None}))
+        pairs[c]=tuple(updated)
+    result=await rerank_candidates(db=db,run=run,policy=policy,stage=stage,candidates_by_criterion=pairs,
+        focus_ids=tuple(focus_ids),provider_override=provider_override,financial_policy=financial_policy)
+    return result,pairs

@@ -111,12 +111,11 @@ def _build_evidence_query(criterion_name, criterion_description, bilingual_terms
 
 @observed("hybrid_retrieve_for_criterion", run_type="retriever",
     result_metadata=lambda result: {"result_count": len(result)})
-async def hybrid_retrieve_for_criterion(
+async def collect_hybrid_candidates(
     db: AsyncSession,
     sanitized_version_id: uuid.UUID,
     criterion_name: str,
     criterion_description: str,
-    top_k: int = 4,
     *,
     bilingual_terms: dict[str, Any] | None = None,
     anchor_terms: list[str] | None = None,
@@ -198,7 +197,15 @@ async def hybrid_retrieve_for_criterion(
         )
 
     scores.sort(key=lambda score: (-score.rrf_score, score.chunk_index, str(score.chunk_id)))
-    return scores[: max(0, top_k)]
+    return scores
+
+
+async def hybrid_retrieve_for_criterion(db: AsyncSession,sanitized_version_id: uuid.UUID,
+    criterion_name: str,criterion_description: str,top_k: int=4,*,bilingual_terms=None,
+    anchor_terms=None,channels=frozenset({'dense','lexical'}),pipeline_version='v1')->list[RetrievedChunkScore]:
+    scores=await collect_hybrid_candidates(db,sanitized_version_id,criterion_name,criterion_description,
+        bilingual_terms=bilingual_terms,anchor_terms=anchor_terms,channels=channels,pipeline_version=pipeline_version)
+    return scores[:max(0,top_k)]
 
 
 async def _load_span_sections(
@@ -259,6 +266,9 @@ async def build_hybrid_assessment_pack(
     channels: frozenset[str] = frozenset({"dense", "lexical"}),
     pipeline_version: str = "v1",
     diagnostics: AssessmentDiagnostics | None = None,
+    candidates_by_criterion: dict[str, list[RetrievedChunkScore]] | None = None,
+    rerank_result=None,
+    rerank_pairs_by_criterion=None,
 ) -> dict[str, Any]:
     """Build a bounded, section-diverse evidence pack for the approved rubric."""
     config_id = embedding_config_id(pipeline_version)
@@ -270,20 +280,24 @@ async def build_hybrid_assessment_pack(
 
     for criterion in criteria:
         criterion_id = criterion.get("id") or criterion.get("name", "unknown")
-        matches = await hybrid_retrieve_for_criterion(
-            db,
-            sanitized_version_id,
-            criterion.get("name", ""),
-            criterion.get("description", ""),
-            top_k=30 if pipeline_version == "v2" else DENSE_CANDIDATE_LIMIT,
-            **({"pipeline_version": pipeline_version} if pipeline_version != "v1" else {}),
-            bilingual_terms=criterion.get("bilingual_terms"),
-            **({"channels": channels} if channels != frozenset({"dense", "lexical"}) else {}),
-            anchor_terms=[
-                *_flatten_text_values(criterion.get("anchors")),
-                *_flatten_text_values(criterion.get("anchor_terms")),
-            ],
-        )
+        if candidates_by_criterion is not None:
+            if criterion_id not in candidates_by_criterion:raise ValueError('RERANK_POOL_SCOPE_INVALID')
+            matches = candidates_by_criterion[criterion_id]
+        else:
+            matches = await hybrid_retrieve_for_criterion(
+                db,
+                sanitized_version_id,
+                criterion.get("name", ""),
+                criterion.get("description", ""),
+                top_k=30 if pipeline_version == "v2" else DENSE_CANDIDATE_LIMIT,
+                **({"pipeline_version": pipeline_version} if pipeline_version != "v1" else {}),
+                bilingual_terms=criterion.get("bilingual_terms"),
+                **({"channels": channels} if channels != frozenset({"dense", "lexical"}) else {}),
+                anchor_terms=[
+                    *_flatten_text_values(criterion.get("anchors")),
+                    *_flatten_text_values(criterion.get("anchor_terms")),
+                ],
+            )
         candidate_matches_by_criterion[criterion_id] = matches
         for match in matches:
             all_matches_by_chunk_id.setdefault(match.chunk_id, match)
@@ -310,12 +324,26 @@ async def build_hybrid_assessment_pack(
     eligible_chunk_ids = set()
     size_excluded_chunk_ids = set()
     for criterion_id, candidates in candidate_matches_by_criterion.items():
-        diverse_matches = _select_diverse_matches(
-            candidates,
-            section_by_chunk_id,
-            valid_span_ids_by_chunk_id,
-            MAX_EVIDENCE_CHUNKS_PER_CRITERION,
-        )
+        if rerank_result is not None and rerank_result.mode in {'rerank','gate_experiment'}:
+            if rerank_pairs_by_criterion is None:raise ValueError('RERANK_POOL_SCOPE_INVALID')
+            pairs={p.pair_id:p for p in rerank_pairs_by_criterion.get(criterion_id,())}
+            matches_by_id={str(m.chunk_id):m for m in candidates}
+            chosen=rerank_result.selected_pair_ids_by_criterion.get(criterion_id)
+            if chosen is None or len(chosen)>MAX_EVIDENCE_CHUNKS_PER_CRITERION or set(chosen)-set(pairs):
+                raise ValueError('RERANK_POOL_SCOPE_INVALID')
+            diverse_matches=[]
+            for pair_id in chosen:
+                pair=pairs[pair_id];match=matches_by_id.get(pair.chunk_id)
+                if match is None or match.text!=pair.text or tuple(match.span_ids)!=pair.span_ids or not valid_span_ids_by_chunk_id[match.chunk_id]:
+                    raise ValueError('RERANK_POOL_SCOPE_INVALID')
+                diverse_matches.append(match)
+        else:
+            diverse_matches = _select_diverse_matches(
+                candidates,
+                section_by_chunk_id,
+                valid_span_ids_by_chunk_id,
+                MAX_EVIDENCE_CHUNKS_PER_CRITERION,
+            )
         criterion_results: list[dict[str, Any]] = []
         for match in diverse_matches:
             eligible_chunk_ids.add(match.chunk_id)

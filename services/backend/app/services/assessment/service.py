@@ -199,6 +199,7 @@ async def create_assessment_run(
     ctx: AuthenticatedContext,
     *,
     execution_policy: AssessmentExecutionPolicy | None = None,
+    rerank_policy_override=None,
 ) -> AssessmentRunResponse:
     """Validate preconditions and enqueue an assessment run job.
     Preconditions:
@@ -312,6 +313,14 @@ async def create_assessment_run(
     if execution_policy:
         snapshot["assessment_execution_policy"] = execution_policy.to_snapshot()
         snapshot["assessment_execution_policy_hash"] = execution_policy.digest
+    from app.services.reranking.policy import freeze_rerank_policy
+    rerank_policy=rerank_policy_override or freeze_rerank_policy(settings)
+    if rerank_policy.enabled:
+        if retrieval_strategy!='hybrid' or pipeline_version!='v2':raise ValueError('JEV_RERANK_REQUIRES_HYBRID_V2')
+        if rerank_policy.mode=='gate_experiment' and (settings.APP_ENV!='sandbox' or execution_policy is None):
+            raise ValueError('JEV_GATE_SANDBOX_ONLY')
+        snapshot['reranking_policy']=rerank_policy.model_dump(mode='json')
+        snapshot['reranking_policy_hash']=rerank_policy.digest
     snapshot_hash = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode("utf-8")).hexdigest()
 
     # Enqueue Job
@@ -386,6 +395,8 @@ async def execute_assessment_job(
     *,
     diagnostics: AssessmentDiagnostics | None = None,
     strict_reservation_policy: StrictReservationPolicy | None = None,
+    rerank_provider_override: BaseLLMProvider | None = None,
+    rerank_financial_policy=None,
 ) -> None:
     """Execute an assessment against the prompt and retrieval strategy frozen at enqueue."""
     now = datetime.now(timezone.utc)
@@ -454,6 +465,8 @@ async def execute_assessment_job(
     )
     try:
         execution_policy = load_execution_policy(run.snapshot)
+        from app.services.reranking.policy import load_rerank_policy
+        rerank_policy = load_rerank_policy(run.snapshot)
         system_prompt = get_assessment_prompt(assessment_prompt_version)
     except ValueError:
         run.status = "failed"
@@ -504,6 +517,20 @@ async def execute_assessment_job(
                 rubric_criteria,
                 key=lambda criterion: (criterion.criterion_id not in focus_ids, criterion.criterion_id),
             )
+            rerank_kwargs={}
+            if rerank_policy.enabled:
+                from app.services.retrieval import collect_hybrid_candidates
+                from app.services.agent.tools import _anchor_query_terms
+                from app.services.reranking.service import rerank_retrieval_pool
+                candidates={}
+                for criterion in ordered_criteria:
+                    candidates[criterion.criterion_id]=await collect_hybrid_candidates(db,run.sanitized_version_id,
+                        criterion.label_vi,criterion.description_vi,bilingual_terms=criterion.bilingual_terms,
+                        anchor_terms=_anchor_query_terms(criterion.anchors),pipeline_version=pipeline_version,
+                        channels=execution_policy.channels if execution_policy else frozenset({'dense','lexical'}))
+                result,pairs=await rerank_retrieval_pool(db=db,run=run,criteria=ordered_criteria,candidates=candidates,stage='initial',
+                    focus_ids=tuple(focus_ids),provider_override=rerank_provider_override,financial_policy=rerank_financial_policy)
+                rerank_kwargs={'candidates_by_criterion':candidates,'rerank_result':result,'rerank_pairs_by_criterion':pairs}
             with measure_stage(diagnostics, "retrieval"):
                 pack = await build_hybrid_assessment_pack(
                     db,
@@ -518,6 +545,7 @@ async def execute_assessment_job(
                         }
                         for criterion in ordered_criteria
                     ],
+                    **rerank_kwargs,
                     **({"pipeline_version": pipeline_version} if pipeline_version != "v1" else {}),
                     **({"diagnostics": diagnostics} if diagnostics else {}),
                     **({"channels": execution_policy.channels, "max_evidence_chars": execution_policy.max_evidence_chars}
@@ -528,7 +556,7 @@ async def execute_assessment_job(
             # CV. HR gets a failed run and can use the baseline/manual path.
             logger.warning("Hybrid retrieval failed for assessment %s (%s).", run.id, type(exc).__name__)
             run.status = "failed"
-            run.failure_code = "HYBRID_RETRIEVAL_FAILED"
+            run.failure_code = getattr(exc,"error_code",None) or "HYBRID_RETRIEVAL_FAILED"
             record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
             run.completed_at = datetime.now(timezone.utc)
             await db.flush()
@@ -648,6 +676,7 @@ async def execute_assessment_job(
                 initial_pack=agent_pack,
                 provider_override=provider_override,
                 focus_criterion_ids=run.snapshot.get("focus_criterion_ids"),
+                **({"rerank_provider_override":rerank_provider_override,"rerank_financial_policy":rerank_financial_policy} if rerank_policy.enabled else {}),
                 **({"execution_policy": execution_policy} if execution_policy else {}),
                 **({"diagnostics": diagnostics} if diagnostics else {}),
                 **({"strict_reservation_policy": strict_reservation_policy} if strict_reservation_policy else {}),

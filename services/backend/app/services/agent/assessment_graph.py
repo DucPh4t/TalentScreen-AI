@@ -180,6 +180,8 @@ async def run_assessment_agent(
     execution_policy: AssessmentExecutionPolicy | None = None,
     diagnostics: AssessmentDiagnostics | None = None,
     strict_reservation_policy: StrictReservationPolicy | None = None,
+    rerank_provider_override: BaseLLMProvider | None = None,
+    rerank_financial_policy=None,
 ) -> AgentExecutionResult:
     """Run a transient, no-checkpointer graph with at most two validated tool executions."""
     expected_criterion_ids = {criterion.criterion_id for criterion in rubric_criteria}
@@ -472,15 +474,25 @@ async def run_assessment_agent(
                         or set(criterion_ids) - set(eligible_ids)
                     ):
                         raise AgentToolError("Requested criteria do not need additional evidence.")
+                    from app.services.reranking.policy import load_rerank_policy
+                    grouped=None
+                    if load_rerank_policy(run.snapshot).enabled:
+                        from app.services.agent.tools import retrieve_more_evidence_by_criterion
+                        grouped=await retrieve_more_evidence_by_criterion(db=db,run=run,rubric_criteria=rubric_criteria,
+                            criterion_ids=criterion_ids,query_hint=query_hint,rerank_stage=f'tool_{executed+1}',
+                            rerank_provider_override=rerank_provider_override,rerank_financial_policy=rerank_financial_policy)
                     criteria_results: dict[str, list[dict[str, Any]]] = {}
                     for criterion_id in criterion_ids:
-                        matches = await retrieve_more_evidence(
-                            db=db,
-                            run=run,
-                            rubric_criteria=rubric_criteria,
-                            criterion_ids=[criterion_id],
-                            query_hint=query_hint,
-                        )
+                        if grouped is not None:
+                            matches=grouped[criterion_id]
+                        else:
+                            matches = await retrieve_more_evidence(
+                                db=db,
+                                run=run,
+                                rubric_criteria=rubric_criteria,
+                                criterion_ids=[criterion_id],
+                                query_hint=query_hint,
+                            )
                         criteria_results[criterion_id] = []
                         for match in matches:
                             span_ids = [span_id for span_id in match.span_ids if isinstance(span_id, str)]
@@ -539,13 +551,14 @@ async def run_assessment_agent(
                     "tool_call_id": call.id,
                     "content": json.dumps(tool_result, ensure_ascii=False, separators=(",", ":")),
                 })
-            except (AgentToolError, KeyError, TypeError, ValueError):
+            except (AgentToolError, KeyError, TypeError, ValueError) as exc:
+                tool_error_code=getattr(exc,"error_code",None) or "AGENT_TOOL_SCOPE_REJECTED"
                 entry["outcome"] = "blocked"
-                entry["error_code"] = "AGENT_TOOL_SCOPE_REJECTED"
+                entry["error_code"] = tool_error_code
                 trace_calls.append(entry)
                 trace["tool_calls"] = trace_calls
                 trace["outcome"] = "failed"
-                trace["error_code"] = "AGENT_TOOL_SCOPE_REJECTED"
+                trace["error_code"] = tool_error_code
                 return {
                     "messages": messages,
                     "source_spans": spans,
@@ -554,7 +567,7 @@ async def run_assessment_agent(
                     "pending_span_criteria": pending_map,
                     "tool_execution_count": executed,
                     "trace": trace,
-                    "error_code": "AGENT_TOOL_SCOPE_REJECTED",
+                    "error_code": tool_error_code,
                 }
             executed += 1
             trace_calls.append(entry)

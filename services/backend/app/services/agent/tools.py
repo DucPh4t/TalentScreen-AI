@@ -116,50 +116,50 @@ def _safe_query_hint(query_hint: str) -> str:
     return cleaned
 
 
-@observed("retrieve_more_evidence", run_type="tool", result_metadata=lambda result: {"result_count": len(result)})
-async def retrieve_more_evidence(
-    *,
-    db: AsyncSession,
-    run: AssessmentRun,
-    rubric_criteria: list[RubricCriterion],
-    criterion_ids: list[str],
-    query_hint: str,
-) -> list[RetrievedChunkScore]:
-    """Search only requested approved criteria in the run's sanitized CV version."""
-    await _require_approved_snapshot(db, run)
-    query = _safe_query_hint(query_hint)
-    if (
-        not isinstance(criterion_ids, list)
-        or not criterion_ids
-        or len(criterion_ids) > MAX_AGENT_CRITERIA_PER_RETRIEVAL
-        or len(set(criterion_ids)) != len(criterion_ids)
-    ):
-        raise AgentToolError("Criterion scope is invalid.")
-
-    criteria_by_id = {
-        criterion.criterion_id: criterion
-        for criterion in rubric_criteria
-        if criterion.rubric_version_id == run.rubric_version_id
-    }
-    if set(criterion_ids) - set(criteria_by_id):
-        raise AgentToolError("Requested criteria are outside the approved rubric.")
-
-    results: list[RetrievedChunkScore] = []
+async def retrieve_more_evidence_by_criterion(*,db,run,rubric_criteria,criterion_ids,query_hint,
+    rerank_stage=None,rerank_provider_override=None,rerank_financial_policy=None):
+    await _require_approved_snapshot(db,run)
+    query=_safe_query_hint(query_hint)
+    if (not isinstance(criterion_ids,list) or not criterion_ids or len(criterion_ids)>4 or len(set(criterion_ids))!=len(criterion_ids)):
+        raise AgentToolError('Criterion request is invalid.')
+    criteria_by_id={c.criterion_id:c for c in rubric_criteria}
+    if set(criterion_ids)-set(criteria_by_id):raise AgentToolError('Criterion request is outside the approved rubric.')
+    from app.services.reranking.policy import load_rerank_policy
+    policy=load_rerank_policy(run.snapshot)
+    pools={}
     for criterion_id in criterion_ids:
-        criterion = criteria_by_id[criterion_id]
-        results.extend(await hybrid_retrieve_for_criterion(
-            db,
-            run.sanitized_version_id,
-            criterion.label_vi,
-            (f"{query} {criterion.description_vi}" if run.snapshot.get("rag_pipeline_version") == "v2"
-             else f"{criterion.description_vi} {query}"),
-            top_k=4,
-            **({"pipeline_version": run.snapshot["rag_pipeline_version"]}
-               if run.snapshot.get("rag_pipeline_version", "v1") != "v1" else {}),
-            bilingual_terms=criterion.bilingual_terms,
-            anchor_terms=_anchor_query_terms(criterion.anchors),
-        ))
-    return results
+        c=criteria_by_id[criterion_id]
+        pools[criterion_id]=await hybrid_retrieve_for_criterion(db,run.sanitized_version_id,c.label_vi,
+            f'{query} {c.description_vi}' if run.snapshot.get('rag_pipeline_version')=='v2' else f'{c.description_vi} {query}',
+            top_k=30 if policy.enabled else 4,pipeline_version=run.snapshot.get('rag_pipeline_version','v1'),
+            bilingual_terms=c.bilingual_terms,anchor_terms=_anchor_query_terms(c.anchors))
+    if policy.enabled:
+        if rerank_stage not in {'tool_1','tool_2'}:raise AgentToolError('Reranking stage must be assigned by the graph.')
+        from app.services.reranking.service import rerank_retrieval_pool
+        result,pairs=await rerank_retrieval_pool(db=db,run=run,criteria=[criteria_by_id[c] for c in criterion_ids],
+            candidates=pools,stage=rerank_stage,focus_ids=tuple(criterion_ids),provider_override=rerank_provider_override,financial_policy=rerank_financial_policy)
+        from app.services.retrieval import _load_span_sections,_select_diverse_matches
+        if policy.mode in {'rerank','gate_experiment'}:
+            for c in pools:
+                by_pair={p.pair_id:p.chunk_id for p in pairs[c]};by_chunk={str(m.chunk_id):m for m in pools[c]}
+                pools[c]=[by_chunk[by_pair[pid]] for pid in result.selected_pair_ids_by_criterion[c]]
+        else:
+            # Shadow must reproduce the old four-result tool response exactly.
+            pools={c:ps[:4] for c,ps in pools.items()}
+    return pools
+
+
+@observed('retrieve_more_evidence',run_type='tool',result_metadata=lambda result:{'result_count':len(result)})
+async def retrieve_more_evidence(*,db,run,rubric_criteria,criterion_ids,query_hint,rerank_stage=None,
+    rerank_provider_override=None,rerank_financial_policy=None)->list[RetrievedChunkScore]:
+    pools=await retrieve_more_evidence_by_criterion(db=db,run=run,rubric_criteria=rubric_criteria,
+        criterion_ids=criterion_ids,query_hint=query_hint,rerank_stage=rerank_stage,
+        rerank_provider_override=rerank_provider_override,rerank_financial_policy=rerank_financial_policy)
+    result=[];seen=set()
+    for ps in pools.values():
+        for p in ps:
+            if p.chunk_id not in seen:result.append(p);seen.add(p.chunk_id)
+    return result
 
 
 @observed("get_source_spans", run_type="tool", result_metadata=lambda result: {"result_count": len(result)})
