@@ -20,7 +20,19 @@ def diverse(pairs,limit,selected=()):
     return result
 
 
-def rank_and_select(pairs: tuple[PassagePair,...],judgments: tuple[PairJudgment,...],policy: RerankPolicy,*,stage: Stage,elapsed_ms: int=0)->RerankStageResult:
+from app.services.observability import trace_span
+
+
+def rank_and_select(*args, **kwargs)->RerankStageResult:
+    policy = args[2] if len(args)>2 else kwargs["policy"]
+    with trace_span("jev_gate", metadata={"rerank_mode":policy.mode,"rerank_policy_version":policy.policy_version}) as span:
+        result = _rank_and_select(*args, **kwargs)
+        span.record({"result_count":sum(len(ids) for ids in result.selected_pair_ids_by_criterion.values()),
+            "omitted_count":result.omitted_limiting_count})
+        return result
+
+
+def _rank_and_select(pairs: tuple[PassagePair,...],judgments: tuple[PairJudgment,...],policy: RerankPolicy,*,stage: Stage,elapsed_ms: int=0)->RerankStageResult:
     by_id={p.pair_id:p for p in pairs};js={j.pair_id:j for j in judgments}
     if len(js)!=len(judgments) or set(js)-set(by_id):raise ValueError('JEV_JUDGMENT_INVALID')
     ordered={};selected={};omitted=0

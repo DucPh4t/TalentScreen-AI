@@ -33,14 +33,17 @@ ERROR_CODES = frozenset({"TRACE_STEP_FAILED", "TRACE_CANCELLED", "ASSESSMENT_OUT
     "ASSESSMENT_CONTEXT_LIMIT", "PreconditionViolationError", "BudgetExceededError",
     "LLMAuthenticationError", "LLMQuotaExhaustedError", "LLMModelUnavailableError",
     "LLMProviderError", "LLMTimeoutError", "LLMTruncatedError", "LLMEmptyResponseError",
-    "LLMMalformedJSONError", "LLMRefusalError", "AgentToolError"})
+    "LLMMalformedJSONError", "LLMRefusalError", "AgentToolError",
+    "JEV_RERANK_FAILED", "RERANK_POLICY_INVALID", "RERANK_BOUND_EXCLUDED", "RERANK_RECONCILIATION_REQUIRED"})
 COUNTERS = frozenset({"model_round_trips", "tool_execution_count", "repair_count", "criterion_count",
     "result_criterion_count", "result_count", "source_span_count", "tool_call_count",
     "input_tokens", "output_tokens", "total_tokens", "validation_error_count", "attempt_no",
     "max_output_tokens", "external_call_count", "provider_latency_ms", "cached_input_tokens",
-    "rejected_citations", "normalized_criteria", "schema_failures"})
+    "rejected_citations", "normalized_criteria", "schema_failures", "rerank_elapsed_ms", "omitted_count"})
 UUID_FIELDS = frozenset({"assessment_run_id", "job_id", "jd_version_id", "experiment_id"})
 ENUMS = {
+    "rerank_mode": {"off", "shadow", "rerank", "gate_experiment"},
+    "rerank_policy_version": {"jev-evidence-ranking.v1"},
     "benchmark_profile": {"full_text", "dense", "hybrid", "hybrid_agent"},
     "node": NODES, "outcome": OUTCOMES, "error_code": ERROR_CODES,
     "retrieval_strategy": {"hybrid", "full_text_baseline"},

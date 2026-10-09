@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, Literal
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
@@ -104,6 +104,15 @@ class CriterionAssessmentResponse(BaseModel):
     evidence: list[CriterionEvidenceResponse] = []
 
 
+class RerankingSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["off", "shadow", "rerank", "gate_experiment"]
+    applied: bool
+    omitted_count: int = Field(ge=0)
+    needs_evidence_review: bool
+    error_code: str | None = None
+
+
 class AssessmentRunResponse(BaseModel):
     id: uuid.UUID
     application_id: uuid.UUID
@@ -121,3 +130,4 @@ class AssessmentRunResponse(BaseModel):
     secondary_model_output: Optional[dict[str, Any]] = None
     criteria: list[CriterionAssessmentResponse] = []
     is_stale: bool = False
+    reranking_summary: RerankingSummary | None = None

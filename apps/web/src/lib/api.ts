@@ -77,7 +77,16 @@ export interface AssessmentExecutionTraceData {
   tool_calls?: AssessmentExecutionToolCallData[];
 }
 
+export interface RerankingSummaryData {
+  mode: "off" | "shadow" | "rerank" | "gate_experiment";
+  applied: boolean;
+  omitted_count: number;
+  needs_evidence_review: boolean;
+  error_code: string | null;
+}
+
 export interface AssessmentRunData {
+  reranking_summary?: RerankingSummaryData | null;
   id: string;
   application_id: string;
   run_no: number;

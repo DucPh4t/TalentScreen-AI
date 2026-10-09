@@ -43,6 +43,7 @@ from app.schemas.assessment import (
     CriterionAssessmentSchema,
     CriterionAssessmentResponse,
     CriterionEvidenceResponse,
+    RerankingSummary,
 )
 from app.services.assessment.prompt import (
     AGENT_PROMPT_VERSION,
@@ -963,6 +964,31 @@ async def get_assessment_run_detail(
 
     is_stale = run.application_generation != run.application.generation
 
+    # Authorized presentation data only: never return the private ranking journal.
+    summary = None
+    if run.snapshot.get("reranking_policy") is not None:
+        from app.services.reranking.policy import load_rerank_policy
+        from app.services.observability import ERROR_CODES
+        try:
+            policy = load_rerank_policy(run.snapshot)
+            stages = (run.rerank_output or {}).get("stages", [])
+            omitted_ids = set()
+            limiting = 0
+            for stage in stages:
+                selected = {pid for ids in stage.get("selected_pair_ids_by_criterion", {}).values() for pid in ids}
+                known = {pid for ids in stage.get("ordered_pair_ids_by_criterion", {}).values() for pid in ids}
+                known.update(j["pair_id"] for j in stage.get("judgments", []) if "pair_id" in j)
+                omitted_ids.update(known - selected)
+                limiting += stage.get("omitted_limiting_count", 0)
+            omitted = max(len(omitted_ids), limiting)
+            applied = policy.mode in {"rerank", "gate_experiment"} and bool(stages)
+            code = run.failure_code if run.failure_code in ERROR_CODES else None
+            summary = RerankingSummary(mode=policy.mode, applied=applied, omitted_count=omitted,
+                needs_evidence_review=applied and (omitted > 0 or bool(code)), error_code=code)
+        except (ValueError, TypeError, KeyError):
+            summary = RerankingSummary(mode="off", applied=False, omitted_count=0,
+                needs_evidence_review=False, error_code="RERANK_POLICY_INVALID")
+
     return AssessmentRunResponse(
         id=run.id,
         application_id=run.application_id,
@@ -980,4 +1006,5 @@ async def get_assessment_run_detail(
         secondary_model_output=run.secondary_model_output,
         criteria=criteria_resp,
         is_stale=is_stale,
+        reranking_summary=summary,
     )

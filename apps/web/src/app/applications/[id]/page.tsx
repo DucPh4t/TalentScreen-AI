@@ -27,6 +27,7 @@ import RawPdfViewer from "@/components/RawPdfViewer";
 import ScreeningDecision from "@/components/ScreeningDecision";
 import InterviewWorkspace from "@/components/InterviewWorkspace";
 import {screeningPayload, workflowTab, preserveEditBase, refreshInterviewCards} from "@/lib/hr-workflow";
+import { evidenceReviewMessage } from "@/lib/reranking-summary";
 import { stageLabels } from "@/lib/workflow";
 import { SkeletonDossier } from "@/components/Skeleton";
 
@@ -940,6 +941,13 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                   </div>
                 </div>
               </div>
+
+              {evidenceReviewMessage(assessmentRun.reranking_summary) && (
+                <section className="card" role="status" aria-label="Đối chiếu bằng chứng" style={{marginBottom:"1.5rem",borderColor:"var(--border-subtle)"}}>
+                  <p style={{lineHeight:1.6,overflowWrap:"anywhere"}}>{evidenceReviewMessage(assessmentRun.reranking_summary)}</p>
+                  <button className="btn btn-secondary" style={{marginTop:"0.75rem"}} onClick={()=>setActiveTab("sanitization")}>Đối chiếu CV</button>
+                </section>
+              )}
 
               {assessmentRun.secondary_model_output && (
                 <section className="card" aria-label="Kết quả đối chiếu Jev" style={{ marginBottom: "1.5rem", borderColor: "var(--border-subtle)" }}>
