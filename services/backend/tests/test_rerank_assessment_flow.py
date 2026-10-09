@@ -1,3 +1,4 @@
+from datetime import date
 import pytest
 from sqlalchemy import select
 from decimal import Decimal
@@ -45,7 +46,7 @@ async def test_actual_service_calls_jev_before_primary(test_session_factory,agen
         run.snapshot={**run.snapshot,'assessment_execution_policy':ep.to_snapshot(),'assessment_execution_policy_hash':ep.digest,
             'assessment_prompt_version':ep.assessment_prompt_version}
         await db.commit()
-        financial=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        financial=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),date.today().isoformat(),frozenset(p.accepted_models),p.endpoint)
         jev=ChoiceProvider()
         with scripted_embeddings(True):
             await execute_assessment_job(db,run.job_id,provider_override=BenchmarkMockProvider(),
@@ -108,7 +109,13 @@ async def test_initial_rerank_pool_uses_identical_baseline_anchor_query(test_ses
     from app.services.assessment.policy import benchmark_policy
     from app.services import retrieval
     monkeypatch.setattr(get_settings(),'JEV_DATA_PROCESSING_APPROVED',True)
-    captured=[];original=retrieval.collect_hybrid_candidates
+    captured=[];seen_focus=[];original=retrieval.collect_hybrid_candidates
+    from app.services.reranking import service as ranking_service
+    original_pool=ranking_service.rerank_retrieval_pool
+    async def capture_pool(**kwargs):
+        seen_focus.append(kwargs["focus_ids"])
+        return await original_pool(**kwargs)
+    monkeypatch.setattr(ranking_service,"rerank_retrieval_pool",capture_pool)
     async def capture(*args,**kwargs):
         captured.append(kwargs['anchor_terms'])
         return await original(*args,**kwargs)
@@ -120,14 +127,16 @@ async def test_initial_rerank_pool_uses_identical_baseline_anchor_query(test_ses
             'disqualifying_evidence':['unsupported framework claim']}}
         ep=benchmark_policy('hybrid',retrieval_version='v2')
         run.snapshot={**run.snapshot,'assessment_execution_policy':ep.to_snapshot(),'assessment_execution_policy_hash':ep.digest,
-            'assessment_prompt_version':ep.assessment_prompt_version}
+            'assessment_prompt_version':ep.assessment_prompt_version,'focus_criterion_ids':['python_backend','api_design']}
         await db.commit()
-        financial=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        financial=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),date.today().isoformat(),frozenset(p.accepted_models),p.endpoint)
         with scripted_embeddings(True):
             await execute_assessment_job(db,run.job_id,provider_override=BenchmarkMockProvider(),
                 rerank_provider_override=ChoiceProvider(),rerank_financial_policy=financial)
         assert run.status=='succeeded'
         assert captured[0]==retrieval._flatten_text_values(criterion.anchors)
+
+        assert seen_focus==[('api_design','python_backend')]
 
 
 @pytest.mark.asyncio

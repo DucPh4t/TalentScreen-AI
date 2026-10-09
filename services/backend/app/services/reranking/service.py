@@ -61,15 +61,20 @@ async def require_scope(db,run,policy,pairs):
     result_metadata=lambda result:{'result_count':len(result.judgments),'rerank_elapsed_ms':result.elapsed_ms})
 async def rerank_candidates(*,db,run,policy,stage,candidates_by_criterion,focus_ids=(),provider_override=None,financial_policy=None):
     pairs=tuple(p for ps in candidates_by_criterion.values() for p in ps)
-    if len(pairs)>360 or len({p.pair_id for p in pairs})!=len(pairs):raise RerankError('RERANK_POLICY_INVALID')
+    # Each channel contributes <=30 candidates; keep their full union auditable.
+    if len(candidates_by_criterion)>12 or any(len(ps)>60 for ps in candidates_by_criterion.values()) or len({p.pair_id for p in pairs})!=len(pairs):
+        raise RerankError('RERANK_POLICY_INVALID')
     if not policy.enabled:return rank_and_select(pairs,(),policy,stage=stage)
     await require_scope(db,run,policy,pairs)
     journal=await load_rerank_journal(db,run)
     existing=(await db.scalars(select(LLMInvocation).where(LLMInvocation.job_id==run.job_id,LLMInvocation.logical_step.like('jev_rerank_%')))).all()
     if any(str(i.id) not in journal.admission_ids or i.status.value in {'reserved','outcome_unknown'} for i in existing):
         raise RerankError('RERANK_RECONCILIATION_REQUIRED')
-    cached=tuple(journal.successful_judgments[p.pair_id] for p in pairs if p.pair_id in journal.successful_judgments)
-    unsent={k:tuple(p for p in ps if p.pair_id not in journal.successful_judgments) for k,ps in candidates_by_criterion.items()}
+    # Pin the stage's first eight before cache filtering: a restart cannot
+    # advance into the previously unscored tail and admit extra paid work.
+    allocated={k:tuple(ps[:policy.max_pairs_per_criterion]) for k,ps in candidates_by_criterion.items()}
+    cached=tuple(journal.successful_judgments[p.pair_id] for ps in allocated.values() for p in ps if p.pair_id in journal.successful_judgments)
+    unsent={k:tuple(p for p in ps if p.pair_id not in journal.successful_judgments) for k,ps in allocated.items()}
     plan=plan_batches(unsent,policy,remaining_calls=policy.max_rerank_calls-len(existing),focus_ids=tuple(focus_ids))
     if financial_policy is None and plan.batches:
         scope=BudgetScope.DEVELOPMENT if get_settings().APP_ENV=='sandbox' else BudgetScope.PILOT

@@ -1,3 +1,4 @@
+from datetime import date
 import json
 import uuid
 import pytest
@@ -48,7 +49,7 @@ async def test_exact_success_reuse_and_private_journal(test_session_factory,agen
     monkeypatch.setattr(get_settings(),'JEV_DATA_PROCESSING_APPROVED',True)
     async with test_session_factory() as db:
         run,p,pairs=await rerank_context(db,agent_context);provider=ChoiceProvider()
-        financial=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        financial=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),date.today().isoformat(),frozenset(p.accepted_models),p.endpoint)
         a=await rerank_candidates(db=db,run=run,policy=p,stage='initial',candidates_by_criterion=pairs,provider_override=provider,financial_policy=financial)
         b=await rerank_candidates(db=db,run=run,policy=p,stage='tool_1',candidates_by_criterion=pairs,provider_override=provider,financial_policy=financial)
         assert a.selected_pair_ids_by_criterion==b.selected_pair_ids_by_criterion
@@ -70,7 +71,7 @@ async def test_revoked_input_after_network_discards_selection(test_session_facto
         async def revoke():
             async with test_session_factory() as other:
                 await other.execute(update(SanitizedVersion).where(SanitizedVersion.id==run.sanitized_version_id).values(status=SanitizedVersionStatus.DRAFT));await other.commit()
-        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),date.today().isoformat(),frozenset(p.accepted_models),p.endpoint)
         with pytest.raises(RerankError,match='ASSESSMENT_INPUT_STALE'):
             await rerank_candidates(db=db,run=run,policy=p,stage='initial',candidates_by_criterion=pairs,provider_override=ChoiceProvider(revoke),financial_policy=f)
         assert not (run.rerank_output or {}).get('successful_judgments')
@@ -83,7 +84,7 @@ async def test_crash_after_settlement_before_journal_cannot_replay(test_session_
     monkeypatch.setattr(get_settings(),'JEV_DATA_PROCESSING_APPROVED',True)
     async with test_session_factory() as db:
         run,p,pairs=await rerank_context(db,agent_context);provider=ChoiceProvider()
-        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),date.today().isoformat(),frozenset(p.accepted_models),p.endpoint)
         await rerank_candidates(db=db,run=run,policy=p,stage='initial',candidates_by_criterion=pairs,provider_override=provider,financial_policy=f)
         run.rerank_output=None;await db.commit()
         with pytest.raises(RerankError,match='RECONCILIATION_REQUIRED'):
@@ -105,7 +106,7 @@ async def test_invalid_paid_judgment_fails_safely_without_expired_orm_access(tes
             return good
     async with test_session_factory() as db:
         run,p,pairs=await rerank_context(db,agent_context)
-        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),date.today().isoformat(),frozenset(p.accepted_models),p.endpoint)
         with pytest.raises(RerankError,match='JEV_RERANK_FAILED'):
             await rerank_candidates(db=db,run=run,policy=p,stage='initial',candidates_by_criterion=pairs,provider_override=BadProvider(),financial_policy=f)
 
@@ -118,7 +119,7 @@ async def test_restarted_partial_stage_uses_next_physical_ordinal(test_session_f
     monkeypatch.setattr(get_settings(),'JEV_DATA_PROCESSING_APPROVED',True)
     async with test_session_factory() as db:
         run,p,pairs=await rerank_context(db,agent_context);provider=ChoiceProvider()
-        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),date.today().isoformat(),frozenset(p.accepted_models),p.endpoint)
         await rerank_candidates(db=db,run=run,policy=p,stage='initial',candidates_by_criterion=pairs,provider_override=provider,financial_policy=f)
         first=pairs['api_design'][0];chunk=await db.get(RetrievalChunk,uuid.UUID(first.chunk_id))
         second=RetrievalChunk(id=uuid.uuid4(),sanitized_version_id=chunk.sanitized_version_id,chunk_index=1,

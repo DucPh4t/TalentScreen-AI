@@ -8,7 +8,7 @@ import json
 import math
 from typing import Literal
 from pydantic import Field
-from .contracts import Contract,BudgetPlan,RunManifest
+from .contracts import Contract,BudgetPlan,RunManifest,MetricsReport
 from .metrics import rate,mean,percentile,paired_cluster_interval
 from app.services.reranking.contracts import PassagePair,RerankPolicy,canonical,OPTIONS
 from app.services.llm.types import CompletionResult
@@ -46,6 +46,11 @@ class RerankingManifestData(Contract):
 
 class RerankRunManifest(RunManifest):
     schema_version:Literal['ai-benchmark-run.rerank.v1']='ai-benchmark-run.rerank.v1'
+    reranking:RerankingManifestData
+
+
+class RerankMetricsReport(MetricsReport):
+    schema_version:Literal['ai-benchmark-metrics.rerank.v1']='ai-benchmark-metrics.rerank.v1'
     reranking:RerankingManifestData
 
 

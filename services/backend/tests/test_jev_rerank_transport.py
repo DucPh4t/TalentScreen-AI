@@ -1,3 +1,4 @@
+from datetime import date
 import hashlib
 import json
 import httpx
@@ -34,7 +35,7 @@ def test_request_byte_cap_rejected_before_egress():
     from app.services.llm.call_policy import JevReservationPolicy
     import uuid
     from decimal import Decimal
-    p=JevReservationPolicy(uuid.uuid4(),Decimal('1'),65536,Decimal('.042'),'2026-10-09',frozenset({'typesafe/jev-1.13-20260917'}),'https://openrouter.ai/api/alpha/decisions')
+    p=JevReservationPolicy(uuid.uuid4(),Decimal('1'),65536,Decimal('.042'),date.today().isoformat(),frozenset({'typesafe/jev-1.13-20260917'}),'https://openrouter.ai/api/alpha/decisions')
     r=CompletionRequest(task_kind='assessment',system_prompt='',user_prompt=json.dumps({'model':'typesafe/jev-1.13','state':'x'*16385,'questions':{'q':{}}}),provider='jev',model='typesafe/jev-1.13')
     with pytest.raises(ValueError):p.input_reservation_tokens(r)
 

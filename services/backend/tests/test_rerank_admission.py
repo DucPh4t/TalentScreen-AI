@@ -1,3 +1,4 @@
+from datetime import date
 import asyncio
 from decimal import Decimal
 import pytest
@@ -53,7 +54,7 @@ async def test_rerank_provider_limits_and_unknown_usage(kind,test_session_factor
     monkeypatch.setattr(get_settings(),'JEV_DATA_PROCESSING_APPROVED',True)
     async with test_session_factory() as db:
         run,p,pairs=await rerank_context(db,agent_context)
-        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),date.today().isoformat(),frozenset(p.accepted_models),p.endpoint)
         request=CompletionRequest(task_kind='assessment',system_prompt='',user_prompt=canonical(build_jev_payload(tuple(pairs['api_design']),p)),model=p.requested_model,
             provider='jev',purpose='jev_rerank',max_output_tokens=0,jev_reservation_policy=f)
         if kind=='unknown_usage':

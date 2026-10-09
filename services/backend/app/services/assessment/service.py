@@ -530,7 +530,7 @@ async def execute_assessment_job(
                         anchor_terms=_flatten_text_values(criterion.anchors),pipeline_version=pipeline_version,
                         channels=execution_policy.channels if execution_policy else frozenset({'dense','lexical'}))
                 result,pairs=await rerank_retrieval_pool(db=db,run=run,criteria=ordered_criteria,candidates=candidates,stage='initial',
-                    focus_ids=tuple(focus_ids),provider_override=rerank_provider_override,financial_policy=rerank_financial_policy)
+                    focus_ids=tuple(c.criterion_id for c in ordered_criteria if c.criterion_id in focus_ids),provider_override=rerank_provider_override,financial_policy=rerank_financial_policy)
                 rerank_kwargs={'candidates_by_criterion':candidates,'rerank_result':result,'rerank_pairs_by_criterion':pairs}
             with measure_stage(diagnostics, "retrieval"):
                 pack = await build_hybrid_assessment_pack(

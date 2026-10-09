@@ -21,6 +21,10 @@ def write_reports(report,output):
         c=data['counts'];q=data['quality'];r=data['retrieval']
         values=[name,c['planned'],c['accepted'],c['planned']-c['accepted'],q['numeric_pairs'],q['mae'],q['status_agreement_accepted'],r['span_recall_at_10'],data['model_calls']]
         lines.append('| '+' | '.join(cell(v) for v in values)+' |')
+    if getattr(report,'reranking',None) is not None:
+        lines+=['','## Reranking configuration','',
+            'Passage-relevance experiment; separate from primary applicant-score quality.','',
+            '```json',json.dumps(report.reranking.model_dump(mode='json'),indent=2),'```']
     lines+=['','## Limits','',*['- '+item for item in report.limitations],'','## Financial summary','',
         'Peak-rate usage estimates; invoice unavailable. Unresolved admissions remain uncertain.','',
         '```json',json.dumps(report.financial,indent=2),'```','','## Failures','']
@@ -43,6 +47,9 @@ def generate_reports(source,output,dataset):
     events=read_events(source/'admissions.jsonl')
     inputs=load_inputs(Path(dataset));refs=load_references(inputs.root,inputs)
     report=evaluate_records(inputs,refs,manifest,records)
+    if getattr(manifest,'reranking',None) is not None:
+        from .reranking import RerankMetricsReport
+        report=RerankMetricsReport(**report.model_dump(exclude={'schema_version'}),reranking=manifest.reranking)
     all_ids=[str(i.invocation_id) for r in records for i in r.invocations]
     finalized={str(i.invocation_id) for r in records for i in r.invocations if i.status in {'succeeded','failed'}}
     admitted={e['invocation_id'] for e in events if e.get('event')=='admitted'}

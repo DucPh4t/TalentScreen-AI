@@ -1,3 +1,4 @@
+from datetime import date
 import pytest
 from app.services.reranking.contracts import ApprovedCriterion,PassagePair,RerankPolicy,PairJudgment,OPTIONS,canonical
 
@@ -13,7 +14,7 @@ def judgment(p,choice='substantive_evidence',confidence=1.0,probs=None):
 
 
 def policy(mode='rerank'):
-    return RerankPolicy(mode=mode,accepted_models=('typesafe/jev-1.13-20260917',),rate_per_million_usd=.042,rate_verified_at='2026-10-09')
+    return RerankPolicy(mode=mode,accepted_models=('typesafe/jev-1.13-20260917',),rate_per_million_usd=.042,rate_verified_at=date.today().isoformat())
 
 
 def test_utility_and_protected_limiting_unscored_slots():

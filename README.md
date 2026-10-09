@@ -33,7 +33,7 @@ TalentScreen AI turns a job description and candidate CV into a criterion-by-cri
 | **Reliable execution and cost control** | Background jobs, frozen input versions, reserve-before-call ledger, full serialized request fitting | Rejects stale results and limits outbound calls, context size, and spend. |
 | **Reproducible evaluation** | Actual-service ablations, frozen synthetic inputs, invocation journals, offline metrics | Separates retrieval availability, model quality, integration reliability, and cost uncertainty. |
 
-Latest recorded verification, **9 October 2026**: [498 backend tests passed, one opt-in test skipped; 23 frontend tests and production build passed](docs/reviews/2026-10-09-jev-reranking-verification.md); [480/480 E5 + mock benchmark runs accepted](docs/evaluation/rag-packing-results-2026-10-09.md). These measure software behavior and retrieval, not real hiring accuracy.
+Latest recorded verification, **9 October 2026**: [506 backend tests passed, one opt-in test skipped; 23 frontend tests and production build passed](docs/reviews/2026-10-09-jev-reranking-verification.md); [480/480 E5 + mock benchmark runs accepted](docs/evaluation/rag-packing-results-2026-10-09.md). These measure software behavior and retrieval, not real hiring accuracy.
 
 ## Product workflow
 

@@ -39,7 +39,7 @@ Approval is a deployment-specific assertion about permitted data processing, not
 
 ## Limits and billing
 
-- At most eight judged pairs per criterion per stage and 20 questions per batch. Oversized pairs stay unscored; text is never silently truncated.
+- The auditable dense/lexical union contains up to 60 candidates per criterion (720 for 12 criteria). At most eight judged pairs per criterion per stage and 20 questions per batch. Oversized pairs stay unscored; text is never silently truncated.
 - State ≤16,384 UTF-8 bytes, full body ≤32,768 bytes. Primary context remains ≤65,536 bytes / 24,000 unique evidence characters.
 - At most nine Jev and four primary calls per assessment, thirteen total, including failed/admitted calls. At most two tools and one repair.
 - Jev request timeout 15 seconds, cumulative reranking allowance 60 seconds. This is a stop budget, not a promise of added p95 latency ≤5 seconds.

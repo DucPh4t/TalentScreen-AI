@@ -1,3 +1,4 @@
+from datetime import date
 import copy
 import pytest
 from app.config import Settings
@@ -8,7 +9,7 @@ def valid_settings(**changes):
     values=dict(LLM_PROVIDER='mock',JEV_MODE='off',JEV_RERANK_MODE='rerank',RAG_MODE='hybrid',
         RAG_PIPELINE_VERSION='v2',JEV_API_KEY='synthetic',JEV_DATA_PROCESSING_APPROVED=True,
         JEV_MODEL='typesafe/jev-1.13',JEV_INPUT_PRICE_PER_MILLION_USD=.042,
-        JEV_RATE_CARD_VERIFIED_AT='2026-10-09',JEV_RERANK_ACCEPTED_MODELS=['typesafe/jev-1.13-20260917'])
+        JEV_RATE_CARD_VERIFIED_AT=date.today().isoformat(),JEV_RERANK_ACCEPTED_MODELS=['typesafe/jev-1.13-20260917'])
     return Settings(_env_file=None,**(values|changes))
 
 
@@ -50,7 +51,7 @@ def test_old_shadow_and_reranker_are_mutually_exclusive():
     with pytest.raises(ValueError):
         Settings(_env_file=None,LLM_PROVIDER='mock',JEV_MODE='shadow',JEV_RERANK_MODE='rerank',
             JEV_API_KEY='synthetic',JEV_DATA_PROCESSING_APPROVED=True,
-            JEV_INPUT_PRICE_PER_MILLION_USD=.042,JEV_RATE_CARD_VERIFIED_AT='2026-10-09')
+            JEV_INPUT_PRICE_PER_MILLION_USD=.042,JEV_RATE_CARD_VERIFIED_AT=date.today().isoformat())
 
 @pytest.mark.parametrize('changes',[{'accepted_models':[]},{'rate_per_million_usd':0},{'rate_verified_at':None},
     {'endpoint':'http://unapproved.example/api'}, {'provider_kind':'scripted','accepted_models':['real-live-model']}])

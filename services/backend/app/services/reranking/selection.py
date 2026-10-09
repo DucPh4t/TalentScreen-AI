@@ -45,7 +45,9 @@ def _rank_and_select(pairs: tuple[PassagePair,...],judgments: tuple[PairJudgment
             and js[p.pair_id].probabilities['unrelated']>=policy.gate_probability and js[p.pair_id].confidence>=policy.gate_confidence)]
         limiting=[p for p in eligible if js[p.pair_id].probabilities['limiting_evidence']>=policy.limiting_probability]
         if not scored:
-            picked=diverse(rrf,policy.selection_limit);ordered[c]=tuple(p.pair_id for p in rrf)
+            # An unscored stage must preserve its own pre-rerank baseline.
+            picked=diverse(rrf[:30],policy.selection_limit) if stage=='initial' else rrf[:policy.selection_limit]
+            ordered[c]=tuple(p.pair_id for p in rrf)
         else:
             protected=limiting[:1]+unscored[:1]
             picked=diverse(eligible,policy.selection_limit,protected)

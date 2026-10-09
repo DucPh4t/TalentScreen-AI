@@ -67,3 +67,24 @@ def test_complete_manifest_requires_complete_journal_evidence(tmp_path,missing):
     assert not report.journal['financial_reconciled']
     assert report.journal['manifest_status']=='complete'
     assert report.journal['integrity_errors']
+
+
+def test_exported_reranking_report_preserves_mode_policy_and_interpretation(tmp_path):
+    from app.services.evaluation.benchmark.reranking import RerankRunManifest,MultiProviderBudgetPlan,experiment_policy
+    from app.config import get_settings
+    inputs,refs,manifest,rows,*_=fixture_report('mock')
+    p=experiment_policy('rerank','scripted',get_settings())
+    budget=MultiProviderBudgetPlan(primary=manifest.budget_plan,rerank_upper_by_combination={},probe_upper_usd=0,
+        total_upper_usd=0,cap_usd=1,admitted=True)
+    extended=RerankRunManifest(**manifest.model_dump(exclude={'schema_version'}),reranking={
+        'mode':'rerank','reranker_provider':'scripted','requested_model':p.requested_model,
+        'policy':p,'policy_hash':p.digest,'model_quality':'unmeasured','budget':budget})
+    atomic_json(tmp_path/'manifest.json',extended)
+    for row in rows:append_record(tmp_path/'runs.jsonl',row)
+    report=generate_reports(tmp_path,tmp_path/'out',DATA)
+    result=json.loads((tmp_path/'out/metrics.json').read_text())
+    assert result['reranking']['mode']=='rerank'
+    assert result['reranking']['policy_hash']==p.digest
+    assert result['reranking']['model_quality']=='unmeasured'
+    assert 'scripted' in (tmp_path/'out/report.md').read_text()
+    assert p.digest in (tmp_path/'out/report.html').read_text()
