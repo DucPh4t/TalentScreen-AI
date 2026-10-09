@@ -151,8 +151,11 @@ async def retrieve_more_evidence(
             db,
             run.sanitized_version_id,
             criterion.label_vi,
-            f"{criterion.description_vi} {query}",
+            (f"{query} {criterion.description_vi}" if run.snapshot.get("rag_pipeline_version") == "v2"
+             else f"{criterion.description_vi} {query}"),
             top_k=4,
+            **({"pipeline_version": run.snapshot["rag_pipeline_version"]}
+               if run.snapshot.get("rag_pipeline_version", "v1") != "v1" else {}),
             bilingual_terms=criterion.bilingual_terms,
             anchor_terms=_anchor_query_terms(criterion.anchors),
         ))

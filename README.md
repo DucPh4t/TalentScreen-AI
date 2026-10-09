@@ -26,7 +26,7 @@ TalentScreen AI makes those requirements explicit: each assessment records the a
 
 | Area | Implementation | Purpose |
 | --- | --- | --- |
-| Hybrid RAG | Section-aware chunks, local multilingual E5 embeddings, PostgreSQL lexical search + pgvector, reciprocal-rank fusion | Retrieve evidence for each approved rubric criterion. |
+| Hybrid RAG | Versioned section/claim chunks, local multilingual E5, PostgreSQL lexical search + pgvector, reciprocal-rank fusion | Retrieve evidence for each approved rubric criterion. |
 | Bounded agent | LangGraph state machine with two allowlisted read-only tools, explicit call limits, and snapshot checks | Find additional evidence within the authorized record. |
 | Grounding | Pydantic schemas, exact span/quote validation, criterion-scoped citations | Reject malformed output and references outside the supplied evidence. |
 | Scoring policy | Deterministic Decimal arithmetic, approved weights and anchors, separate evidence coverage | Keep model observations distinct from application scoring policy. |
@@ -56,10 +56,12 @@ Read the [architecture walkthrough](docs/architecture.md) for data boundaries, s
 ### Retrieval pipeline
 
 1. Extract and normalize the PDF/DOCX. Create a redacted document version and canonical source spans; HR approves that version before external assessment.
-2. Group adjacent spans within a section into chunks targeting **300 tokens**, with a **480-token maximum**. Oversized spans are split without changing the canonical citation target.
+2. V1 groups adjacent section-local spans targeting **300 tokens**. Opt-in V2 indexes individual canonical spans and deduplicates exact repeated text within a section. Both split oversized spans losslessly at **480 tokens**, preserving canonical citation targets.
 3. Encode passages and rubric queries with pinned `intfloat/multilingual-e5-base`: **768-dimensional normalized vectors**, with E5's `passage: ` and `query: ` prefixes. Local device selection supports CPU, Apple MPS, or CUDA when available.
-4. Search only the current approved redacted version. Retrieve up to 10 dense and 10 lexical candidates, fuse ranks with **RRF (`k=60`)**, deduplicate, and select up to four section-diverse chunks per criterion within the evidence budget.
+4. Search only the approved redacted version and pinned pipeline configuration. Retrieve up to **10 candidates per channel in V1**, or **30 in V2** with shorter bilingual skill queries; fuse with **RRF (`k=60`)** and select up to four section-diverse chunks per criterion.
 5. Resolve selected chunks back to canonical spans. The model may cite only spans supplied for the relevant criterion; the backend checks the complete quote against registered source text.
+
+Every model turn fits the complete serialized request within **65,536 UTF-8 bytes** and **24,000 unique evidence characters**, removing whole spans and updating citation scope. Tool/repair history obeys the same bound. See [pipeline versions, rollback and packing](docs/evaluation/rag-pipeline-versions.md).
 
 `RAG_MODE=full_text_baseline` is the default. `RAG_MODE=hybrid` enables E5 + lexical/vector retrieval. A hybrid retrieval failure produces an explicit failed/manual-review path; it does not silently expand context or switch providers.
 
@@ -172,6 +174,7 @@ Open **http://localhost:2004**. Backend API docs are at **http://127.0.0.1:8000/
 | --- | --- | --- |
 | `LLM_PROVIDER` | `mock` | Set `deepseek` and configure `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` for the primary API provider. |
 | `RAG_MODE` | `full_text_baseline` | Set `hybrid` to enable local E5 + lexical/vector retrieval. |
+| `RAG_PIPELINE_VERSION` | `v1` | Select `v2` for claim-level indexing and concise bilingual queries on new hybrid runs; old snapshots retain their pinned version. |
 | `EMBEDDING_DEVICE` | `auto` | Select `cpu`, `mps`, or `cuda` explicitly when needed. |
 | `JEV_MODE` | `off` | `shadow` enables separately approved/configured secondary scoring. |
 | `LANGSMITH_TRACING` | `false` | Enable developer-only metadata tracing after setting `LANGSMITH_API_KEY`; see the [setup and verification runbook](docs/runbooks/langsmith-observability.md). |

@@ -109,6 +109,7 @@ class Settings(BaseSettings):
         default="d128750597153bb5987e10b1c3493a34e5a4502a",
         description="Immutable model repository commit used for reproducible retrieval",
     )
+    RAG_PIPELINE_VERSION: Literal["v1", "v2"] = "v1"
     RAG_MODE: Literal["full_text_baseline", "hybrid"] = Field(
         default="full_text_baseline",
     )

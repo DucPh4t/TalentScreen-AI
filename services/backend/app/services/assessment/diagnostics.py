@@ -24,6 +24,7 @@ class AssessmentDiagnostics:
         self.final={c:None for c in sorted(self.criteria)}
         self.context=None
         self.packing=None
+        self.requests=[]
         self.counters={'rejected_citations':0,'normalized_criteria':0,'schema_failures':0}
 
     @staticmethod
@@ -56,9 +57,25 @@ class AssessmentDiagnostics:
         self.context={k:v for k,v in values.items() if k in counts and type(v) is int and v>=0}
         self.context.update({k:v for k,v in values.items() if k in {'context_limit','size_truncated'} and type(v) is bool})
 
+    def record_delivered_context(self, *, span_count: int, characters: int, size_excluded: bool) -> None:
+        if not isinstance(self.context, dict) or not {'original_span_count', 'original_characters'} <= self.context.keys():
+            return
+        context = dict(self.context)
+        context.update(initial_delivered_span_count=span_count, initial_delivered_characters=characters,
+            initial_excluded_span_count=max(0, context['original_span_count']-span_count),
+            initial_excluded_characters=max(0, context['original_characters']-characters),
+            size_truncated=size_excluded or context.get('size_truncated', False))
+        self.record_context(**context)
+
     def record_packing(self, **values) -> None:
         allowed={'eligible_chunks','packed_chunks','size_excluded_chunks','packed_characters','character_limit'}
         self.packing={k:v for k,v in values.items() if k in allowed and type(v) is int and v>=0}
+
+    def record_request_budget(self, *, phase: str, **values) -> None:
+        if phase not in {'initial','tools','repair'} or len(self.requests)>=4:return
+        allowed={'original_bytes','serialized_bytes','byte_limit','excluded_span_count','evidence_characters','character_limit'}
+        entry={k:v for k,v in values.items() if k in allowed and type(v) is int and v>=0}
+        self.requests.append({'phase':phase,**entry})
 
     def record_validation(self,*,rejected_citations: int,normalized_criteria: int,schema_failures: int) -> None:
         for name,value in (('rejected_citations',rejected_citations),('normalized_criteria',normalized_criteria),('schema_failures',schema_failures)):
@@ -66,7 +83,7 @@ class AssessmentDiagnostics:
 
     def snapshot(self) -> dict[str,Any]:
         return copy.deepcopy({'stage_ms':self.stages,'ranked_evidence':self.ranked,'initial_evidence':self.initial,
-                              'final_evidence':self.final,'context':self.context,'packing':self.packing,'counters':self.counters})
+                              'final_evidence':self.final,'context':self.context,'packing':self.packing,'request_budget':self.requests,'counters':self.counters})
 
 
 def safe_record(recorder,method: str,*args,**kwargs):

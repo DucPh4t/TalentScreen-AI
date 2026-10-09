@@ -27,6 +27,16 @@ if len(EMBEDDING_CONFIG_ID) > 100:
     raise ValueError("EMBEDDING_CONFIG_ID exceeds the database column limit")
 
 
+def embedding_config_id(pipeline_version: str = 'v1') -> str:
+    if pipeline_version not in {'v1', 'v2'}:
+        raise ValueError('RAG_PIPELINE_VERSION_INVALID')
+    result = EMBEDDING_CONFIG_ID if pipeline_version == 'v1' else (
+        f'{settings.EMBEDDING_MODEL}@{settings.EMBEDDING_MODEL_REVISION}:span-evidence-v2')
+    if len(result) > 100:
+        raise ValueError('EMBEDDING_CONFIG_ID_INVALID')
+    return result
+
+
 class EmbeddingError(RuntimeError):
     """Base class for local embedding failures; callers must fail closed."""
 
@@ -310,11 +320,34 @@ def build_chunks_from_spans(
     return chunks
 
 
+def build_evidence_chunks_from_spans(spans: list[SourceSpan], token_count: Callable[[str], int],
+                                     max_tokens: int = 480) -> list[dict[str, Any]]:
+    """Index one canonical claim per chunk; collapse exact repetition within a section.
+
+    No labels, language penalties or inferred claim classifications enter ranking.
+    Contradictions and distinct claims remain separate. Source spans stay immutable.
+    """
+    if max_tokens <= 0:
+        raise ValueError('max_tokens must be positive')
+    chunks = []
+    seen = set()
+    for span in sorted(spans, key=lambda item: (item.start_cp, item.end_cp, item.span_id)):
+        for part in _split_text_at_token_limit(span.text, token_count, max_tokens):
+            identity = (span.section_label, part)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            chunks.append({'span_ids': [span.span_id], 'text': part, 'section_label': span.section_label})
+    return chunks
+
+
 async def index_sanitized_version(
     db: AsyncSession,
     sanitized_version_id: uuid.UUID,
+    *, pipeline_version: str = 'v1',
 ) -> int:
     """Index approved source spans once per immutable version and embedding config."""
+    config_id = embedding_config_id(pipeline_version)
     # Serialize workers for the same sanitized version. The source version is
     # immutable after approval, so a committed config-matched index is reusable.
     version_stmt = (
@@ -333,7 +366,7 @@ async def index_sanitized_version(
         await db.execute(
             select(func.count(RetrievalChunk.id)).where(
                 RetrievalChunk.sanitized_version_id == sanitized_version_id,
-                RetrievalChunk.embedding_config_id == EMBEDDING_CONFIG_ID,
+                RetrievalChunk.embedding_config_id == config_id,
             )
         )
     ).scalar_one()
@@ -350,12 +383,13 @@ async def index_sanitized_version(
         return 0
 
     model = _get_embedding_model()
-    chunk_dicts = build_chunks_from_spans(
+    chunk_dicts = (build_evidence_chunks_from_spans(spans, _token_count_fn(model))
+        if pipeline_version == 'v2' else build_chunks_from_spans(
         spans,
         token_count=_token_count_fn(model),
         target_tokens=300,
         max_tokens=480,
-    )
+    ))
     if not chunk_dicts:
         return 0
 
@@ -365,7 +399,7 @@ async def index_sanitized_version(
     await db.execute(
         delete(RetrievalChunk).where(
             RetrievalChunk.sanitized_version_id == sanitized_version_id,
-            RetrievalChunk.embedding_config_id == EMBEDDING_CONFIG_ID,
+            RetrievalChunk.embedding_config_id == config_id,
         )
     )
 
@@ -377,7 +411,7 @@ async def index_sanitized_version(
             span_ids=chunk["span_ids"],
             text=chunk["text"],
             embedding=vector,
-            embedding_config_id=EMBEDDING_CONFIG_ID,
+            embedding_config_id=config_id,
         )
         for index, (chunk, vector) in enumerate(zip(chunk_dicts, vectors, strict=True))
     ]

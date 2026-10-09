@@ -276,6 +276,9 @@ async def create_assessment_run(
     )
     settings = get_settings()
     retrieval_strategy = execution_policy.retrieval_strategy if execution_policy else settings.RAG_MODE
+    pipeline_version = execution_policy.retrieval_version if execution_policy else settings.RAG_PIPELINE_VERSION
+    from app.services.embedding import embedding_config_id
+    from app.services.agent.request_budget import REQUEST_PACKING_VERSION
     assessment_prompt_version = (
         HYBRID_ASSESSMENT_PROMPT_VERSION
         if retrieval_strategy == "hybrid"
@@ -295,6 +298,9 @@ async def create_assessment_run(
         "assessment_prompt_version": assessment_prompt_version,
         "agent_prompt_version": AGENT_PROMPT_VERSION,
         "retrieval_strategy": retrieval_strategy,
+        "rag_pipeline_version": pipeline_version,
+        "rag_embedding_config_id": embedding_config_id(pipeline_version),
+        "request_packing_version": REQUEST_PACKING_VERSION,
         "focus_criterion_ids": focus_criterion_ids,
         "application_id": str(application_id),
         "document_id": str(sanitized.document_id),
@@ -425,6 +431,15 @@ async def execute_assessment_job(
         return
 
     # 2. Load Rubric criteria, policy, and Sanitized Source Spans
+    from app.services.agent.request_budget import REQUEST_PACKING_VERSION
+    if run.snapshot.get("request_packing_version", REQUEST_PACKING_VERSION) != REQUEST_PACKING_VERSION:
+        run.status = "failed"
+        run.failure_code = "ASSESSMENT_REQUEST_PACKING_VERSION_UNKNOWN"
+        run.completed_at = now
+        record_trace_metadata({"outcome": "failed", "error_code": run.failure_code})
+        await db.flush()
+        return
+
     stmt_crit = (
         select(RubricCriterion)
         .where(RubricCriterion.rubric_version_id == run.rubric_version_id)
@@ -474,10 +489,16 @@ async def execute_assessment_job(
 
     if retrieval_strategy == "hybrid":
         try:
+            from app.services.embedding import embedding_config_id
+            pipeline_version = run.snapshot.get("rag_pipeline_version", "v1")
+            config_id = embedding_config_id(pipeline_version)
+            if run.snapshot.get("rag_embedding_config_id", config_id) != config_id:
+                raise ValueError("RAG_EMBEDDING_CONFIG_DRIFT")
             # The sanitized version is immutable after approval; indexing is
             # keyed by its pinned embedding config and safe to retry.
             with measure_stage(diagnostics, "indexing"):
-                await index_sanitized_version(db, run.sanitized_version_id)
+                await index_sanitized_version(db, run.sanitized_version_id,
+                    **({"pipeline_version": pipeline_version} if pipeline_version != "v1" else {}))
             focus_ids = set(run.snapshot.get("focus_criterion_ids") or [])
             ordered_criteria = sorted(
                 rubric_criteria,
@@ -497,6 +518,7 @@ async def execute_assessment_job(
                         }
                         for criterion in ordered_criteria
                     ],
+                    **({"pipeline_version": pipeline_version} if pipeline_version != "v1" else {}),
                     **({"diagnostics": diagnostics} if diagnostics else {}),
                     **({"channels": execution_policy.channels, "max_evidence_chars": execution_policy.max_evidence_chars}
                        if execution_policy else {}),

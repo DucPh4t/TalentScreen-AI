@@ -77,7 +77,7 @@ class RecordingProvider:
 class BenchmarkMockRecordingProvider(RecordingProvider):pass
 class DeepSeekRecordingProvider(RecordingProvider):pass
 
-async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,output,embedding_mode='real'):
+async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,output,embedding_mode='real',retrieval_version='v1'):
     from sqlalchemy import select
     from app.config import get_settings
     from app.db.models import AssessmentRun,CriterionAssessment,CriterionEvidence,LLMInvocation,Job,BudgetReservation
@@ -88,7 +88,8 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
     from app.services.assessment.prompt import get_assessment_prompt
     from app.services.agent.assessment_graph import _AGENT_PROMPTS,AGENT_PROMPT_VERSION
     from app.services.assessment.diagnostics import AssessmentDiagnostics
-    from app.services.embedding import EMBEDDING_CONFIG_ID
+    from app.services.embedding import embedding_config_id
+    from app.services.agent.request_budget import REQUEST_PACKING_VERSION
     from app.services.llm.ledger import get_or_create_active_budget_period,settle_budget
     from app.services.llm.types import StrictReservationPolicy
     from app.services.observability import trace_span,safe_metadata
@@ -105,7 +106,7 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
         raise ValueError('BENCHMARK_CONFIG_MISMATCH')
     if embedding_mode not in {'scripted','real'} or (not is_mock and embedding_mode!='real'):
         raise ValueError('BENCHMARK_SCRIPTED_LIVE_FORBIDDEN')
-    policies={p:benchmark_policy(p) for p in selection.profiles}
+    policies={p:benchmark_policy(p,retrieval_version=retrieval_version) for p in selection.profiles}
     recalculated=plan_budget(inputs,selection,policies,model=budget_plan.model,cap_usd=budget_plan.cap_usd,bound=budget_plan.bound)
     if recalculated!=budget_plan or not budget_plan.admitted:raise ValueError('BENCHMARK_BUDGET_PLAN_REJECTED')
     assert_frozen(inputs)
@@ -120,7 +121,8 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
         requested_model=budget_plan.model,embedding_mode=embedding_mode,selection=selection,dataset_hash=inputs.manifest_hash,
         dataset_files=inputs.hashes,policies={p:policy.to_snapshot() for p,policy in policies.items()},
         provenance={**git_source_provenance(),'effective_prompt_sha256':hashlib.sha256((get_assessment_prompt('assessment-v1.6.0')+'\n\n'+_AGENT_PROMPTS[AGENT_PROMPT_VERSION]).encode()).hexdigest(),
-            'schema_sha256':digest(AssessmentOutputSchema.model_json_schema()),'embedding_config':EMBEDDING_CONFIG_ID,
+            'schema_sha256':digest(AssessmentOutputSchema.model_json_schema()),'embedding_config':embedding_config_id(retrieval_version),
+            'retrieval_version':retrieval_version,'request_packing_version':REQUEST_PACKING_VERSION,
             'temperature':0,'thinking':'disabled','max_output_tokens':4096,'concurrency':1,'repetitions':1,
             'reference_origin':'synthetic_design_expected','invoice_usd':None},budget_plan=budget_plan,
         budget_period_id=period.id,started_at=now(),counts={'planned':len(selection.combinations)})
@@ -241,6 +243,7 @@ def parser():
             q.add_argument('--max-cost-usd',type=Decimal,default=Decimal(5))
         if name!='validate':
             q.add_argument('--embedding-mode',choices=('real','scripted'),default='real')
+            q.add_argument('--retrieval-version',choices=('v1','v2'),default='v1')
         if name=='run':
             q.add_argument('--output',type=Path,required=True)
     q=sub.add_parser('report');q.add_argument('--input',type=Path,required=True);q.add_argument('--output',type=Path,required=True)
@@ -269,11 +272,11 @@ def main(argv=None):
         model='mock' if args.provider=='mock' else get_settings().DEEPSEEK_MODEL
         try:bound=verify_utf8_artifacts(Path('reports/ai-benchmark-cache'))
         except ValueError:bound=context_bound(model)
-        plan=plan_budget(inputs,selection,{p:benchmark_policy(p) for p in selection.profiles},model=model,cap_usd=args.max_cost_usd,bound=bound)
+        plan=plan_budget(inputs,selection,{p:benchmark_policy(p,retrieval_version=args.retrieval_version) for p in selection.profiles},model=model,cap_usd=args.max_cost_usd,bound=bound)
         prerequisites=execution_prerequisites(plan,provider=args.provider,embedding_mode=args.embedding_mode)
         if args.command=='plan':
             print(json.dumps({**plan.model_dump(mode='json'),'execution_prerequisites':prerequisites,
-                              'source_code':git_source_provenance()},indent=2));return 0
+                              'source_code':git_source_provenance(),'retrieval_version':args.retrieval_version},indent=2));return 0
         from .isolation import IsolationContext
         try:context=IsolationContext.from_environment()
         except (KeyError,ValueError):raise ValueError('BENCHMARK_ISOLATION_REQUIRED')
@@ -295,7 +298,7 @@ def main(argv=None):
             for sig in (signal.SIGINT,signal.SIGTERM):loop.add_signal_handler(sig,task.cancel)
             try:
                 async with get_session_factory()() as db:
-                    return await run_experiment(db,inputs,selection,context,provider=provider,budget_plan=plan,output=args.output,embedding_mode=args.embedding_mode)
+                    return await run_experiment(db,inputs,selection,context,provider=provider,budget_plan=plan,output=args.output,embedding_mode=args.embedding_mode,retrieval_version=args.retrieval_version)
             finally:
                 for sig in (signal.SIGINT,signal.SIGTERM):loop.remove_signal_handler(sig)
         manifest=asyncio.run(execute())

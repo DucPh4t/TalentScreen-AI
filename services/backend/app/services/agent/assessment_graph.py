@@ -14,6 +14,7 @@ from app.db.models.document import SourceSpan
 from app.db.models.requisition import RubricCriterion
 from app.schemas.assessment import AssessmentOutputSchema
 from app.services.agent.schemas import AgentExecutionResult
+from app.services.agent.request_budget import fit_evidence_request, RequestBudgetError, REQUEST_BYTE_LIMIT
 from app.services.agent.tools import (
     AgentToolError,
     MAX_AGENT_CRITERIA_PER_RETRIEVAL,
@@ -330,6 +331,39 @@ async def run_assessment_agent(
             tool_choice="auto" if tool_schemas else None,
             response_format=None if tool_schemas else {"type": "json_object"},
         )
+        byte_limit = REQUEST_BYTE_LIMIT
+        if strict_reservation_policy and strict_reservation_policy.bound.max_serialized_bytes is not None:
+            byte_limit = min(byte_limit, strict_reservation_policy.bound.max_serialized_bytes)
+        # Favor newly resolved evidence over older context when a tool expands it.
+        new_ids = []
+        for message in reversed(current["messages"]):
+            if message.get("role") == "tool":
+                try:
+                    values = json.loads(message["content"]).get("source_spans", [])
+                    new_ids.extend(value["span_id"] for value in values if value.get("span_id") in current["source_spans"])
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    pass
+        priority = list(dict.fromkeys([*new_ids, *current["source_spans"]]))
+        try:
+            request, removed, budget_metadata = fit_evidence_request(request, priority, byte_limit=byte_limit,
+                max_evidence_chars=execution_policy.max_evidence_chars if execution_policy else 24000)
+        except RequestBudgetError as exc:
+            return _tool_failure(current, str(exc))
+        removed_ids = set(removed)
+        prepared = {
+            "messages": request.messages,
+            "source_spans": {key: value for key, value in current["source_spans"].items() if key not in removed_ids},
+            "allowed_span_ids_by_criterion": {key: set(ids) - removed_ids for key, ids in current["allowed_span_ids_by_criterion"].items()},
+        }
+        current = {**current, **prepared}
+        phase = "repair" if is_repair else "initial" if current["model_round_trips"] == 0 else "tools"
+        safe_record(diagnostics, "record_request_budget", phase=phase, **budget_metadata)
+        if phase == "initial":
+            safe_record(diagnostics, "record_initial_evidence", {key: sorted(ids) for key, ids in current["allowed_span_ids_by_criterion"].items()})
+            safe_record(diagnostics, "record_delivered_context",
+                span_count=len(current["source_spans"]),
+                characters=sum(len(span.text) for span in current["source_spans"].values()),
+                size_excluded=bool(removed_ids))
         logical_step = "agent_repair" if is_repair else f"agent_turn_{current['model_round_trips'] + 1}"
         attempt_no = 2 if is_repair else 1
         try:
@@ -348,6 +382,7 @@ async def run_assessment_agent(
             trace["outcome"] = "failed"
             trace["error_code"] = type(exc).__name__[:64]
             return {
+                **prepared,
                 "trace": trace,
                 "error_code": type(exc).__name__[:64],
                 "model_round_trips": current["model_round_trips"] + 1,
@@ -364,11 +399,13 @@ async def run_assessment_agent(
             trace["error_code"] = "AGENT_UNAUTHORIZED_TOOL_CALL"
             return {
                 "trace": trace,
+                **prepared,
                 "error_code": "AGENT_UNAUTHORIZED_TOOL_CALL",
                 "pending_tool_calls": [],
                 "model_round_trips": count,
             }
         return {
+            **prepared,
             "current_content": completion.content,
             "pending_tool_calls": completion.tool_calls,
             "model_round_trips": count,
@@ -383,7 +420,7 @@ async def run_assessment_agent(
             return _tool_failure(current, "AGENT_TOOL_LIMIT")
         messages.append({
             "role": "assistant",
-            "content": current.get("current_content"),
+            "content": None,  # Discard unvalidated prose; retain only tool protocol.
             "tool_calls": [{
                 "id": call.id,
                 "type": "function",
@@ -474,9 +511,7 @@ async def run_assessment_agent(
                     if not isinstance(span_ids, list) or set(span_ids) - set(pending_map):
                         raise AgentToolError("Requested source spans were not returned by this assessment retrieval.")
                     resolved = await get_source_spans(db=db, run=run, span_ids=span_ids)
-                    expanded_spans = {**spans, **{span.span_id: span for span in resolved}}
-                    if execution_policy and sum(len(span.text) for span in expanded_spans.values()) > execution_policy.max_evidence_chars:
-                        raise AgentToolError("Expanded evidence exceeds the assessment context limit.")
+                    # The next model node fits complete history and evicts old evidence before egress.
                     for span in resolved:
                         spans[span.span_id] = span
                         for criterion_id in pending_map[span.span_id]:
@@ -570,7 +605,10 @@ async def run_assessment_agent(
 
     async def prepare_repair_node(current: _AgentState) -> dict[str, Any]:
         errors = "; ".join(current["validation_errors"][:5])
-        messages = list(current["messages"])
+        # The invalid answer is not evidence. Keep tool-call protocol history,
+        # but avoid replaying a large malformed answer in the repair request.
+        messages = [message for message in current["messages"]
+            if message.get("role") != "assistant" or message.get("tool_calls")]
         messages.append({
             "role": "user",
             "content": (

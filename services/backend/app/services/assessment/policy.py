@@ -20,9 +20,10 @@ class AssessmentExecutionPolicy:
     temperature: float=0.0
     thinking_mode: str='disabled'
     max_output_tokens: int=4096
+    retrieval_version: str='v1'
 
     def __post_init__(self):
-        if (self.profile not in CHANNELS or self.channels!=CHANNELS[self.profile]
+        if (self.retrieval_version not in {'v1','v2'} or self.profile not in CHANNELS or self.channels!=CHANNELS[self.profile]
             or type(self.tools_enabled) is not bool or self.tools_enabled!=(self.profile=='hybrid_agent')
             or type(self.max_evidence_chars) is not int or self.max_evidence_chars!=24000
             or self.assessment_prompt_version!=BENCHMARK_PROMPT_VERSION
@@ -38,6 +39,7 @@ class AssessmentExecutionPolicy:
     def to_snapshot(self) -> dict[str,Any]:
         result=asdict(self)
         result['channels']=sorted(self.channels)
+        if self.retrieval_version=='v1':result.pop('retrieval_version')
         return result
 
     @property
@@ -54,9 +56,9 @@ class AssessmentExecutionPolicy:
             raise ValueError('ASSESSMENT_EXECUTION_POLICY_INVALID') from exc
 
 
-def benchmark_policy(profile: str) -> AssessmentExecutionPolicy:
+def benchmark_policy(profile: str, *, retrieval_version: str='v1') -> AssessmentExecutionPolicy:
     if profile not in CHANNELS: raise ValueError('ASSESSMENT_EXECUTION_POLICY_INVALID')
-    return AssessmentExecutionPolicy(profile,CHANNELS[profile],profile=='hybrid_agent')
+    return AssessmentExecutionPolicy(profile,CHANNELS[profile],profile=='hybrid_agent',retrieval_version=retrieval_version)
 
 
 def load_execution_policy(snapshot: dict) -> AssessmentExecutionPolicy | None:
@@ -69,6 +71,7 @@ def load_execution_policy(snapshot: dict) -> AssessmentExecutionPolicy | None:
     if (snapshot.get('assessment_execution_policy_hash')!=policy.digest
         or snapshot.get('assessment_prompt_version')!=policy.assessment_prompt_version
         or snapshot.get('agent_prompt_version')!=policy.agent_prompt_version
-        or snapshot.get('retrieval_strategy')!=policy.retrieval_strategy):
+        or snapshot.get('retrieval_strategy')!=policy.retrieval_strategy
+        or snapshot.get('rag_pipeline_version','v1')!=policy.retrieval_version):
         raise ValueError('ASSESSMENT_EXECUTION_POLICY_INVALID')
     return policy

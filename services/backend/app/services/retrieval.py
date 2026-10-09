@@ -14,7 +14,7 @@ from app.services.observability import observed
 from app.services.assessment.diagnostics import AssessmentDiagnostics, safe_record
 
 from app.db.models.document import RetrievalChunk, SourceSpan
-from app.services.embedding import EMBEDDING_CONFIG_ID, embed_texts
+from app.services.embedding import EMBEDDING_CONFIG_ID, embedding_config_id, embed_texts
 
 RRF_K = 60
 DENSE_CANDIDATE_LIMIT = 10
@@ -93,6 +93,22 @@ def _build_criterion_query(
     return query_text, lexical_terms
 
 
+def _build_evidence_query(criterion_name, criterion_description, bilingual_terms, anchor_terms):
+    """Prioritize approved skill vocabulary within E5's finite query context."""
+    synonyms = _unique_phrases(_flatten_text_values(bilingual_terms or {}))
+    anchors = _unique_phrases(_flatten_text_values(anchor_terms or []))
+    phrases = _unique_phrases([*synonyms, criterion_name or '', criterion_description or '', *anchors])
+    query = ' '.join(phrases)[:800]
+    terms = []
+    for phrase in [*synonyms, criterion_name or '', *anchors, criterion_description or '']:
+        for token in re.findall(r'\w+', phrase.casefold()):
+            if len(token) >= 2 and token not in terms:
+                terms.append(token)
+                if len(terms) >= 16:
+                    return query, terms
+    return query, terms
+
+
 @observed("hybrid_retrieve_for_criterion", run_type="retriever",
     result_metadata=lambda result: {"result_count": len(result)})
 async def hybrid_retrieve_for_criterion(
@@ -105,11 +121,14 @@ async def hybrid_retrieve_for_criterion(
     bilingual_terms: dict[str, Any] | None = None,
     anchor_terms: list[str] | None = None,
     channels: frozenset[str] = frozenset({"dense", "lexical"}),
+    pipeline_version: str = "v1",
 ) -> list[RetrievedChunkScore]:
     """Fuse scoped dense and lexical results using deterministic Reciprocal Rank Fusion."""
     if not channels or not channels.issubset({"dense", "lexical"}):
         raise ValueError("RETRIEVAL_CHANNELS_INVALID")
-    query_text, keywords = _build_criterion_query(
+    config_id = embedding_config_id(pipeline_version)
+    candidate_limit = 30 if pipeline_version == "v2" else 10
+    query_text, keywords = (_build_evidence_query if pipeline_version == "v2" else _build_criterion_query)(
         criterion_name,
         criterion_description,
         bilingual_terms,
@@ -124,7 +143,7 @@ async def hybrid_retrieve_for_criterion(
     # document version and embedding configuration before ranking.
     scope = (
         RetrievalChunk.sanitized_version_id == sanitized_version_id,
-        RetrievalChunk.embedding_config_id == EMBEDDING_CONFIG_ID,
+        RetrievalChunk.embedding_config_id == config_id,
     )
     dense_stmt = (
         select(RetrievalChunk)
@@ -133,7 +152,7 @@ async def hybrid_retrieve_for_criterion(
             RetrievalChunk.embedding.cosine_distance(query_vec),
             RetrievalChunk.chunk_index.asc(),
         )
-        .limit(DENSE_CANDIDATE_LIMIT)
+        .limit(candidate_limit)
     )
     dense_res = (await db.execute(dense_stmt)).scalars().all() if "dense" in channels else []
     dense_rank_map = {chunk.id: idx + 1 for idx, chunk in enumerate(dense_res)}
@@ -150,7 +169,7 @@ async def hybrid_retrieve_for_criterion(
                 func.ts_rank_cd(vector, query).desc(),
                 RetrievalChunk.chunk_index.asc(),
             )
-            .limit(LEXICAL_CANDIDATE_LIMIT)
+            .limit(candidate_limit)
         )
         lex_res = (await db.execute(lex_stmt)).scalars().all()
         for idx, chunk in enumerate(lex_res):
@@ -238,9 +257,11 @@ async def build_hybrid_assessment_pack(
     max_evidence_chars: int = 24000,
     *,
     channels: frozenset[str] = frozenset({"dense", "lexical"}),
+    pipeline_version: str = "v1",
     diagnostics: AssessmentDiagnostics | None = None,
 ) -> dict[str, Any]:
     """Build a bounded, section-diverse evidence pack for the approved rubric."""
+    config_id = embedding_config_id(pipeline_version)
     if max_evidence_chars < 0:
         raise ValueError("max_evidence_chars must be non-negative")
 
@@ -254,7 +275,8 @@ async def build_hybrid_assessment_pack(
             sanitized_version_id,
             criterion.get("name", ""),
             criterion.get("description", ""),
-            top_k=DENSE_CANDIDATE_LIMIT,
+            top_k=30 if pipeline_version == "v2" else DENSE_CANDIDATE_LIMIT,
+            **({"pipeline_version": pipeline_version} if pipeline_version != "v1" else {}),
             bilingual_terms=criterion.get("bilingual_terms"),
             **({"channels": channels} if channels != frozenset({"dense", "lexical"}) else {}),
             anchor_terms=[
@@ -347,7 +369,7 @@ async def build_hybrid_assessment_pack(
 
     return {
         "strategy": "fulltext_fallback" if fallback_needed else "hybrid",
-        "embedding_config_id": EMBEDDING_CONFIG_ID,
+        "embedding_config_id": config_id,
         "criteria_retrieval_map": criterion_retrievals,
         "packed_chunks_count": len(chunks),
         "total_evidence_characters": total_chars,
