@@ -41,6 +41,8 @@ export LLM_PROVIDER=mock
 export DEEPSEEK_API_KEY=
 # Keep a locally configured secondary provider or hybrid mode out of generic regression runs.
 export JEV_MODE=off
+export JEV_RERANK_MODE=off
+export JEV_RERANK_ACCEPTED_MODELS="[]"
 export JEV_API_KEY=
 export RAG_MODE=full_text_baseline
 # Generic tests must never inherit cloud telemetry credentials.

@@ -80,6 +80,8 @@ class Settings(BaseSettings):
     # Jev is an optional, separate decision model. It remains disabled until
     # the institution approves this processor and verifies its rate card.
     JEV_MODE: Literal["off", "shadow"] = Field(default="off")
+    JEV_RERANK_MODE: Literal['off', 'shadow', 'rerank', 'gate_experiment'] = 'off'
+    JEV_RERANK_ACCEPTED_MODELS: list[str] = Field(default_factory=list)
     JEV_API_KEY: Optional[str] = Field(default=None)
     JEV_BASE_URL: str = Field(default="https://openrouter.ai/api/v1/systemone")
     JEV_MODEL: str = Field(default="typesafe/jev-1.13")
@@ -184,7 +186,7 @@ class Settings(BaseSettings):
             or parsed.query
             or parsed.fragment
             or (parsed.hostname == "api.typesafe.ai" and parsed.path != "/v1/systemone")
-            or (parsed.hostname == "openrouter.ai" and parsed.path != "/api/v1/systemone")
+            or (parsed.hostname == "openrouter.ai" and parsed.path not in {"/api/v1/systemone", "/api/alpha/decisions"})
         ):
             raise ValueError("JEV_BASE_URL must be the HTTPS TypeSafe or OpenRouter System One endpoint without credentials/query/fragment")
         return value.rstrip("/")
@@ -224,7 +226,17 @@ class Settings(BaseSettings):
                     "DEEPSEEK_API_KEY is required when LLM_PROVIDER is 'deepseek'"
                 )
 
-        if self.JEV_MODE == "shadow":
+        if self.JEV_RERANK_MODE != 'off':
+            if self.JEV_MODE != 'off':
+                raise ValueError('JEV_PURPOSE_CONFLICT')
+            if self.RAG_MODE != 'hybrid' or self.RAG_PIPELINE_VERSION != 'v2':
+                raise ValueError('JEV_RERANK_REQUIRES_HYBRID_V2')
+            if self.JEV_RERANK_MODE == 'gate_experiment' and self.APP_ENV != 'sandbox':
+                raise ValueError('JEV_GATE_SANDBOX_ONLY')
+            if (not self.JEV_RERANK_ACCEPTED_MODELS or len(set(self.JEV_RERANK_ACCEPTED_MODELS)) != len(self.JEV_RERANK_ACCEPTED_MODELS)
+                or any(not re.fullmatch(r'(?:typesafe/)?jev-\d+\.\d+(?:\.\d+)?(?:-\d{8})?', m) for m in self.JEV_RERANK_ACCEPTED_MODELS)):
+                raise ValueError('JEV_ACCEPTED_MODELS_REQUIRED')
+        if self.JEV_MODE == "shadow" or self.JEV_RERANK_MODE != 'off':
             if not self.JEV_API_KEY or not self.JEV_API_KEY.strip():
                 raise ValueError("JEV_API_KEY is required when JEV_MODE is 'shadow'")
             if not self.JEV_DATA_PROCESSING_APPROVED:
@@ -233,7 +245,7 @@ class Settings(BaseSettings):
             model_pattern = r"typesafe/jev-\d+\.\d+" if is_openrouter else r"jev-\d+\.\d+(?:\.\d+)?"
             if not re.fullmatch(model_pattern, self.JEV_MODEL):
                 raise ValueError("JEV_MODEL must be a pinned Jev model ID compatible with the configured System One provider; rolling aliases are not permitted")
-            if self.JEV_INPUT_PRICE_PER_MILLION_USD is None or self.JEV_INPUT_PRICE_PER_MILLION_USD <= 0:
+            if self.JEV_INPUT_PRICE_PER_MILLION_USD is None or not math.isfinite(self.JEV_INPUT_PRICE_PER_MILLION_USD) or self.JEV_INPUT_PRICE_PER_MILLION_USD <= 0:
                 raise ValueError("A verified positive JEV_INPUT_PRICE_PER_MILLION_USD is required")
             if not self.JEV_RATE_CARD_VERIFIED_AT:
                 raise ValueError("JEV_RATE_CARD_VERIFIED_AT is required before enabling JEV shadow processing")

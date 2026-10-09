@@ -28,6 +28,8 @@ jobs:
       LLM_PROVIDER: mock
       DEEPSEEK_API_KEY: ''
       JEV_MODE: 'off'
+      JEV_RERANK_MODE: 'off'
+      JEV_RERANK_ACCEPTED_MODELS: '[]'
       JEV_API_KEY: ''
       RAG_MODE: full_text_baseline
       LANGSMITH_TRACING: 'false'
