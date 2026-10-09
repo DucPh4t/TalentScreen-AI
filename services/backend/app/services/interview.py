@@ -73,9 +73,9 @@ logger = logging.getLogger(__name__)
 def get_seed_question_bank_path() -> Path:
     """Find path to seed question bank JSON."""
     candidates = [
-        Path("talentscreen-mvp-plan/examples/interview-question-bank.v1.json"),
-        Path("../talentscreen-mvp-plan/examples/interview-question-bank.v1.json"),
-        Path(__file__).parents[4] / "talentscreen-mvp-plan" / "examples" / "interview-question-bank.v1.json",
+        Path("fixtures/seeds/interview-question-bank.v1.json"),
+        Path("../fixtures/seeds/interview-question-bank.v1.json"),
+        Path(__file__).parents[4] / "fixtures" / "seeds" / "interview-question-bank.v1.json",
     ]
     for p in candidates:
         if p.exists():

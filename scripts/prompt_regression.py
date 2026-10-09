@@ -19,7 +19,7 @@ from app.domain.rubric_policy import FORBIDDEN_DISCRIMINATION_PATTERNS
 from app.services.assessment.prompt import ASSESSMENT_PROMPT_VERSION, build_assessment_system_prompt
 from app.services.interview_prompts import build_interview_system_prompt
 
-RELEASES_DIR = Path(__file__).resolve().parent.parent / "releases"
+RELEASES_DIR = Path(__file__).resolve().parent.parent / "reports" / "releases"
 
 RUBRIC_DRAFT_SYSTEM_PROMPT = """Task: draft a competency rubric for HR review, using the supplied JD requirements.
 Create role-specific criterion IDs and criteria from this JD; do not reuse an unrelated role's rubric.

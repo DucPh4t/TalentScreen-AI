@@ -38,9 +38,9 @@ from app.services.requisition import extract_jd_source_refs
 def get_seed_rubric_path() -> Path:
     """Find the path to the canonical seed rubric JSON."""
     candidates = [
-        Path("talentscreen-mvp-plan/examples/rubric-backend-python.v1.json"),
-        Path("../talentscreen-mvp-plan/examples/rubric-backend-python.v1.json"),
-        Path(__file__).parents[4] / "talentscreen-mvp-plan" / "examples" / "rubric-backend-python.v1.json",
+        Path("fixtures/seeds/rubric-backend-python.v1.json"),
+        Path("../fixtures/seeds/rubric-backend-python.v1.json"),
+        Path(__file__).parents[4] / "fixtures" / "seeds" / "rubric-backend-python.v1.json",
     ]
     for p in candidates:
         if p.exists():

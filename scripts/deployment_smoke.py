@@ -57,7 +57,7 @@ def main() -> None:
         req = call("POST", "/requisitions", 201, json={"title": "SYNTHETIC Deployment Review — Backend Python"})
         req_id = req["id"]
         jd = call("POST", f"/requisitions/{req_id}/jd-versions", 201, json={
-            "source_text": (root / "talentscreen-mvp-plan/examples/jd-backend-python.vi.md").read_text(),
+            "source_text": (root / "fixtures/seeds/jd-backend-python.vi.md").read_text(),
             "change_reason": "Synthetic deployment smoke check",
             "expected_requisition_version": req["row_version"],
         })

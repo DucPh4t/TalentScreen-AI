@@ -12,6 +12,16 @@ backups
 **/*.pyc
 services/backend/tests
 docs
-fixtures
+# Keep synthetic runtime seeds, exclude benchmark corpora.
+fixtures/*
+!fixtures/seeds/
+!fixtures/seeds/**
 *.zip
 *.tar.gz
+
+# Local worktrees, generated evidence and dependencies are not image inputs.
+.worktrees
+node_modules
+reports
+releases
+**/.DS_Store

@@ -40,7 +40,7 @@ DEFAULT_CAP_USD = Decimal("0.10")
 
 
 def load_seed_criteria() -> list[SimpleNamespace]:
-    seed = json.loads((ROOT / "talentscreen-mvp-plan/examples/rubric-backend-python.v1.json").read_text())
+    seed = json.loads((ROOT / "fixtures/seeds/rubric-backend-python.v1.json").read_text())
     return [
         SimpleNamespace(
             criterion_id=c["id"],
@@ -115,7 +115,7 @@ async def run(case_ids: tuple[str, ...], cap_usd: Decimal, dry_run: bool, progre
         "prompt_version": ASSESSMENT_PROMPT_VERSION,
         "case_ids": list(case_ids),
         "system_prompt_sha256": hashlib.sha256(system_prompt.encode()).hexdigest(),
-        "seed_rubric_sha256": hashlib.sha256((ROOT / "talentscreen-mvp-plan/examples/rubric-backend-python.v1.json").read_bytes()).hexdigest(),
+        "seed_rubric_sha256": hashlib.sha256((ROOT / "fixtures/seeds/rubric-backend-python.v1.json").read_bytes()).hexdigest(),
         "estimated_worst_case_usd": str(maximum_reservation),
         "cost_cap_usd": str(cap_usd),
         "dry_run": dry_run,

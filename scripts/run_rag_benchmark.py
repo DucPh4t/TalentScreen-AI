@@ -753,7 +753,7 @@ def evaluate_dataset(dataset: Path, split: str = "development", minimum_group_si
             },
             MVP_P1_PROFILE: {
                 "state": "PROVISIONAL_NOT_APPROVED",
-                "source": "talentscreen-mvp-plan/06-evaluation-and-testing.md and 07-operations-deployment.md",
+                "source": "docs/evaluation/legacy-mvp-evaluation-policy.md and legacy-mvp-operations-policy.md",
             },
         },
         "manual_fallback_recommended": manual_fallback,

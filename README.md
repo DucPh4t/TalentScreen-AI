@@ -1,6 +1,6 @@
 # TalentScreen AI
 
-**AI-assisted CV screening with hybrid RAG, a bounded LangGraph agent, and human approval.**
+**Evidence-based CV screening with hybrid RAG, a bounded LangGraph agent, and optional Jev reranking.**
 
 [![CI](https://github.com/DucPh4t/TalentScreen-AI/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DucPh4t/TalentScreen-AI/actions/workflows/ci.yml)
 
@@ -14,13 +14,18 @@
 [![Hybrid RAG](https://img.shields.io/badge/Hybrid_RAG-E5_%2B_pgvector-64734B)](#rag-and-agent-workflow)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Bounded_Agent-1C3C3C)](services/backend/app/services/agent/assessment_graph.py)
 [![DeepSeek](https://img.shields.io/badge/DeepSeek-LLM-4D6BFE)](services/backend/app/services/llm)
+[![Jev 1.13](https://img.shields.io/badge/Jev-1.13_%7C_Optional_Reranking-64734B)](#jev-evidence-reranking)
 [![LangSmith](https://img.shields.io/badge/LangSmith-Observability-1C3C3C)](docs/runbooks/langsmith-observability.md)
 
 TalentScreen AI turns a job description and candidate CV into a criterion-by-criterion assessment with traceable evidence. Built for a university HR use case, it combines CV review, application comparison, structured interviews, and auditable human decisions. Users define their own JD and rubric for each vacancy.
 
-**Status:** local MVP with regression and benchmark evidence. AI assessments are advisory; HR decides. Hybrid RAG V2 is opt-in.
+**Status:** local MVP with regression and synthetic benchmark evidence. HR owns hiring decisions. Hybrid RAG V2 is opt-in; Jev reranking is implemented and live-tested, but remains **off by default** pending quality validation.
 
-[Engineering](#engineering-highlights) · [Architecture](#architecture) · [RAG & agent](#rag-and-agent-workflow) · [Results](#evaluation-results) · [Quickstart](#quickstart) · [Code guide](#code-guide)
+[Engineering](#engineering-highlights) · [Architecture](#architecture) · [RAG & agent](#rag-and-agent-workflow) · [Jev](#jev-evidence-reranking) · [Results](#evaluation-results) · [Quickstart](#quickstart) · [Code guide](#code-guide)
+
+![TalentScreen AI candidate review workspace with synthetic records](docs/reviews/candidate-list-desktop-2026-10-08.jpg)
+
+*Vietnamese HR workspace with responsive candidate review. Screenshot uses synthetic records, captured on 8 October 2026.*
 
 ## Engineering highlights
 
@@ -33,7 +38,7 @@ TalentScreen AI turns a job description and candidate CV into a criterion-by-cri
 | **Reliable execution and cost control** | Background jobs, frozen input versions, reserve-before-call ledger, full serialized request fitting | Rejects stale results and limits outbound calls, context size, and spend. |
 | **Reproducible evaluation** | Actual-service ablations, frozen synthetic inputs, invocation journals, offline metrics | Separates retrieval availability, model quality, integration reliability, and cost uncertainty. |
 
-Latest recorded verification, **9 October 2026**: [506 backend tests passed, one opt-in test skipped; 23 frontend tests and production build passed](docs/reviews/2026-10-09-jev-reranking-verification.md); [480/480 E5 + mock benchmark runs accepted](docs/evaluation/rag-packing-results-2026-10-09.md). These measure software behavior and retrieval, not real hiring accuracy.
+Latest recorded verification, **9 October 2026**: [508 backend tests passed, one opt-in test skipped; 23 frontend tests and production build passed](docs/reviews/2026-10-09-repository-cleanup.md); [480/480 E5 + mock benchmark runs accepted](docs/evaluation/rag-packing-results-2026-10-09.md). These measure software behavior and retrieval, not real hiring accuracy.
 
 ## Product workflow
 
@@ -47,11 +52,7 @@ Latest recorded verification, **9 October 2026**: [506 backend tests passed, one
 The Vietnamese UI supports desktop, tablet, and phone layouts; CVs may be Vietnamese, English, or mixed-language. Original CV access is role-gated and audited. Anonymized labels, duplicate hints, and review-SLA alerts support the queue without changing capability scores.
 
 <details>
-<summary><strong>View the HR workspace</strong></summary>
-
-![Candidate review queue on desktop](docs/reviews/candidate-list-desktop-2026-10-08.jpg)
-
-*Desktop candidate queue, captured with synthetic records on 8 October 2026.*
+<summary><strong>View the mobile workspace</strong></summary>
 
 <img src="docs/reviews/candidate-list-mobile-2026-10-08.jpg" alt="Responsive candidate queue with synthetic records" width="360" />
 
@@ -83,12 +84,26 @@ The backend is a **modular monolith with a separate worker process**. PostgreSQL
 | Persistence | PostgreSQL 16, pgvector, async SQLAlchemy 2, Alembic |
 | Retrieval | Sentence Transformers, multilingual E5, lexical search, RRF |
 | Agent and inference | LangGraph, DeepSeek HTTP adapter, explicit local mock |
+| Optional passage evaluator | Jev 1.13 Choice API via OpenRouter; separate from primary scoring |
 | Developer observability | Optional LangSmith spans with a metadata allowlist |
 | Documents and tooling | PDF/DOCX extraction, Tesseract, LibreOffice, Docker, pytest, GitHub Actions |
 
 [Architecture walkthrough](docs/architecture.md) · [Current retrieval versions and packing rules](docs/evaluation/rag-pipeline-versions.md)
 
 ## RAG and agent workflow
+
+**Hybrid means combining semantic and keyword retrieval.** It does not mean combining DeepSeek and Jev. The approved rubric supplies the search criteria; the approved, redacted CV supplies the evidence.
+
+| Component | Role in this application |
+|---|---|
+| **Dense search** | Multilingual E5 embeddings + pgvector cosine similarity retrieve passages by meaning, including Vietnamese/English phrasing. |
+| **Lexical search** | PostgreSQL full-text search with `simple` tokenization and `ts_rank_cd` retrieves matching technical vocabulary. This is not a BM25 implementation. |
+| **Rank fusion** | Reciprocal Rank Fusion (`k=60`) combines the two ranked lists without mixing incompatible raw scores. |
+| **Optional Jev** | Classifies criterion–passage relevance before evidence selection; does not score the applicant. |
+| **DeepSeek + LangGraph** | Produces cited observations and can request more scoped evidence through bounded tools. |
+| **Backend + HR** | Validates citations, calculates deterministic scores, and records the human decision. |
+
+For a SQL criterion, keyword retrieval can find `PostgreSQL`, while dense retrieval can find a differently worded account of query optimization. RRF merges these results; DeepSeek still needs cited evidence to support an observation. Retrieval matches alone do not prove competence.
 
 ### 1. Retrieve evidence against the approved rubric
 
@@ -121,11 +136,36 @@ flowchart TD
 | `retrieve_more_evidence` | Search for evidence using a validated technical query hint | Current approved CV; at most four approved criterion IDs per request. |
 | `get_source_spans` | Read exact text for retrieved evidence | At most eight span IDs exposed by the preceding retrieval, within the same snapshot. |
 
-The graph permits **two tool executions, three normal model turns, and one repair**, subject to the assessment-wide outbound ceiling (default: four calls). Scope/limit violations stop execution. Tools cannot browse externally, write decisions, or send messages. Optional LangSmith traces export metadata, not CVs, prompts, model responses, or query text.
+The graph permits **two tool executions, three normal model turns, and one repair**. With reranking off, the default assessment ceiling is four primary calls. Enabled reranking freezes separate limits of **four primary, nine Jev, and thirteen total calls**, including admitted/failed calls. Scope/limit violations stop execution. Tools cannot browse externally, write decisions, or send messages. Optional LangSmith traces export metadata, not CVs, prompts, model responses, or query text.
 
 ### 3. Validate observations before calculating scores
 
 The backend validates structured observations and exact citations before Decimal-based scoring. **Observed score**, **coverage**, and **comparable score** stay separate; comparability requires complete assessment without missing/conflicting criteria. Valid citations do not prove correct interpretation—HR reviews the evidence and reasoning.
+
+## Jev evidence reranking
+
+**Jev 1.13 evaluates passages; DeepSeek evaluates cited observations; HR decides.** Jev sits inside initial retrieval and agent retrieval tools, rather than adding another LangGraph node. The implementation uses the OpenRouter Choice endpoint and validates the served model against a frozen allowlist.
+
+**Which score?** Jev returns passage-category probabilities. The backend derives a relevance utility to rank evidence, not an applicant's 0–4 criterion score or overall fit score. Enabled reranking can indirectly change the primary assessment by changing the evidence shown to DeepSeek; Jev does not replace that assessment or the deterministic scoring rules.
+
+**Does it save money?** Cost reduction is a hypothesis, not a verified result here. Reranking adds Jev calls and latency; both baseline and rerank select up to four chunks per criterion. A different evidence pack may affect primary token use, but lower total cost must be demonstrated in a controlled comparison that includes both providers. Current experiments do not establish net savings.
+
+Each approved criterion–passage pair receives one of five categories: `substantive_evidence`, `mention_only`, `limiting_evidence`, `unrelated`, or `unclear`. Selection protects a limiting passage and an unscored passage when available, but these protections do not guarantee complete negative/conflicting evidence retention.
+
+| Mode | Effect on the evidence pack | Current use |
+|---|---|---|
+| `off` | Baseline RRF selection; no Jev calls | Recommended default |
+| `shadow` | Record judgments while retaining baseline selection | Controlled observation |
+| `rerank` | Change passage order and selection | Opt-in, pending activation evidence |
+| `gate_experiment` | Also omit highly confident unrelated passages | Internal synthetic sandbox only |
+
+Calls have bounded batch/request sizes, reserve-before-call accounting, and a private run-scoped journal. Ambiguous provider outcomes retain their reservation and cannot be replayed automatically. HR sees an evidence-review notice when applicable; developer metadata goes to optional LangSmith traces.
+
+**Live evidence, 9 October 2026:** Jev actually served `typesafe/jev-1.13-20260917`. The synthetic suite accepted 21/22 assessments plus a contract probe. Eighteen assessments used **real Jev with a mock primary**; the live DeepSeek comparison covered only one Node.js case. These acceptance counts measure execution, not scoring accuracy.
+
+Reranking delivered more annotated evidence overall, but lost some negative evidence available in the matching shadow baseline. One invocation has an unresolved outcome. An off/enabled query mismatch was fixed after the experiment; the corrected code has not had a paid rerun. **Activation gates are not met, so Jev stays off.**
+
+[Measured results and provenance](docs/evaluation/jev-reranking-results-2026-10-09.md) · [Configuration, limits, and rollback](docs/runbooks/jev-reranking.md) · [Regression verification](docs/reviews/2026-10-09-jev-reranking-verification.md)
 
 ## Evaluation results
 
@@ -148,7 +188,15 @@ An earlier **12-run live DeepSeek probe** verified integration on three syntheti
 
 [Controlled results and provenance](docs/evaluation/rag-packing-results-2026-10-09.md) · [Earlier live probe](docs/evaluation/ai-benchmark-results-2026-10-09.md) · [Reproduction protocol](docs/evaluation/ai-benchmark-reproducibility.md)
 
-A later **live Jev experiment** completed 21/22 synthetic assessment runs plus a successful contract probe. It exposed negative-evidence losses, a now-fixed off/shadow query mismatch, and one unresolved provider admission. **Jev remains off**; these results do not validate activation or HR replacement. [Full results and limitations](docs/evaluation/jev-reranking-results-2026-10-09.md).
+Read the evidence at the appropriate level:
+
+| Evidence | Establishes | Still unmeasured |
+|---|---|---|
+| Regression tests and build | Tested contracts, workflow behavior, migration compatibility, and compilation | Production reliability and hiring quality |
+| E5 + mock ablations | Evidence retrieval/packing on frozen synthetic references | Live interpretation and scoring accuracy |
+| Live DeepSeek/Jev probes | Provider integration and observed sample behavior | General model benefit, live tool recovery, independent HR agreement |
+
+[Jev experiment](#jev-evidence-reranking) · [AI Engineering README review and related projects](docs/reviews/2026-10-09-readme-ai-engineering-review.md)
 
 ## Quickstart
 
@@ -212,15 +260,11 @@ Keep the worker running for extraction/assessments. Follow the [HR workflow](doc
 | `RAG_PIPELINE_VERSION` | `v1` | Set `v2` for the improved span index and bilingual query; `v1` rolls back new runs. |
 | `EMBEDDING_DEVICE` | `auto` | Explicit `cpu`, `mps`, or `cuda` when needed. |
 | `LANGSMITH_TRACING` | `false` | Enable developer metadata traces after configuring your own key/project. |
+| `JEV_RERANK_MODE` | `off` | Keep off for normal use; see the [Jev runbook](docs/runbooks/jev-reranking.md) for controlled experiments. |
 
 Restart **API and worker** after changing settings. Hybrid first use may download pinned E5 weights; offline benchmarks require a populated cache. Provider configuration alone does not verify live inference.
 
-<details>
-<summary>Optional secondary scorer</summary>
-
-Jev 1.13 is an optional shadow adapter, disabled by default. Separate credentials, processing approval, and verified pricing are required; it cannot alter the primary assessment or human decision. See [settings](.env.example).
-
-</details>
+Jev reranking uses a separate `JEV_API_KEY`, processor approval, a current verified rate card, and an accepted-model allowlist. For the measured Choice route, override `JEV_BASE_URL` with `https://openrouter.ai/api/alpha/decisions`; the template retains the older System One endpoint for compatibility. Do not copy expired rate dates from a report. The legacy `JEV_MODE` secondary scoring shadow is a different integration and cannot run together with reranking; keep `JEV_MODE=off` for this path. [Full configuration](.env.example).
 
 ## Verification and benchmark commands
 
@@ -251,6 +295,7 @@ Each experiment needs a new output directory. See [prerequisites, tokenizer proo
 | [LangGraph](services/backend/app/services/agent/assessment_graph.py) → [tools](services/backend/app/services/agent/tools.py) | Authorization, bounded tool calls, stale inputs, validation and repair. |
 | [Request fitter](services/backend/app/services/agent/request_budget.py) → [invocation ledger](services/backend/app/services/llm/ledger.py) | Complete UTF-8 request accounting, whole-span eviction, budget reservation and settlement. |
 | [Prompts](services/backend/app/services/assessment/prompt.py) → [validator](services/backend/app/services/assessment/validator.py) → [scoring](services/backend/app/services/assessment/scoring.py) | Versioned prompts, exact citations, deterministic scoring and abstention. |
+| [Jev reranking](services/backend/app/services/reranking) → [reranking evaluation](services/backend/app/services/evaluation/benchmark/reranking.py) | Pair contracts, protected selection, resumable journals, provider-aware budgets, and activation gates. |
 | [Benchmark runner/evaluator](services/backend/app/services/evaluation/benchmark) | Controlled profiles, label separation, owned isolation, metrics and financial reconciliation. |
 
 ```text
@@ -260,11 +305,12 @@ services/backend/app/
   services/agent/             LangGraph and scoped evidence tools
   services/assessment/        Prompts, validation, scoring and snapshots
   services/llm/               Provider adapters and invocation ledger
+  services/reranking/         Optional Jev passage judgments and selection
   services/evaluation/        Metrics and actual-service benchmark
 services/backend/alembic/      Database migrations
 services/backend/tests/        Regression and integration tests
 scripts/                      Local tooling and benchmark entry points
-fixtures/                     Synthetic test and evaluation data
+fixtures/                     Synthetic seeds and evaluation data
 docs/                         Architecture, results, workflow and runbooks
 ```
 
@@ -272,11 +318,11 @@ docs/                         Architecture, results, workflow and runbooks
 
 Next: bounded live V2/tool-recovery evaluation, independent HR/IT labels, and operational verification. Email delivery, ATS/calendar integrations, and dossier export remain future work. Interview conclusions do not create offers. Public deployment and real-data use require the [G1–G7 readiness gates](docs/runbooks/rag-agent-readiness.md).
 
-[Detailed workflow](docs/hr-workflow.md) · [Latest verification](docs/reviews/2026-10-09-rag-packing-verification.md) · [LangSmith setup](docs/runbooks/langsmith-observability.md) · [Full configuration](.env.example)
+[Detailed workflow](docs/hr-workflow.md) · [Latest verification](docs/reviews/2026-10-09-jev-reranking-verification.md) · [LangSmith setup](docs/runbooks/langsmith-observability.md) · [Full configuration](.env.example)
 
 <details>
 <summary>Giới thiệu tiếng Việt</summary>
 
-TalentScreen AI hỗ trợ HR đối chiếu CV với JD và rubric đã duyệt. Hybrid RAG tìm bằng chứng theo tiêu chí; agent chỉ đọc dữ liệu trong hồ sơ hiện tại. Điểm AI mang tính tham khảo, thiếu/mâu thuẫn bằng chứng giữ điểm trống, HR quyết định cuối cùng. Dự án có kiểm thử và benchmark; chất lượng tuyển dụng thật cần đánh giá độc lập.
+TalentScreen AI hỗ trợ HR đối chiếu CV với JD và rubric đã duyệt. Hybrid RAG kết hợp tìm theo ý nghĩa (E5 + pgvector) và từ khóa (PostgreSQL), gộp thứ hạng bằng RRF. Jev tùy chọn đánh giá độ liên quan của đoạn CV, DeepSeek tạo nhận xét có trích dẫn; agent chỉ đọc dữ liệu trong hồ sơ hiện tại. Điểm AI mang tính tham khảo, thiếu/mâu thuẫn bằng chứng giữ điểm trống, HR quyết định cuối cùng. Dự án có kiểm thử và benchmark; chất lượng tuyển dụng thật cần đánh giá độc lập.
 
 </details>

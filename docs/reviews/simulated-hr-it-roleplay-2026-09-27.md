@@ -13,8 +13,8 @@ Combined state: `approved_for_synthetic_rehearsal_only`. Do not set a production
 
 ## Material reviewed
 
-- Draft JD: `talentscreen-mvp-plan/examples/jd-backend-python.vi.md`.
-- Draft rubric: `talentscreen-mvp-plan/examples/rubric-backend-python.v1.json`.
+- Draft JD: `fixtures/seeds/jd-backend-python.vi.md`.
+- Draft rubric: `fixtures/seeds/rubric-backend-python.v1.json`.
 - Frozen synthetic rehearsal corpus: `fixtures/holdout_rehearsal/manifest.json`, 30 distinct one-line CV scenarios, 10 each in Vietnamese, English and mixed language.
 - Per-case annotations: `private_storage/eval/simulated_hr_it_roleplay_2026-09-27.json` (local, ignored by Git, mode 0600). This file includes source hashes, all six outcomes/scores, source text quotes and a provenance flag. It deliberately does **not** use `hr_blind` as its origin.
 

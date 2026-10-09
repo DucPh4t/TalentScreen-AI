@@ -83,3 +83,8 @@ Thumbs.db
 *.tar.gz
 
 .worktrees/
+
+# Local backup archives and generated release manifests
+/backups/
+/releases/
+*.zip

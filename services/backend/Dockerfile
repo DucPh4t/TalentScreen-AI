@@ -44,7 +44,7 @@ RUN groupadd -g 10001 appgroup && \
 COPY services/backend/app ./services/backend/app
 COPY services/backend/alembic ./services/backend/alembic
 COPY alembic.ini ./
-COPY talentscreen-mvp-plan/examples ./talentscreen-mvp-plan/examples
+COPY fixtures/seeds ./fixtures/seeds
 ENV PYTHONPATH=/app/services/backend
 
 # Ensure storage directory exists and owned by appuser

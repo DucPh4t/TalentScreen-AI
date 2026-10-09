@@ -1,5 +1,7 @@
 # 07 — Local runtime, chi phí, SLO và chuẩn bị deploy
 
+> Historical MVP proposal (26 September 2026), retained as the source of the legacy benchmark threshold profile. This is not the current runtime setup or a record of passing gates. See [current readiness](../runbooks/rag-agent-readiness.md), [reproduction](ai-benchmark-reproducibility.md), and the root README for current commands.
+
 ## 1. Mục tiêu môi trường
 
 Ưu tiên một người có thể cài, chạy, debug và phục hồi trên MacBook Air M4. Không chạy DeepSeek đầy đủ trên laptop; DeepSeek là API remote đã được phép theo trường. GPU tích hợp dùng cho embedding khi MPS chạy ổn; parser/OCR chủ yếu CPU. Dung lượng RAM chưa kiểm tra được trong phiên lập plan, nên không khẳng định cấu hình máy đáp ứng một throughput cụ thể.
@@ -79,7 +81,7 @@ Các tên lệnh là acceptance contract; trong bộ tài liệu hiện tại ch
 | `RATE_CARD_VERIFIED_AT` | chưa có cho model user | Thiếu rate card của model thực => chặn paid batch |
 | `RETENTION_POLICY_ID` | bắt buộc ở real environment | Chính sách trường; không invent luật |
 
-Actual output token limits theo từng task và input sizing theo [04](04-ai-rag-prompts.md). Key mismatch giữa docs phải được sửa trước implement; không định nghĩa nhiều biến tên khác nhau cho cùng một policy.
+Actual output token limits theo từng task và input sizing theo [current request fitter](../../services/backend/app/services/agent/request_budget.py). Key mismatch giữa docs phải được sửa trước implement; không định nghĩa nhiều biến tên khác nhau cho cùng một policy.
 
 ## 4. DeepSeek capability probe và model drift
 
