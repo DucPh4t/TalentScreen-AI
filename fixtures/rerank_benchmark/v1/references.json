@@ -1,0 +1,193 @@
+{
+  "design_labels": {
+    "pair-00-0": "substantive_evidence",
+    "pair-00-1": "limiting_evidence",
+    "pair-00-2": "mention_only",
+    "pair-00-3": "unrelated",
+    "pair-00-4": "unclear",
+    "pair-01-0": "substantive_evidence",
+    "pair-01-1": "limiting_evidence",
+    "pair-01-2": "mention_only",
+    "pair-01-3": "unrelated",
+    "pair-01-4": "unclear",
+    "pair-02-0": "substantive_evidence",
+    "pair-02-1": "limiting_evidence",
+    "pair-02-2": "mention_only",
+    "pair-02-3": "unrelated",
+    "pair-02-4": "unclear",
+    "pair-03-0": "substantive_evidence",
+    "pair-03-1": "limiting_evidence",
+    "pair-03-2": "mention_only",
+    "pair-03-3": "unrelated",
+    "pair-03-4": "unclear",
+    "pair-04-0": "substantive_evidence",
+    "pair-04-1": "limiting_evidence",
+    "pair-04-2": "mention_only",
+    "pair-04-3": "unrelated",
+    "pair-04-4": "unclear",
+    "pair-05-0": "substantive_evidence",
+    "pair-05-1": "limiting_evidence",
+    "pair-05-2": "mention_only",
+    "pair-05-3": "unrelated",
+    "pair-05-4": "unclear",
+    "pair-06-0": "substantive_evidence",
+    "pair-06-1": "limiting_evidence",
+    "pair-06-2": "mention_only",
+    "pair-06-3": "unrelated",
+    "pair-06-4": "unclear",
+    "pair-07-0": "substantive_evidence",
+    "pair-07-1": "limiting_evidence",
+    "pair-07-2": "mention_only",
+    "pair-07-3": "unrelated",
+    "pair-07-4": "unclear",
+    "pair-08-0": "substantive_evidence",
+    "pair-08-1": "limiting_evidence",
+    "pair-08-2": "mention_only",
+    "pair-08-3": "unrelated",
+    "pair-08-4": "unclear",
+    "pair-09-0": "substantive_evidence",
+    "pair-09-1": "limiting_evidence",
+    "pair-09-2": "mention_only",
+    "pair-09-3": "unrelated",
+    "pair-09-4": "unclear",
+    "pair-10-0": "substantive_evidence",
+    "pair-10-1": "limiting_evidence",
+    "pair-10-2": "mention_only",
+    "pair-10-3": "unrelated",
+    "pair-10-4": "unclear",
+    "pair-11-0": "substantive_evidence",
+    "pair-11-1": "limiting_evidence",
+    "pair-11-2": "mention_only",
+    "pair-11-3": "unrelated",
+    "pair-11-4": "unclear",
+    "oversized-vi": "unclear",
+    "instruction-attack": "unrelated"
+  },
+  "independent_grades": null,
+  "sufficient_groups": {
+    "skill_00": [
+      [
+        "pair-00-0"
+      ]
+    ],
+    "skill_01": [
+      [
+        "pair-01-0"
+      ]
+    ],
+    "skill_02": [
+      [
+        "pair-02-0"
+      ]
+    ],
+    "skill_03": [
+      [
+        "pair-03-0"
+      ]
+    ],
+    "skill_04": [
+      [
+        "pair-04-0"
+      ]
+    ],
+    "skill_05": [
+      [
+        "pair-05-0"
+      ]
+    ],
+    "skill_06": [
+      [
+        "pair-06-0"
+      ]
+    ],
+    "skill_07": [
+      [
+        "pair-07-0"
+      ]
+    ],
+    "skill_08": [
+      [
+        "pair-08-0"
+      ]
+    ],
+    "skill_09": [
+      [
+        "pair-09-0"
+      ]
+    ],
+    "skill_10": [
+      [
+        "pair-10-0"
+      ]
+    ],
+    "skill_11": [
+      [
+        "pair-11-0"
+      ]
+    ]
+  },
+  "limiting_pair_ids": [
+    "pair-00-1",
+    "pair-01-1",
+    "pair-02-1",
+    "pair-03-1",
+    "pair-04-1",
+    "pair-05-1",
+    "pair-06-1",
+    "pair-07-1",
+    "pair-08-1",
+    "pair-09-1",
+    "pair-10-1",
+    "pair-11-1"
+  ],
+  "contradictory_pair_groups": [
+    [
+      "pair-00-0",
+      "pair-00-1"
+    ],
+    [
+      "pair-01-0",
+      "pair-01-1"
+    ],
+    [
+      "pair-02-0",
+      "pair-02-1"
+    ],
+    [
+      "pair-03-0",
+      "pair-03-1"
+    ],
+    [
+      "pair-04-0",
+      "pair-04-1"
+    ],
+    [
+      "pair-05-0",
+      "pair-05-1"
+    ],
+    [
+      "pair-06-0",
+      "pair-06-1"
+    ],
+    [
+      "pair-07-0",
+      "pair-07-1"
+    ],
+    [
+      "pair-08-0",
+      "pair-08-1"
+    ],
+    [
+      "pair-09-0",
+      "pair-09-1"
+    ],
+    [
+      "pair-10-0",
+      "pair-10-1"
+    ],
+    [
+      "pair-11-0",
+      "pair-11-1"
+    ]
+  ]
+}

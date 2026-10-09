@@ -23,6 +23,7 @@ class RerankPolicy(Contract):
     mode: Mode='off'
     policy_version: Literal['jev-evidence-ranking.v1']='jev-evidence-ranking.v1'
     prompt_version: Literal['jev-passage-choice.v1']='jev-passage-choice.v1'
+    provider_kind: Literal['jev','scripted']='jev'
     requested_model: str='typesafe/jev-1.13'
     accepted_models: tuple[str,...]=()
     endpoint: str='https://openrouter.ai/api/alpha/decisions'

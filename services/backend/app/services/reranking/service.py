@@ -77,6 +77,7 @@ async def rerank_candidates(*,db,run,policy,stage,candidates_by_criterion,focus_
         financial_policy=JevReservationPolicy(period.id,Decimal(str(period.limit_usd)),policy.input_reservation_tokens,
             Decimal(str(policy.rate_per_million_usd)),policy.rate_verified_at,frozenset(policy.accepted_models),policy.endpoint)
         await db.commit()
+    if policy.provider_kind=='scripted' and provider_override is None:raise RerankError('SCRIPTED_RERANK_PROVIDER_REQUIRED')
     provider=provider_override or get_jev_provider(policy=policy)
     started=time.monotonic();judgments=list(cached);status=None
     previous_ms=next((s.elapsed_ms for s in journal.stages if s.stage==stage),0)

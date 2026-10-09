@@ -37,7 +37,8 @@ def write_reports(report,output):
 def generate_reports(source,output,dataset):
     source=Path(source)
     if source.is_symlink() or (source/'manifest.json').is_symlink():raise ValueError('ARTIFACT_PATH_INVALID')
-    manifest=RunManifest.model_validate_json((source/'manifest.json').read_text())
+    from .reranking import load_run_manifest
+    manifest=load_run_manifest((source/'manifest.json').read_text())
     records=read_records(source/'runs.jsonl')
     events=read_events(source/'admissions.jsonl')
     inputs=load_inputs(Path(dataset));refs=load_references(inputs.root,inputs)

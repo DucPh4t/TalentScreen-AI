@@ -139,7 +139,8 @@ def run_in_isolation(command: list[str]) -> int:
                  "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"; "
                  "COMMENT ON DATABASE talentscreen_benchmark IS 'benchmark:"+nonce+"';"])
         env={**os.environ,**context.private_environment(),'PYTHONPATH':'services/backend','APP_ENV':'sandbox',
-             'PILOT_STAGE':'','JEV_MODE':'off','JEV_API_KEY':'',
+             'PILOT_STAGE':'','JEV_MODE':'off','JEV_RERANK_MODE':'off',
+             'JEV_API_KEY':os.environ.get('JEV_API_KEY','') if '--reranker-provider' in command and command[command.index('--reranker-provider')+1]=='jev' else '',
              'HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1'}
         subprocess.run([sys.executable,'-m','alembic','upgrade','head'],env=env,check=True)
         child=subprocess.Popen(command,env=env)

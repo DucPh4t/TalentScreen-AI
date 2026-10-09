@@ -34,7 +34,7 @@ class JevReservationPolicy:
         allowed={('openrouter.ai','/api/alpha/decisions'),('openrouter.ai','/api/v1/systemone'),('api.typesafe.ai','/v1/systemone')}
         if (not isinstance(self.budget_period_id,UUID) or not self.cap_usd.is_finite() or not 0<self.cap_usd
             or type(self.max_input_tokens) is not int or self.max_input_tokens!=65536
-            or not self.rate_per_million_usd.is_finite() or self.rate_per_million_usd<=0
+            or not self.rate_per_million_usd.is_finite() or (self.rate_per_million_usd<0 or (self.rate_per_million_usd==0 and self.accepted_models!=frozenset({'scripted-jev-v1'})))
             or not 0<=age<=7 or not self.accepted_models or url.scheme!='https'
             or (url.hostname,url.path) not in allowed or url.port not in (None,443) or url.query or url.fragment or url.username):
             raise ValueError('JEV_RESERVATION_POLICY_INVALID')

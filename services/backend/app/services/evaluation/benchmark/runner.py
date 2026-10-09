@@ -62,7 +62,8 @@ class RecordingProvider:
             'reported_model':safe_model,'input_tokens':result.input_tokens,'output_tokens':result.output_tokens,
             'cached_input_tokens':result.cached_input_tokens,'provider_latency_ms':result.latency_ms,'at':now()})
         identity=self.model_identity
-        if safe_model not in request.strict_reservation_policy.accepted_reported_models or (identity.first is not None and safe_model!=identity.first):
+        accepted=request.jev_reservation_policy.accepted_models if request.provider=='jev' else request.strict_reservation_policy.accepted_reported_models
+        if safe_model not in accepted or (identity.first is not None and safe_model!=identity.first):
             identity.changed=True
             append_event(self.output/'admissions.jsonl',{'event':'model_identity_changed','invocation_id':str(pending.id),
                 'first_reported_model':identity.first,'reported_model':safe_model,'at':now()})
@@ -76,8 +77,9 @@ class RecordingProvider:
 
 class BenchmarkMockRecordingProvider(RecordingProvider):pass
 class DeepSeekRecordingProvider(RecordingProvider):pass
+class JevRecordingProvider(RecordingProvider):pass
 
-async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,output,embedding_mode='real',retrieval_version='v1'):
+async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,output,embedding_mode='real',retrieval_version='v1',rerank_policy=None,reranker_provider=None,rerank_budget_plan=None):
     from sqlalchemy import select
     from app.config import get_settings
     from app.db.models import AssessmentRun,CriterionAssessment,CriterionEvidence,LLMInvocation,Job,BudgetReservation
@@ -109,6 +111,14 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
     policies={p:benchmark_policy(p,retrieval_version=retrieval_version) for p in selection.profiles}
     recalculated=plan_budget(inputs,selection,policies,model=budget_plan.model,cap_usd=budget_plan.cap_usd,bound=budget_plan.bound)
     if recalculated!=budget_plan or not budget_plan.admitted:raise ValueError('BENCHMARK_BUDGET_PLAN_REJECTED')
+    from .reranking import plan_rerank_budget,RerankRunManifest
+    from app.services.reranking.contracts import RerankPolicy
+    rerank_policy=rerank_policy or RerankPolicy()
+    if rerank_policy.enabled:
+        if retrieval_version!='v2' or reranker_provider is None:raise ValueError('RERANK_EXPERIMENT_POLICY_INVALID')
+        rerank_kind='scripted' if rerank_policy.provider_kind=='scripted' else 'jev'
+        planned=plan_rerank_budget(budget_plan,selection,policy=rerank_policy,reranker_provider=rerank_kind,cap_usd=budget_plan.cap_usd)
+        if planned!=rerank_budget_plan:raise ValueError('RERANK_EXPERIMENT_POLICY_INVALID')
     assert_frozen(inputs)
     period=await get_or_create_active_budget_period(db,BudgetScope.DEVELOPMENT)
     if period.limit_usd!=budget_plan.cap_usd:raise ValueError('BENCHMARK_CAP_MISMATCH')
@@ -126,9 +136,15 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
             'temperature':0,'thinking':'disabled','max_output_tokens':4096,'concurrency':1,'repetitions':1,
             'reference_origin':'synthetic_design_expected','invoice_usd':None},budget_plan=budget_plan,
         budget_period_id=period.id,started_at=now(),counts={'planned':len(selection.combinations)})
+    if rerank_policy.enabled:
+        manifest=RerankRunManifest(**{k:v for k,v in manifest.model_dump().items() if k!='schema_version'},reranking={
+            'mode':rerank_policy.mode,'reranker_provider':rerank_kind,'requested_model':rerank_policy.requested_model,
+            'policy':rerank_policy.model_dump(mode='json'),'policy_hash':rerank_policy.digest,
+            'model_quality':'unmeasured' if rerank_kind=='scripted' else 'synthetic_retrieval_only',
+            'budget':rerank_budget_plan.model_dump(mode='json')})
     atomic_json(output/'manifest.json',manifest)
     strict=StrictReservationPolicy(period.id,budget_plan.cap_usd,budget_plan.bound,budget_plan.model)
-    stop=None;interrupted=False;records=[];model_identity=ExperimentModelIdentity()
+    stop=None;interrupted=False;records=[];model_identity=ExperimentModelIdentity();jev_identity=ExperimentModelIdentity()
     with scripted_embeddings(embedding_mode=='scripted'):
         setup_start=time.perf_counter();device=None
         try:
@@ -149,20 +165,27 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                 record=RunRecord(case_id=case_id,profile=profile,status='skipped',error_code=stop,policy_hash=policies[profile].digest)
                 append_record(output/'runs.jsonl',record);records.append(record)
                 continue
-            run=None;wrapper=None;trace_id=None
+            run=None;wrapper=None;jev_wrapper=None;trace_id=None
             diagnostic=AssessmentDiagnostics({c.id for c in inputs.roles[next(c.role_family for c in inputs.cases if c.case_id==case_id)].criteria})
             try:
                 assert_frozen(inputs)
                 item=seeded[case_id]
                 response=await create_assessment_run(db,item.application_id,AssessmentRunCreateRequest(
-                    sanitized_version_id=item.sanitized_version_id,rubric_version_id=item.rubric_version_id),item.ctx,execution_policy=policies[profile])
+                    sanitized_version_id=item.sanitized_version_id,rubric_version_id=item.rubric_version_id),item.ctx,execution_policy=policies[profile],**({"rerank_policy_override":rerank_policy} if rerank_policy.enabled else {}))
                 await db.commit()
                 run=await db.get(AssessmentRun,response.id)
                 wrapper=(BenchmarkMockRecordingProvider if is_mock else DeepSeekRecordingProvider)(provider,db,run.job_id,inputs,output,model_identity)
+                rerank_arguments={}
+                if rerank_policy.enabled:
+                    from app.services.llm.call_policy import JevReservationPolicy
+                    jev_wrapper=JevRecordingProvider(reranker_provider,db,run.job_id,inputs,output,jev_identity)
+                    financial=JevReservationPolicy(period.id,budget_plan.cap_usd,65536,Decimal(str(rerank_policy.rate_per_million_usd)),
+                        rerank_policy.rate_verified_at,frozenset(rerank_policy.accepted_models),rerank_policy.endpoint)
+                    rerank_arguments={'rerank_provider_override':jev_wrapper,'rerank_financial_policy':financial}
                 with trace_span('benchmark_combination',metadata={'experiment_id':str(context.experiment_id),'benchmark_profile':profile,
                     'case_id_sha256':hashlib.sha256(case_id.encode()).hexdigest()}) as span:
                     trace_id=uuid.UUID(span.run_id) if span.run_id else None
-                    await execute_assessment_job(db,run.job_id,provider_override=wrapper,diagnostics=diagnostic,strict_reservation_policy=strict)
+                    await execute_assessment_job(db,run.job_id,provider_override=wrapper,diagnostics=diagnostic,strict_reservation_policy=strict,**rerank_arguments)
                     span.record(diagnostic.snapshot()["counters"])
                 await db.commit()
                 # Hash changes during the final response also invalidate the batch.
@@ -191,9 +214,11 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                         clarification_count=len(c.missing_information or [])) for c in criteria}
                 llms=(await db.scalars(select(LLMInvocation).where(LLMInvocation.job_id==run.job_id).order_by(LLMInvocation.created_at))).all()
                 for invocation in llms:
-                    result=wrapper.results.get(invocation.id) if wrapper else None
+                    is_jev=invocation.logical_step.startswith("jev_rerank_")
+                    recorder=jev_wrapper if is_jev else wrapper
+                    result=recorder.results.get(invocation.id) if recorder else None
                     invocations.append(InvocationRecord(invocation_id=invocation.id,logical_step=invocation.logical_step,
-                        attempt_no=invocation.attempt_no,status=invocation.status.value,requested_model=budget_plan.model,
+                        attempt_no=invocation.attempt_no,status=invocation.status.value,requested_model=rerank_policy.requested_model if is_jev else budget_plan.model,
                         reported_model=safe_metadata({"model":result.reported_model}).get("model") if result else None,input_tokens=invocation.input_tokens,output_tokens=invocation.output_tokens,
                         cached_input_tokens=result.cached_input_tokens if result else None,provider_latency_ms=result.latency_ms if result else None,
                         reserved_usd=invocation.cost_reserved,estimated_peak_usd=invocation.cost_actual,rate_card_version=invocation.rate_card_version))
@@ -215,6 +240,10 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                 diagnostics=diagnostic.snapshot(),invocations=tuple(invocations),tool_execution_count=(run.execution_trace or {}).get('tool_execution_count',0) if run else 0,
                 repair_count=(run.execution_trace or {}).get('repair_count',0) if run else 0,trace_id=trace_id)
             append_record(output/'runs.jsonl',record);records.append(record)
+            if rerank_policy.enabled:
+                append_event(output/'rerank.jsonl',{'case_id':case_id,'profile':profile,'mode':rerank_policy.mode,
+                    'status':status,'reranker_provider':rerank_kind,'journal':run.rerank_output if run else None,
+                    'first_reported_model':jev_identity.first,'model_changed':jev_identity.changed})
             manifest=manifest.model_copy(update={'provenance':{**manifest.provenance,**model_identity.provenance()}})
             atomic_json(output/'manifest.json',manifest.model_copy(update={'counts':{'planned':len(selection.combinations),'recorded':len(records)}}))
     await db.refresh(period)
@@ -223,7 +252,7 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
     manifest=manifest.model_copy(update={'status':final_status,'completed_at':now(),'stop_code':stop,
         'financial':{'spent_peak_estimate_usd':str(period.spent_usd),'held_usd':str(period.reserved_usd),
             'unresolved_invocations':sum(i.status in {'reserved','admitted','outcome_unknown'} for i in all_invocations),
-            'invoice_usd':None},'counts':{'planned':len(selection.combinations),**{s:sum(r.status==s for r in records) for s in ('accepted','failed','skipped','interrupted')}}})
+            'invoice_usd':None,**({'jev_first_reported_model':jev_identity.first,'jev_model_changed':jev_identity.changed} if rerank_policy.enabled else {})},'counts':{'planned':len(selection.combinations),**{s:sum(r.status==s for r in records) for s in ('accepted','failed','skipped','interrupted')}}})
     atomic_json(output/'manifest.json',manifest)
     return manifest
 
@@ -244,6 +273,8 @@ def parser():
         if name!='validate':
             q.add_argument('--embedding-mode',choices=('real','scripted'),default='real')
             q.add_argument('--retrieval-version',choices=('v1','v2'),default='v1')
+            q.add_argument('--rerank-mode',choices=('off','shadow','rerank','gate_experiment'),default='off')
+            q.add_argument('--reranker-provider',choices=('scripted','jev'),default='scripted')
         if name=='run':
             q.add_argument('--output',type=Path,required=True)
     q=sub.add_parser('report');q.add_argument('--input',type=Path,required=True);q.add_argument('--output',type=Path,required=True)
@@ -274,9 +305,18 @@ def main(argv=None):
         except ValueError:bound=context_bound(model)
         plan=plan_budget(inputs,selection,{p:benchmark_policy(p,retrieval_version=args.retrieval_version) for p in selection.profiles},model=model,cap_usd=args.max_cost_usd,bound=bound)
         prerequisites=execution_prerequisites(plan,provider=args.provider,embedding_mode=args.embedding_mode)
+        from .reranking import experiment_policy,plan_rerank_budget
+        rerank_policy=experiment_policy(args.rerank_mode,args.reranker_provider,get_settings())
+        rerank_plan=None;extension={}
+        if rerank_policy.enabled:
+            if args.retrieval_version!='v2':raise ValueError('JEV_RERANK_REQUIRES_HYBRID_V2')
+            rerank_plan=plan_rerank_budget(plan,selection,policy=rerank_policy,reranker_provider=args.reranker_provider,cap_usd=args.max_cost_usd)
+            extension={'reranking':{'mode':rerank_policy.mode,'reranker_provider':args.reranker_provider,
+                'model_quality':'unmeasured' if args.reranker_provider=='scripted' else 'synthetic_retrieval_only',
+                'budget':rerank_plan.model_dump(mode='json'),'policy_hash':rerank_policy.digest}}
         if args.command=='plan':
             print(json.dumps({**plan.model_dump(mode='json'),'execution_prerequisites':prerequisites,
-                              'source_code':git_source_provenance(),'retrieval_version':args.retrieval_version},indent=2));return 0
+                              'source_code':git_source_provenance(),'retrieval_version':args.retrieval_version,**extension},indent=2));return 0
         from .isolation import IsolationContext
         try:context=IsolationContext.from_environment()
         except (KeyError,ValueError):raise ValueError('BENCHMARK_ISOLATION_REQUIRED')
@@ -284,7 +324,7 @@ def main(argv=None):
         if prerequisites['embedding_revision']:
             os.environ['EMBEDDING_MODEL_REVISION']=prerequisites['embedding_revision']
         # These settings apply only in the disposable child; never edit .env.
-        os.environ.update(APP_ENV='sandbox',JEV_MODE='off',DEV_EVAL_BUDGET_USD=str(args.max_cost_usd),DEEPSEEK_MODEL=model,
+        os.environ.update(APP_ENV='sandbox',JEV_MODE='off',JEV_RERANK_MODE='off',DEV_EVAL_BUDGET_USD=str(args.max_cost_usd),DEEPSEEK_MODEL=model,
             HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1')
         if args.provider=='mock':os.environ.update(LLM_PROVIDER='mock',LANGSMITH_TRACING='false')
         import app.config as configuration
@@ -293,12 +333,17 @@ def main(argv=None):
         from app.services.llm.provider import DeepSeekHTTPXProvider
         from .mock_provider import BenchmarkMockProvider
         provider=BenchmarkMockProvider() if args.provider=='mock' else DeepSeekHTTPXProvider()
+        reranker=None
+        if rerank_policy.enabled:
+            from .reranking import ScriptedJevProvider
+            from app.services.jev.provider import get_jev_provider
+            reranker=ScriptedJevProvider() if args.reranker_provider=='scripted' else get_jev_provider(policy=rerank_policy)
         async def execute():
             loop=asyncio.get_running_loop();task=asyncio.current_task()
             for sig in (signal.SIGINT,signal.SIGTERM):loop.add_signal_handler(sig,task.cancel)
             try:
                 async with get_session_factory()() as db:
-                    return await run_experiment(db,inputs,selection,context,provider=provider,budget_plan=plan,output=args.output,embedding_mode=args.embedding_mode,retrieval_version=args.retrieval_version)
+                    return await run_experiment(db,inputs,selection,context,provider=provider,budget_plan=plan,output=args.output,embedding_mode=args.embedding_mode,retrieval_version=args.retrieval_version,rerank_policy=rerank_policy,reranker_provider=reranker,rerank_budget_plan=rerank_plan)
             finally:
                 for sig in (signal.SIGINT,signal.SIGTERM):loop.remove_signal_handler(sig)
         manifest=asyncio.run(execute())

@@ -1,0 +1,9 @@
+{
+  "version": "rerank-pairs.v1",
+  "origin": "synthetic_design_expected",
+  "protected_holdout": false,
+  "files": {
+    "pairs.json": "070ed7a41a0c436e82ecb450900909e4e1f9c92b6604f9a6c7c83351de8804e6",
+    "references.json": "383a6fa38c11d1d47e3529427536f6b2314a0cd93f0033dd138d28d584ae99cc"
+  }
+}

@@ -164,6 +164,8 @@ async def admit_invocation(db: AsyncSession, *, job_id: uuid.UUID, request: Comp
         raise PreconditionViolationError('INVOCATION_ALREADY_ADMITTED')
     strict=request.strict_reservation_policy
     financial=request.jev_reservation_policy
+    if policy.enabled and policy.provider_kind=='scripted' and (get_settings().APP_ENV!='sandbox' or not snapshot.get('assessment_execution_policy')):
+        raise PreconditionViolationError('SCRIPTED_RERANK_SANDBOX_ONLY')
     if is_rerank and (financial is None or request.model!=policy.requested_model
         or financial.accepted_models!=frozenset(policy.accepted_models)
         or financial.provider_endpoint!=policy.endpoint or financial.rate_per_million_usd!=Decimal(str(policy.rate_per_million_usd))
@@ -183,12 +185,12 @@ async def admit_invocation(db: AsyncSession, *, job_id: uuid.UUID, request: Comp
         if pending is not None:raise PreconditionViolationError('BENCHMARK_OUTCOME_PENDING')
     if request.provider=='jev':
         settings=get_settings()
-        if not settings.JEV_DATA_PROCESSING_APPROVED or (not is_rerank and settings.JEV_MODE!='shadow'):
+        if (policy.provider_kind!='scripted' and not settings.JEV_DATA_PROCESSING_APPROVED) or (not is_rerank and settings.JEV_MODE!='shadow'):
             raise PreconditionViolationError('JEV_EGRESS_DISABLED')
         rate=financial.rate_per_million_usd if financial else settings.JEV_INPUT_PRICE_PER_MILLION_USD
         if rate is None or (not financial and not settings.JEV_RATE_CARD_VERIFIED_AT):
             raise PreconditionViolationError('JEV_RATE_CARD_UNVERIFIED')
-        cost=estimate_jev_request_cost(estimate,rate)
+        cost=Decimal(0) if policy.provider_kind=='scripted' else estimate_jev_request_cost(estimate,rate)
         input_rate=Decimal(str(rate));output_rate=Decimal(0)
         accepted=financial.accepted_models if financial else frozenset()
     else:
@@ -257,7 +259,7 @@ async def execute_bounded_llm_call(
                 raise LLMUsageUnavailableError()
             if result.reported_model not in admission.accepted_models:
                 raise LLMModelChangedError()
-            if result.input_tokens > admission.input_upper_tokens or result.output_tokens > request.max_output_tokens:
+            if result.input_tokens > admission.input_upper_tokens or (request.provider!='jev' and result.output_tokens > request.max_output_tokens):
                 raise LLMUsageBoundError()
     except (LLMAuthenticationError, LLMQuotaExhaustedError, LLMModelUnavailableError) as e:
         # Non-retryable configuration errors: zero actual cost if network call was not made/rejected
@@ -295,7 +297,7 @@ async def execute_bounded_llm_call(
             # Success case
             if request.provider == "jev":
                 price = admission.input_rate_per_million_usd
-                actual_cost = calculate_jev_actual_cost(
+                actual_cost = Decimal(0) if price==0 else calculate_jev_actual_cost(
                     input_tokens=result.input_tokens if result.input_tokens is not None else estimated_input_tokens,
                     price_per_million_usd=price,
                 )

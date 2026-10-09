@@ -1,0 +1,20 @@
+{
+  "verified_at": "2026-10-09",
+  "endpoint": "https://openrouter.ai/api/alpha/decisions",
+  "requested_model": "typesafe/jev-1.13",
+  "accepted_models": [
+    "typesafe/jev-1.13-20260917"
+  ],
+  "input_price_per_million_usd": "0.042",
+  "output_price_per_million_usd": "0",
+  "provider_max_context_tokens": 64000,
+  "reservation_input_tokens": 65536,
+  "state_plus_longest_question_tokens": 32000,
+  "strategy": "conservative full context financial allowance; not a tokenizer estimate",
+  "sources": [
+    "https://openrouter.ai/typesafe/jev-1.13",
+    "https://openrouter.ai/blog/insights/what-is-jev/",
+    "https://docs.typesafe.ai/models"
+  ],
+  "contract_probe_status": "pending; runtime identity/usage verification remains mandatory"
+}
