@@ -29,7 +29,7 @@ from app.services.llm.exceptions import (
 from app.services.llm.types import CompletionRequest, CompletionResult
 from app.services.llm.provider import BaseLLMProvider
 
-JEV_ENDPOINT = "https://openrouter.ai/api/v1/systemone"
+JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 
 
 class JevQuestion(BaseModel):
@@ -112,7 +112,7 @@ def _valid_probabilities(value: Any) -> bool:
 
 
 class JevHTTPXProvider(BaseLLMProvider):
-    """HTTPX client for OpenRouter's typed Jev System One endpoint; never logs request content."""
+    """HTTPX client for TypeSafe's official typed Jev System One endpoint; never logs request content."""
 
     def __init__(
         self,
@@ -143,13 +143,19 @@ class JevHTTPXProvider(BaseLLMProvider):
     ) -> JevDecisionResponse:
         settings = get_settings()
         authorized_rerank = purpose == "jev_rerank" and self.policy is not None and self.policy.enabled
+        authorized_primary = (
+            purpose == "jev_primary"
+            and settings.ASSESSMENT_SCORER_MODE == "jev"
+            and self.api_url == JEV_ENDPOINT
+            and (requested_model or self.model) == settings.JEV_MODEL
+        )
         if purpose == "jev_rerank":
             if (not authorized_rerank or self.policy.provider_kind != "jev"
                 or self.api_url != self.policy.endpoint
                 or (requested_model or self.policy.requested_model) != self.policy.requested_model):
                 raise LLMProviderError("JEV_REQUEST_POLICY_MISMATCH")
             requested_model = self.policy.requested_model
-        if not authorized_rerank and settings.JEV_MODE != "shadow":
+        if not authorized_rerank and not authorized_primary and settings.JEV_MODE != "shadow":
             raise LLMProviderError("Jev is disabled; set JEV_MODE=shadow only after provider and data approval.")
         if not settings.JEV_DATA_PROCESSING_APPROVED:
             raise LLMProviderError("Jev external processing is not approved by the organization.")
@@ -177,6 +183,8 @@ class JevHTTPXProvider(BaseLLMProvider):
         from app.services.reranking.contracts import canonical
         wire = canonical(payload).encode()
         if authorized_rerank and (len(wire)>self.policy.max_body_bytes or len(canonical(payload["state"]).encode())>self.policy.max_state_bytes):
+            raise LLMProviderError("JEV_REQUEST_BOUND_EXCEEDED")
+        if authorized_primary and (len(wire) > 32768 or len(canonical(payload["state"]).encode()) > 16384):
             raise LLMProviderError("JEV_REQUEST_BOUND_EXCEEDED")
         started = time.monotonic()
         client = self._external_client or httpx.AsyncClient(timeout=timeout_seconds)

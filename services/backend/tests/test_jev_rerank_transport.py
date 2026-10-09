@@ -27,7 +27,7 @@ async def test_rerank_transport_matches_wire_hash_and_frozen_model(monkeypatch):
         result=await provider.complete(request)
     assert len(sent)==1
     assert hashlib.sha256(sent[0]).hexdigest()==hashlib.sha256(_serialized_request_payload(request).encode()).hexdigest()
-    assert json.loads(sent[0])['model']=='typesafe/jev-1.13'
+    assert json.loads(sent[0])['model']=='jev-1.13.0'
     assert result.input_tokens==0
 
 
@@ -35,8 +35,8 @@ def test_request_byte_cap_rejected_before_egress():
     from app.services.llm.call_policy import JevReservationPolicy
     import uuid
     from decimal import Decimal
-    p=JevReservationPolicy(uuid.uuid4(),Decimal('1'),65536,Decimal('.042'),date.today().isoformat(),frozenset({'typesafe/jev-1.13-20260917'}),'https://openrouter.ai/api/alpha/decisions')
-    r=CompletionRequest(task_kind='assessment',system_prompt='',user_prompt=json.dumps({'model':'typesafe/jev-1.13','state':'x'*16385,'questions':{'q':{}}}),provider='jev',model='typesafe/jev-1.13')
+    p=JevReservationPolicy(uuid.uuid4(),Decimal('1'),65536,Decimal('.042'),date.today().isoformat(),frozenset({'jev-1.13.0'}),'https://api.typesafe.ai/v1/systemone')
+    r=CompletionRequest(task_kind='assessment',system_prompt='',user_prompt=json.dumps({'model':'jev-1.13.0','state':'x'*16385,'questions':{'q':{}}}),provider='jev',model='jev-1.13.0')
     with pytest.raises(ValueError):p.input_reservation_tokens(r)
 
 @pytest.mark.asyncio

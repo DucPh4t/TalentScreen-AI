@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from app.db.models.document import SourceSpan
 from app.domain.rubric_policy import scan_forbidden_criteria
-from app.schemas.assessment import AssessmentOutputSchema
+from app.schemas.assessment import AssessmentOutputSchema, EvidenceOnlyAssessmentSchema
 
 logger = logging.getLogger(__name__)
 
@@ -104,4 +104,60 @@ def validate_assessment_output(
             errors=provenance_errors,
         )
 
+    return assessment
+
+
+def validate_evidence_only_output(
+    raw_content: str,
+    span_registry: dict[str, SourceSpan],
+    expected_criterion_ids: set[str],
+    *,
+    allowed_span_ids_by_criterion: Mapping[str, set[str]] | None = None,
+) -> EvidenceOnlyAssessmentSchema:
+    """Validate a Jev-mode agent response without allowing scoring fields."""
+    if not raw_content or not raw_content.strip():
+        raise AssessmentValidationError("EMPTY_CONTENT: Model returned empty content.")
+    try:
+        parsed_json = json.loads(raw_content)
+    except json.JSONDecodeError as exc:
+        raise AssessmentValidationError(f"MALFORMED_JSON: Cannot decode JSON response: {exc}")
+    if not isinstance(parsed_json, dict):
+        raise AssessmentValidationError("INVALID_ROOT_TYPE: Response must be a JSON object.")
+    try:
+        assessment = EvidenceOnlyAssessmentSchema.model_validate(parsed_json)
+    except ValidationError as exc:
+        err_msgs = [f"{err['loc']}: {err['msg']}" for err in exc.errors()]
+        raise AssessmentValidationError(
+            f"SCHEMA_VIOLATION: Evidence-only output is invalid: {'; '.join(err_msgs[:3])}",
+            errors=err_msgs,
+        )
+    returned_ids = {criterion.criterion_id for criterion in assessment.criteria}
+    if returned_ids != expected_criterion_ids:
+        missing = sorted(expected_criterion_ids - returned_ids)
+        unexpected = sorted(returned_ids - expected_criterion_ids)
+        raise AssessmentValidationError(
+            f"CRITERION_SET_MISMATCH: Missing={missing}; unexpected={unexpected}.",
+            errors=["CRITERION_SET_MISMATCH"],
+        )
+    errors: list[str] = []
+    for criterion in assessment.criteria:
+        for evidence in criterion.evidence:
+            permitted = allowed_span_ids_by_criterion.get(criterion.criterion_id) if allowed_span_ids_by_criterion is not None else None
+            if permitted is not None and evidence.span_id not in permitted:
+                errors.append(f"UNRETRIEVED_SPAN: {evidence.span_id} is not allowed for {criterion.criterion_id}.")
+                continue
+            span = span_registry.get(evidence.span_id)
+            if span is None:
+                errors.append(f"UNKNOWN_SPAN: {evidence.span_id} is not in the approved document.")
+            elif evidence.quote != span.text:
+                errors.append(f"QUOTE_MISMATCH: {evidence.span_id} is not verbatim.")
+        forbidden = scan_forbidden_criteria(criterion.rationale)
+        if forbidden:
+            errors.append(f"FORBIDDEN_DEMOGRAPHIC_ATTRIBUTE: {criterion.criterion_id}: {forbidden}")
+        for question in criterion.missing_information:
+            forbidden = scan_forbidden_criteria(question)
+            if forbidden:
+                errors.append(f"FORBIDDEN_DEMOGRAPHIC_ATTRIBUTE: {criterion.criterion_id}: {forbidden}")
+    if errors:
+        raise AssessmentValidationError(f"PROVENANCE_VIOLATION: {'; '.join(errors[:3])}", errors=errors)
     return assessment

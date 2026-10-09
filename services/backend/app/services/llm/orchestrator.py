@@ -150,15 +150,32 @@ async def admit_invocation(db: AsyncSession, *, job_id: uuid.UUID, request: Comp
     limits=InvocationBudgetPolicy.from_snapshot(snapshot)
     if not policy.enabled:limits=InvocationBudgetPolicy(get_settings().ASSESSMENT_MAX_EXTERNAL_CALLS,0,get_settings().ASSESSMENT_MAX_EXTERNAL_CALLS)
     is_rerank=request.purpose=='jev_rerank'
+    is_jev_primary=request.purpose=='jev_primary'
+    is_jev_explanation=request.purpose=='jev_primary_explanation'
     namespace=bool(re.fullmatch(r'jev_rerank_(initial|tool_[12])_[1-9][0-9]*',logical_step))
-    if is_rerank != namespace or (is_rerank and (request.provider!='jev' or not policy.enabled)):
+    primary_namespace=logical_step=='jev_primary_score'
+    explanation_namespace=logical_step=='jev_primary_explanation'
+    if (is_rerank != namespace or is_jev_primary != primary_namespace
+        or is_jev_explanation != explanation_namespace
+        or (is_rerank and (request.provider!='jev' or not policy.enabled))
+        or (is_jev_primary and (request.provider!='jev' or policy.enabled
+            or snapshot.get('scorer_mode')!='jev' or get_settings().ASSESSMENT_SCORER_MODE!='jev'))
+        or (is_jev_explanation and (request.provider!='deepseek' or policy.enabled
+            or snapshot.get('scorer_mode')!='jev' or get_settings().ASSESSMENT_SCORER_MODE!='jev'))):
         raise PreconditionViolationError('INVOCATION_PURPOSE_MISMATCH')
     if policy.enabled and request.provider=='jev' and not is_rerank:
         raise PreconditionViolationError('JEV_PURPOSE_CONFLICT')
-    await verify_llm_preconditions(db,job_id,request.task_kind,sanitized_version_id,attempt_no,limits.total_limit)
+    if (is_jev_primary or is_jev_explanation) and attempt_no != 1:
+        raise PreconditionViolationError('JEV_PRIMARY_REPLAY_BLOCKED')
+    jev_primary_run = snapshot.get('scorer_mode') == 'jev'
+    run_call_limit = min(4, limits.total_limit) if jev_primary_run else limits.total_limit
+    await verify_llm_preconditions(db,job_id,request.task_kind,sanitized_version_id,attempt_no,run_call_limit)
     rows=(await db.scalars(select(LLMInvocation).where(LLMInvocation.job_id==job_id))).all()
     count=sum(i.logical_step.startswith('jev_rerank_') for i in rows)
-    if (is_rerank and count>=limits.rerank_limit) or (not is_rerank and len(rows)-count>=limits.primary_limit):
+    jev_primary_count=sum(i.logical_step=='jev_primary_score' for i in rows)
+    normal_primary_count = len(rows) - count - jev_primary_count
+    if ((is_rerank and count>=limits.rerank_limit) or (not is_rerank and not is_jev_primary and normal_primary_count>=limits.primary_limit)
+        or (is_jev_primary and jev_primary_count>=1)):
         raise PreconditionViolationError('MAX_PROVIDER_CALLS_EXCEEDED')
     if any(i.logical_step==logical_step and i.attempt_no==attempt_no for i in rows):
         raise PreconditionViolationError('INVOCATION_ALREADY_ADMITTED')
@@ -171,6 +188,15 @@ async def admit_invocation(db: AsyncSession, *, job_id: uuid.UUID, request: Comp
         or financial.provider_endpoint!=policy.endpoint or financial.rate_per_million_usd!=Decimal(str(policy.rate_per_million_usd))
         or financial.rate_verified_at!=policy.rate_verified_at):
         raise PreconditionViolationError('JEV_REQUEST_POLICY_MISMATCH')
+    if is_jev_primary:
+        settings=get_settings()
+        if (financial is None or request.model!=snapshot.get('scorer_model')
+            or financial.accepted_models!=frozenset({snapshot.get('scorer_model')})
+            or financial.provider_endpoint!=snapshot.get('scorer_endpoint')
+            or financial.rate_per_million_usd!=Decimal(str(snapshot.get('scorer_input_rate_per_million_usd')))
+            or financial.rate_verified_at!=snapshot.get('scorer_rate_verified_at')
+            or not settings.JEV_DATA_PROCESSING_APPROVED):
+            raise PreconditionViolationError('JEV_PRIMARY_REQUEST_POLICY_MISMATCH')
     if strict and financial:raise PreconditionViolationError('INVOCATION_PURPOSE_MISMATCH')
     estimate=financial.input_reservation_tokens(request) if financial else strict.input_reservation_tokens(request) if strict else _estimate_input_tokens(request)
     scope=BudgetScope.DEVELOPMENT if get_settings().APP_ENV=='sandbox' else BudgetScope.PILOT
@@ -185,7 +211,9 @@ async def admit_invocation(db: AsyncSession, *, job_id: uuid.UUID, request: Comp
         if pending is not None:raise PreconditionViolationError('BENCHMARK_OUTCOME_PENDING')
     if request.provider=='jev':
         settings=get_settings()
-        if (policy.provider_kind!='scripted' and not settings.JEV_DATA_PROCESSING_APPROVED) or (not is_rerank and settings.JEV_MODE!='shadow'):
+        if (policy.provider_kind!='scripted' and not settings.JEV_DATA_PROCESSING_APPROVED) or (
+            not is_rerank and not is_jev_primary and settings.JEV_MODE!='shadow'
+        ):
             raise PreconditionViolationError('JEV_EGRESS_DISABLED')
         rate=financial.rate_per_million_usd if financial else settings.JEV_INPUT_PRICE_PER_MILLION_USD
         if rate is None or (not financial and not settings.JEV_RATE_CARD_VERIFIED_AT):
@@ -259,7 +287,9 @@ async def execute_bounded_llm_call(
                 raise LLMUsageUnavailableError()
             if result.reported_model not in admission.accepted_models:
                 raise LLMModelChangedError()
-            if result.input_tokens > admission.input_upper_tokens or (request.provider!='jev' and result.output_tokens > request.max_output_tokens):
+            if (result.input_tokens > admission.input_upper_tokens
+                or (request.provider == 'jev' and result.output_tokens != 0)
+                or (request.provider != 'jev' and result.output_tokens > request.max_output_tokens)):
                 raise LLMUsageBoundError()
     except (LLMAuthenticationError, LLMQuotaExhaustedError, LLMModelUnavailableError) as e:
         # Non-retryable configuration errors: zero actual cost if network call was not made/rejected

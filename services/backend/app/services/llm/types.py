@@ -82,7 +82,7 @@ class CompletionRequest:
     manifest_id: Optional[str] = None
     provider: Literal["deepseek", "jev"] = "deepseek"
     strict_reservation_policy: Optional[StrictReservationPolicy] = None
-    purpose: Literal['primary', 'jev_secondary', 'jev_rerank'] | None = None
+    purpose: Literal['primary', 'jev_secondary', 'jev_rerank', 'jev_primary', 'jev_primary_explanation'] | None = None
     jev_reservation_policy: 'JevReservationPolicy | None' = None
 
 

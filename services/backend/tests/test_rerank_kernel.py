@@ -10,11 +10,11 @@ def pair(n,c='c',text='Built an API',section=None,rrf=None):
 
 def judgment(p,choice='substantive_evidence',confidence=1.0,probs=None):
     return PairJudgment(pair_id=p.pair_id,choice=choice,confidence=confidence,
-        probabilities=probs or {k:float(k==choice) for k in OPTIONS},reported_model='typesafe/jev-1.13-20260917')
+        probabilities=probs or {k:float(k==choice) for k in OPTIONS},reported_model='jev-1.13.0')
 
 
 def policy(mode='rerank'):
-    return RerankPolicy(mode=mode,accepted_models=('typesafe/jev-1.13-20260917',),rate_per_million_usd=.042,rate_verified_at=date.today().isoformat())
+    return RerankPolicy(mode=mode,accepted_models=('jev-1.13.0',),rate_per_million_usd=.042,rate_verified_at=date.today().isoformat())
 
 
 def test_utility_and_protected_limiting_unscored_slots():
@@ -72,7 +72,7 @@ def test_strict_answer_membership_identity_and_choice():
     from app.services.reranking.prompt import validate_pair_judgments
     p=pair(1)
     a=dict(type='choice',choice='substantive_evidence',confidence=1.0,probabilities={k:float(k=='substantive_evidence') for k in OPTIONS})
-    body=dict(model='typesafe/jev-1.13-20260917',answers={p.pair_id:a})
+    body=dict(model='jev-1.13.0',answers={p.pair_id:a})
     assert validate_pair_judgments(body,(p,),policy())[0].choice=='substantive_evidence'
     for bad in ({**body,'answers':{}},{**body,'model':'rolling'},
         {**body,'answers':{'different':a}}, {**body,'answers':{p.pair_id:{**a,'choice':'unrelated'}}},

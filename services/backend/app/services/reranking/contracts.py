@@ -26,9 +26,9 @@ class RerankPolicy(Contract):
     policy_version: Literal['jev-evidence-ranking.v1']='jev-evidence-ranking.v1'
     prompt_version: Literal['jev-passage-choice.v1']='jev-passage-choice.v1'
     provider_kind: Literal['jev','scripted']='jev'
-    requested_model: str='typesafe/jev-1.13'
+    requested_model: str='jev-1.13.0'
     accepted_models: tuple[str,...]=()
-    endpoint: str='https://openrouter.ai/api/alpha/decisions'
+    endpoint: str='https://api.typesafe.ai/v1/systemone'
     rate_per_million_usd: float=Field(default=0,ge=0)
     rate_verified_at: str|None=None
     max_pairs_per_criterion: Literal[8]=8
@@ -61,7 +61,7 @@ class RerankPolicy(Contract):
         try:
             date.fromisoformat(self.rate_verified_at or '')
             url=urlsplit(self.endpoint)
-            allowed={('openrouter.ai','/api/alpha/decisions'),('openrouter.ai','/api/v1/systemone'),('api.typesafe.ai','/v1/systemone')}
+            allowed={('api.typesafe.ai','/v1/systemone')}
             if (not self.requested_model.strip() or not self.accepted_models or len(set(self.accepted_models))!=len(self.accepted_models)
                 or any(not m.strip() for m in self.accepted_models) or url.scheme!='https'
                 or (url.hostname,url.path) not in allowed or url.port not in (None,443) or url.username or url.password or url.query or url.fragment):

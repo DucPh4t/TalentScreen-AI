@@ -20,8 +20,8 @@ class ChoiceProvider(BaseLLMProvider):
         body=json.loads(request.user_prompt)
         answers={qid:{'type':'choice','choice':'substantive_evidence','confidence':1.0,
             'probabilities':{k:float(k=='substantive_evidence') for k in q['criteria']}} for qid,q in body['questions'].items()}
-        content=json.dumps({'model':'typesafe/jev-1.13-20260917','answers':answers,'usage':{'input_tokens':20,'output_tokens':0}})
-        return CompletionResult(content=content,requested_model=request.model,reported_model='typesafe/jev-1.13-20260917',input_tokens=20,output_tokens=0)
+        content=json.dumps({'model':'jev-1.13.0','answers':answers,'usage':{'input_tokens':20,'output_tokens':0}})
+        return CompletionResult(content=content,requested_model=request.model,reported_model='jev-1.13.0',input_tokens=20,output_tokens=0)
 
 
 async def rerank_context(db,context):

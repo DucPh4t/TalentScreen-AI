@@ -6,6 +6,7 @@ from __future__ import annotations
 import math
 import os
 import re
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -67,6 +68,7 @@ class Settings(BaseSettings):
         default="mock",
         description="LLM provider: 'mock' (default, safe for local testing) or 'deepseek'",
     )
+    ASSESSMENT_SCORER_MODE: Literal["deepseek", "jev"] = Field(default="deepseek")
     DEEPSEEK_BASE_URL: str = Field(default="https://api.deepseek.com")
     DEEPSEEK_MODEL: str = Field(
         default="deepseek-flash",
@@ -83,8 +85,8 @@ class Settings(BaseSettings):
     JEV_RERANK_MODE: Literal['off', 'shadow', 'rerank', 'gate_experiment'] = 'off'
     JEV_RERANK_ACCEPTED_MODELS: list[str] = Field(default_factory=list)
     JEV_API_KEY: Optional[str] = Field(default=None)
-    JEV_BASE_URL: str = Field(default="https://openrouter.ai/api/v1/systemone")
-    JEV_MODEL: str = Field(default="typesafe/jev-1.13")
+    JEV_BASE_URL: str = Field(default="https://api.typesafe.ai/v1/systemone")
+    JEV_MODEL: str = Field(default="jev-1.13.0")
     JEV_DATA_PROCESSING_APPROVED: bool = Field(default=False)
     JEV_INPUT_PRICE_PER_MILLION_USD: Optional[float] = Field(default=None)
     JEV_RATE_CARD_VERIFIED_AT: Optional[str] = Field(default=None)
@@ -180,15 +182,14 @@ class Settings(BaseSettings):
         parsed = urlsplit(value)
         if (
             parsed.scheme != "https"
-            or parsed.hostname not in {"api.typesafe.ai", "openrouter.ai"}
+            or parsed.hostname != "api.typesafe.ai"
             or parsed.username
             or parsed.password
             or parsed.query
             or parsed.fragment
-            or (parsed.hostname == "api.typesafe.ai" and parsed.path != "/v1/systemone")
-            or (parsed.hostname == "openrouter.ai" and parsed.path not in {"/api/v1/systemone", "/api/alpha/decisions"})
+            or parsed.path != "/v1/systemone"
         ):
-            raise ValueError("JEV_BASE_URL must be the HTTPS TypeSafe or OpenRouter System One endpoint without credentials/query/fragment")
+            raise ValueError("JEV_BASE_URL must be the official HTTPS TypeSafe System One endpoint without credentials/query/fragment")
         return value.rstrip("/")
 
     @field_validator("LANGSMITH_ENDPOINT")
@@ -236,15 +237,38 @@ class Settings(BaseSettings):
             if (not self.JEV_RERANK_ACCEPTED_MODELS or len(set(self.JEV_RERANK_ACCEPTED_MODELS)) != len(self.JEV_RERANK_ACCEPTED_MODELS)
                 or any(not re.fullmatch(r'(?:typesafe/)?jev-\d+\.\d+(?:\.\d+)?(?:-\d{8})?', m) for m in self.JEV_RERANK_ACCEPTED_MODELS)):
                 raise ValueError('JEV_ACCEPTED_MODELS_REQUIRED')
+        if self.ASSESSMENT_SCORER_MODE == "jev":
+            if self.LLM_PROVIDER != "deepseek" or not self.DEEPSEEK_API_KEY or not self.DEEPSEEK_API_KEY.strip():
+                raise ValueError("JEV-primary assessment requires DeepSeek for its evidence agent and explanation")
+            if self.JEV_MODE != "off" or self.JEV_RERANK_MODE != "off":
+                raise ValueError("JEV_PRIMARY_PURPOSE_CONFLICT")
+            if not self.JEV_API_KEY or not self.JEV_API_KEY.strip():
+                raise ValueError("JEV_API_KEY is required for Jev-primary scoring")
+            if not self.JEV_DATA_PROCESSING_APPROVED:
+                raise ValueError("JEV_DATA_PROCESSING_APPROVED must be true for Jev-primary scoring")
+            if self.JEV_INPUT_PRICE_PER_MILLION_USD is None or not math.isfinite(self.JEV_INPUT_PRICE_PER_MILLION_USD) or self.JEV_INPUT_PRICE_PER_MILLION_USD <= 0:
+                raise ValueError("A verified positive Jev input rate is required for primary scoring")
+            if not self.JEV_RATE_CARD_VERIFIED_AT:
+                raise ValueError("JEV_RATE_CARD_VERIFIED_AT is required for Jev-primary scoring")
+            try:
+                rate_verified_at = date.fromisoformat(self.JEV_RATE_CARD_VERIFIED_AT)
+            except ValueError as exc:
+                raise ValueError("JEV_RATE_CARD_VERIFIED_AT must be an ISO date") from exc
+            if rate_verified_at > date.today():
+                raise ValueError("JEV_RATE_CARD_VERIFIED_AT cannot be in the future")
+            if not re.fullmatch(r"jev-\d+\.\d+\.\d+", self.JEV_MODEL):
+                raise ValueError("Jev-primary scoring requires a pinned TypeSafe model ID")
+            if self.JEV_BASE_URL != "https://api.typesafe.ai/v1/systemone":
+                raise ValueError("Jev-primary scoring requires the official TypeSafe endpoint")
+
         if self.JEV_MODE == "shadow" or self.JEV_RERANK_MODE != 'off':
             if not self.JEV_API_KEY or not self.JEV_API_KEY.strip():
                 raise ValueError("JEV_API_KEY is required when JEV_MODE is 'shadow'")
             if not self.JEV_DATA_PROCESSING_APPROVED:
                 raise ValueError("JEV_DATA_PROCESSING_APPROVED must be true before enabling JEV shadow processing")
-            is_openrouter = urlsplit(self.JEV_BASE_URL).hostname == "openrouter.ai"
-            model_pattern = r"typesafe/jev-\d+\.\d+" if is_openrouter else r"jev-\d+\.\d+(?:\.\d+)?"
+            model_pattern = r"jev-\d+\.\d+\.\d+"
             if not re.fullmatch(model_pattern, self.JEV_MODEL):
-                raise ValueError("JEV_MODEL must be a pinned Jev model ID compatible with the configured System One provider; rolling aliases are not permitted")
+                raise ValueError("JEV_MODEL must be a pinned official TypeSafe Jev model ID; rolling aliases are not permitted")
             if self.JEV_INPUT_PRICE_PER_MILLION_USD is None or not math.isfinite(self.JEV_INPUT_PRICE_PER_MILLION_USD) or self.JEV_INPUT_PRICE_PER_MILLION_USD <= 0:
                 raise ValueError("A verified positive JEV_INPUT_PRICE_PER_MILLION_USD is required")
             if not self.JEV_RATE_CARD_VERIFIED_AT:

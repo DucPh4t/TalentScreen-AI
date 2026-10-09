@@ -60,6 +60,7 @@ class AssessmentRun(Base, PrimaryKeyMixin):
     failure_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     result_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     secondary_model_output: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    jev_explanation: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     rerank_output: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     execution_trace: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
@@ -83,6 +84,10 @@ class CriterionAssessment(Base):
         nullable=False,
     )
     score: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    jev_score: Mapped[Optional[float]] = mapped_column(Numeric(5, 4), nullable=True)
+    jev_probabilities: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    jev_confidence: Mapped[Optional[float]] = mapped_column(Numeric(5, 4), nullable=True)
+    score_disposition: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
     missing_information: Mapped[Optional[list[str]]] = mapped_column(JSONB, nullable=True)
 

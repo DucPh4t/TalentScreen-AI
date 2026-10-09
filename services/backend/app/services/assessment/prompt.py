@@ -12,6 +12,7 @@ ASSESSMENT_PROMPT_VERSION = "assessment-v1.4.0"
 HYBRID_ASSESSMENT_PROMPT_VERSION = "assessment-v1.5.0"
 BENCHMARK_ASSESSMENT_PROMPT_VERSION = "assessment-v1.6.0"
 AGENT_PROMPT_VERSION = "assessment-agent.v1"
+EVIDENCE_ONLY_AGENT_PROMPT_VERSION = "assessment-agent-evidence.v1"
 
 
 def build_assessment_system_prompt() -> str:

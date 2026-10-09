@@ -8,8 +8,8 @@ from app.services.assessment.policy import benchmark_policy
 def valid_settings(**changes):
     values=dict(LLM_PROVIDER='mock',JEV_MODE='off',JEV_RERANK_MODE='rerank',RAG_MODE='hybrid',
         RAG_PIPELINE_VERSION='v2',JEV_API_KEY='synthetic',JEV_DATA_PROCESSING_APPROVED=True,
-        JEV_MODEL='typesafe/jev-1.13',JEV_INPUT_PRICE_PER_MILLION_USD=.042,
-        JEV_RATE_CARD_VERIFIED_AT=date.today().isoformat(),JEV_RERANK_ACCEPTED_MODELS=['typesafe/jev-1.13-20260917'])
+        JEV_MODEL='jev-1.13.0',JEV_INPUT_PRICE_PER_MILLION_USD=.042,
+        JEV_RATE_CARD_VERIFIED_AT=date.today().isoformat(),JEV_RERANK_ACCEPTED_MODELS=['jev-1.13.0'])
     return Settings(_env_file=None,**(values|changes))
 
 

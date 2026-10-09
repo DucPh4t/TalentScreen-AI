@@ -9,7 +9,7 @@ Invariants:
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Mapping
 
 from app.domain.enums import CriterionId, CriterionOutcome, Recommendation
 from app.schemas.assessment import CriterionAssessmentSchema
@@ -31,6 +31,7 @@ def calculate_deterministic_scores(
     core_floor: int = DEFAULT_CORE_FLOOR,
     core_criteria_ids: Optional[set[str]] = None,
     core_minimum_scores: Optional[dict[str, int]] = None,
+    score_overrides: Mapping[str, Decimal] | None = None,
 ) -> tuple[Optional[Decimal], Decimal, Optional[Decimal], Recommendation, list[str]]:
     """Compute observed score, coverage, comparable score, recommendation, and reason codes.
     Returns:
@@ -42,18 +43,26 @@ def calculate_deterministic_scores(
     has_conflict = False
     has_insufficient = False
 
-    scores_by_id: dict[str, int] = {}
+    scores_by_id: dict[str, Decimal] = {}
 
     for c in evaluations:
         cid = c.criterion_id
         w = Decimal(rubric_weights.get(cid, 0))
 
         if c.status == CriterionOutcome.ASSESSED:
-            assert c.score is not None
+            score_value = score_overrides.get(cid) if score_overrides is not None else (
+                Decimal(c.score) if c.score is not None else None
+            )
+            if score_value is None and score_overrides is not None:
+                has_insufficient = True
+                reason_codes.append(f"SCORER_UNAVAILABLE:{cid}")
+                continue
+            if score_value is None or not score_value.is_finite() or not Decimal("0") <= score_value <= Decimal("4"):
+                raise ValueError(f"ASSESSED_SCORE_INVALID:{cid}")
             assessed_weights_sum += int(w)
-            scores_by_id[cid] = c.score
+            scores_by_id[cid] = score_value
             # Contribution: w * (score / 4)
-            weighted_score_accum += w * (Decimal(c.score) / Decimal("4"))
+            weighted_score_accum += w * (score_value / Decimal("4"))
         elif c.status == CriterionOutcome.INSUFFICIENT_EVIDENCE:
             has_insufficient = True
             reason_codes.append(f"INSUFFICIENT_EVIDENCE:{cid}")

@@ -26,8 +26,8 @@ def _settings(**overrides) -> Settings:
         "JEV_MODE": "shadow",
         "JEV_API_KEY": "jev_test_secret_key",
         "JEV_DATA_PROCESSING_APPROVED": True,
-        "JEV_BASE_URL": "https://openrouter.ai/api/v1/systemone",
-        "JEV_MODEL": "typesafe/jev-1.13",
+        "JEV_BASE_URL": "https://api.typesafe.ai/v1/systemone",
+        "JEV_MODEL": "jev-1.13.0",
         "JEV_INPUT_PRICE_PER_MILLION_USD": 0.042,
         "JEV_RATE_CARD_VERIFIED_AT": "2026-09-21",
     }
@@ -40,8 +40,8 @@ def _runtime_settings(**overrides) -> SimpleNamespace:
         "JEV_MODE": "shadow",
         "JEV_API_KEY": "jev_test_secret_key",
         "JEV_DATA_PROCESSING_APPROVED": True,
-        "JEV_MODEL": "typesafe/jev-1.13",
-        "JEV_BASE_URL": "https://openrouter.ai/api/v1/systemone",
+        "JEV_MODEL": "jev-1.13.0",
+        "JEV_BASE_URL": "https://api.typesafe.ai/v1/systemone",
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -56,7 +56,7 @@ def _score_response(question_id: str = "react_ui", **answer_overrides) -> dict:
     }
     answer.update(answer_overrides)
     return {
-        "model": "typesafe/jev-1.13-20260917",
+        "model": "jev-1.13.0",
         "answers": {question_id: answer},
         "usage": {"input_tokens": 42, "output_tokens": 0},
     }
@@ -83,8 +83,8 @@ async def test_jev_posts_typed_contract_and_accepts_fractional_score(monkeypatch
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         provider = JevHTTPXProvider(
-            api_url="https://openrouter.ai/api/v1/systemone",
-            model="typesafe/jev-1.13",
+            api_url="https://api.typesafe.ai/v1/systemone",
+            model="jev-1.13.0",
             client=client,
         )
         response = await provider.evaluate(
@@ -92,9 +92,9 @@ async def test_jev_posts_typed_contract_and_accepts_fractional_score(monkeypatch
             questions={"react_ui": _question()},
         )
 
-    assert captured["url"] == "https://openrouter.ai/api/v1/systemone"
+    assert captured["url"] == "https://api.typesafe.ai/v1/systemone"
     assert captured["authorization"] == "Bearer jev_test_secret_key"
-    assert captured["payload"]["model"] == "typesafe/jev-1.13"
+    assert captured["payload"]["model"] == "jev-1.13.0"
     assert captured["payload"]["questions"]["react_ui"]["type"] == "score"
     assert response.answers["react_ui"]["score"] == 3.25
 
@@ -107,13 +107,13 @@ async def test_jev_completion_adapts_usage_without_emitting_text(monkeypatch) ->
         return httpx.Response(200, json=_score_response())
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        provider = JevHTTPXProvider(client=client, model="typesafe/jev-1.13")
+        provider = JevHTTPXProvider(client=client, model="jev-1.13.0")
         result = await provider.complete(
             CompletionRequest(
                 task_kind="assessment",
                 system_prompt="",
                 user_prompt=json.dumps({"state": {"evidence": "React"}, "questions": {"react_ui": _question()}}),
-                model="typesafe/jev-1.13",
+                model="jev-1.13.0",
                 max_output_tokens=0,
                 provider="jev",
             )
@@ -122,7 +122,7 @@ async def test_jev_completion_adapts_usage_without_emitting_text(monkeypatch) ->
     assert json.loads(result.content)["answers"]["react_ui"]["score"] == 3.25
     assert result.input_tokens == 42
     assert result.output_tokens == 0
-    assert result.reported_model == "typesafe/jev-1.13-20260917"
+    assert result.reported_model == "jev-1.13.0"
 
 
 @pytest.mark.asyncio
@@ -141,7 +141,7 @@ async def test_jev_rejects_mismatched_or_invalid_answers(monkeypatch, response_b
         return httpx.Response(200, json=response_body)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        provider = JevHTTPXProvider(client=client, model="typesafe/jev-1.13")
+        provider = JevHTTPXProvider(client=client, model="jev-1.13.0")
         with pytest.raises(error):
             await provider.evaluate(state="evidence", questions={"react_ui": _question()})
 
@@ -157,7 +157,7 @@ async def test_jev_rejects_mismatched_or_invalid_answers(monkeypatch, response_b
 )
 async def test_jev_requires_explicit_provider_and_data_gates(monkeypatch, settings, error) -> None:
     monkeypatch.setattr("app.services.jev.provider.get_settings", lambda: settings)
-    provider = JevHTTPXProvider(api_key=settings.JEV_API_KEY, model="typesafe/jev-1.13")
+    provider = JevHTTPXProvider(api_key=settings.JEV_API_KEY, model="jev-1.13.0")
     with pytest.raises(error):
         await provider.evaluate(state="evidence", questions={"react_ui": _question()})
 
@@ -171,7 +171,7 @@ async def test_jev_provider_does_not_expose_provider_body_or_key_on_http_error(m
         return httpx.Response(401, text=f"rejected {secret} with candidate text")
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        provider = JevHTTPXProvider(client=client, model="typesafe/jev-1.13")
+        provider = JevHTTPXProvider(client=client, model="jev-1.13.0")
         with pytest.raises(LLMAuthenticationError) as exc:
             await provider.evaluate(state="evidence", questions={"react_ui": _question()})
 

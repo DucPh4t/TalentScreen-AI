@@ -31,7 +31,7 @@ class JevReservationPolicy:
     def __post_init__(self):
         age=(date.today()-date.fromisoformat(self.rate_verified_at)).days
         url=urlsplit(self.provider_endpoint)
-        allowed={('openrouter.ai','/api/alpha/decisions'),('openrouter.ai','/api/v1/systemone'),('api.typesafe.ai','/v1/systemone')}
+        allowed={('api.typesafe.ai','/v1/systemone')}
         if (not isinstance(self.budget_period_id,UUID) or not self.cap_usd.is_finite() or not 0<self.cap_usd
             or type(self.max_input_tokens) is not int or self.max_input_tokens!=65536
             or not self.rate_per_million_usd.is_finite() or (self.rate_per_million_usd<0 or (self.rate_per_million_usd==0 and self.accepted_models!=frozenset({'scripted-jev-v1'})))

@@ -76,6 +76,44 @@ class AssessmentOutputSchema(BaseModel):
         return self
 
 
+class EvidenceCriterionSchema(BaseModel):
+    """Evidence-only agent result used before an external scorer is called."""
+    model_config = ConfigDict(extra="forbid")
+
+    criterion_id: str = Field(pattern=r"^[a-z][a-z0-9_]{1,49}$")
+    status: CriterionOutcome
+    evidence: list[EvidenceItemSchema] = Field(default_factory=list, max_length=6)
+    rationale: str = Field(min_length=1, max_length=1200)
+    missing_information: list[str] = Field(default_factory=list, max_length=5)
+
+    @model_validator(mode="after")
+    def validate_evidence_state(self) -> EvidenceCriterionSchema:
+        if self.status == CriterionOutcome.ASSESSED and not self.evidence:
+            raise ValueError("assessed evidence requires at least one source span")
+        if self.status == CriterionOutcome.INSUFFICIENT_EVIDENCE and not self.missing_information:
+            raise ValueError("insufficient evidence requires a clarification question")
+        if self.status == CriterionOutcome.CONFLICTING_EVIDENCE and (len(self.evidence) < 2 or not self.missing_information):
+            raise ValueError("conflicting evidence requires conflicting spans and a verification question")
+        span_ids = [item.span_id for item in self.evidence]
+        if len(span_ids) != len(set(span_ids)):
+            raise ValueError("duplicate evidence span")
+        return self
+
+
+class EvidenceOnlyAssessmentSchema(BaseModel):
+    """Complete unique criterion set with no scores or hiring recommendation."""
+    model_config = ConfigDict(extra="forbid")
+
+    criteria: list[EvidenceCriterionSchema] = Field(min_length=1, max_length=12)
+
+    @model_validator(mode="after")
+    def validate_unique_criteria(self) -> EvidenceOnlyAssessmentSchema:
+        ids = [criterion.criterion_id for criterion in self.criteria]
+        if len(ids) != len(set(ids)):
+            raise ValueError("duplicate criterion_id")
+        return self
+
+
 class AssessmentRunCreateRequest(BaseModel):
     sanitized_version_id: uuid.UUID
     rubric_version_id: uuid.UUID
@@ -99,6 +137,14 @@ class CriterionAssessmentResponse(BaseModel):
     criterion_id: str
     status: CriterionOutcome
     score: Optional[int] = None
+    jev_score: Optional[float] = None
+    jev_probabilities: Optional[dict[str, float]] = None
+    jev_confidence: Optional[float] = None
+    score_disposition: Optional[str] = None
+    score_source: Literal["deepseek", "jev"] | None = None
+    explanation_vi: Optional[str] = None
+    explanation_basis_span_ids: list[str] = Field(default_factory=list)
+    followup_questions: list[str] = Field(default_factory=list)
     rationale: str
     missing_information: Optional[list[str]] = None
     evidence: list[CriterionEvidenceResponse] = []
@@ -118,6 +164,7 @@ class AssessmentRunResponse(BaseModel):
     application_id: uuid.UUID
     run_no: int
     status: str
+    scorer_mode: Literal["deepseek", "jev"] = "deepseek"
     strategy: str = "fulltext"
     execution_trace: dict[str, Any] = Field(default_factory=dict)
     observed_score: Optional[float] = None

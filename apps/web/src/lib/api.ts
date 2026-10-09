@@ -44,6 +44,14 @@ export interface CriterionAssessmentData {
   criterion_id: string;
   status: "assessed" | "insufficient_evidence" | "conflicting_evidence";
   score: number | null;
+  jev_score?: number | null;
+  jev_probabilities?: Record<string, number> | null;
+  jev_confidence?: number | null;
+  score_disposition?: "scored" | "insufficient_evidence" | "conflicting_evidence" | "low_confidence" | "provider_error" | null;
+  score_source?: "deepseek" | "jev" | null;
+  explanation_vi?: string | null;
+  explanation_basis_span_ids?: string[];
+  followup_questions?: string[];
   rationale: string;
   missing_information?: string[];
   evidence: Array<{
@@ -91,6 +99,7 @@ export interface AssessmentRunData {
   application_id: string;
   run_no: number;
   status: string;
+  scorer_mode?: "deepseek" | "jev";
   strategy: string;
   execution_trace: AssessmentExecutionTraceData;
   observed_score: number | null;

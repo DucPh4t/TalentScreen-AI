@@ -899,8 +899,13 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1.25rem" }}>
                   <div>
                     <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
-                      Gợi Ý Đánh Giá Hệ Thống
+                      {assessmentRun.scorer_mode === "jev" ? "Điểm năng lực tham khảo · Jev" : "Gợi Ý Đánh Giá Hệ Thống"}
                     </span>
+                    {assessmentRun.scorer_mode === "jev" && (
+                      <p style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "0.4rem", maxWidth: "58rem" }}>
+                        Điểm Jev được tính từ phân bố mức 0–4 và chỉ mang tính tham khảo. Chưa có ngưỡng được hiệu chuẩn trên dữ liệu HR, vì vậy hệ thống yêu cầu HR đối chiếu bằng chứng và quyết định; điểm này không dùng để tự xếp shortlist.
+                      </p>
+                    )}
                     <div style={{ marginTop: "0.35rem" }}>
                       <span className={`badge ${assessmentRun.recommendation === "consider_next_round" ? "badge-rec-advance" : assessmentRun.recommendation === "needs_clarification" ? "badge-rec-clarify" : "badge-rec-review"}`} style={{ fontSize: "0.875rem", padding: "0.35rem 0.85rem" }}>
                         {assessmentRun.recommendation === "consider_next_round" && "Cân nhắc vòng tiếp theo"}
@@ -964,7 +969,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                       </p>
                       <div className="table-wrapper" style={{ border: "none" }}>
                         <table className="data-table">
-                          <thead><tr><th scope="col">Tiêu chí</th><th scope="col">DeepSeek</th><th scope="col">Jev</th><th scope="col">Độ tin cậy Jev</th><th scope="col">Chênh lệch</th></tr></thead>
+                    <thead><tr><th scope="col">Tiêu chí</th><th scope="col">DeepSeek</th><th scope="col">Jev</th><th scope="col">Độ tập trung phân bố</th><th scope="col">Chênh lệch</th></tr></thead>
                           <tbody>
                             {Object.entries(assessmentRun.secondary_model_output.evaluations || {}).map(([criterionId, result]) => (
                               <tr key={criterionId}>
@@ -1032,7 +1037,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                       <tr>
                         <th scope="col" style={{ width: "22%" }}>Tiêu Chí</th>
                         <th scope="col" style={{ width: "12%" }}>Trạng Thái</th>
-                        <th scope="col" style={{ width: "10%" }}>Điểm (0..4)</th>
+                        <th scope="col" style={{ width: "10%" }}>{assessmentRun.scorer_mode === "jev" ? "Điểm Jev (0..4)" : "Điểm (0..4)"}</th>
                         <th scope="col" style={{ width: "32%" }}>Giải Trình Đánh Giá Của AI</th>
                         <th scope="col">Bằng chứng và thao tác rà soát</th>
                       </tr>
@@ -1045,7 +1050,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                           </td>
                           <td data-label="Trạng thái">
                             <span className={`badge ${c.status === "assessed" ? "badge-open" : "badge-draft"}`}>
-                              {c.status === "assessed" ? "Có bằng chứng" : c.status === "insufficient_evidence" ? "Cần làm rõ" : "Bằng chứng mâu thuẫn"}
+                              {c.score_disposition === "provider_error" ? "Jev chưa chấm · HR xem" : c.status === "assessed" ? "Có bằng chứng" : c.status === "insufficient_evidence" ? "Cần làm rõ" : "Bằng chứng mâu thuẫn"}
                             </span>
                           </td>
                           <td data-label="Điểm quan sát">
@@ -1053,13 +1058,39 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                               fontSize: "1.25rem",
                               fontWeight: 800,
                               fontFamily: "var(--font-mono)",
-                              color: c.score !== null && c.score >= 2 ? "var(--emerald-text)" : "var(--amber-text)"
+                              color: (c.jev_score ?? c.score) !== null && (c.jev_score ?? c.score)! >= 2 ? "var(--emerald-text)" : "var(--amber-text)"
                             }}>
-                              {c.score !== null ? `${c.score}/4` : "-"}
+                              {c.jev_score != null ? c.jev_score.toFixed(2) + "/4" : c.score !== null ? c.score + "/4" : "-"}
                             </span>
+                            {c.jev_probabilities && (
+                              <details style={{ marginTop: "0.35rem", fontSize: "0.7rem" }}>
+                                <summary style={{ cursor: "pointer", color: "var(--text-secondary)" }}>
+                                  Phân bố · độ tập trung {(100 * (c.jev_confidence ?? 0)).toFixed(0)}%
+                                </summary>
+                                <div style={{ marginTop: "0.25rem", color: "var(--text-secondary)" }}>
+                                  {Object.entries(c.jev_probabilities).sort(([a], [b]) => Number(a) - Number(b)).map(([level, probability]) => level + ": " + (probability * 100).toFixed(0) + "%").join(" · ")}
+                                <br />Đây là tín hiệu của Jev, không phải xác suất chấm đúng.
+                                </div>
+                              </details>
+                            )}
                           </td>
                           <td data-label="Nhận định" style={{ fontSize: "0.825rem", lineHeight: 1.55 }}>
                             <div style={{ color: "var(--text-primary)" }}>{c.rationale}</div>
+                            {c.explanation_vi && (
+                              <div style={{ marginTop: "0.5rem", padding: "0.55rem 0.7rem", borderLeft: "2px solid var(--accent-cyan)", background: "var(--surface-muted)", borderRadius: "var(--radius-xs)" }}>
+                                <strong>Diễn giải DeepSeek từ điểm Jev:</strong> {c.explanation_vi}
+                                {c.explanation_basis_span_ids && c.explanation_basis_span_ids.length > 0 && (
+                                  <div style={{ marginTop: "0.25rem", color: "var(--text-secondary)", fontSize: "0.72rem" }}>
+                                    Dựa trên {c.explanation_basis_span_ids.length} trích dẫn đã được hệ thống xác minh bên dưới.
+                                  </div>
+                                )}
+                                {c.followup_questions && c.followup_questions.length > 0 && (
+                                  <ul style={{ margin: "0.35rem 0 0 1rem", padding: 0 }}>
+                                    {c.followup_questions.map((question, index) => <li key={index}>{question}</li>)}
+                                  </ul>
+                                )}
+                              </div>
+                            )}
                             {c.missing_information && c.missing_information.length > 0 && (
                               <div style={{
                                 marginTop: "0.5rem",

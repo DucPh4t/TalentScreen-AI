@@ -1,6 +1,6 @@
 # TalentScreen AI
 
-**Evidence-based CV screening with hybrid RAG, a bounded LangGraph agent, and optional Jev reranking.**
+**Evidence-based CV screening with hybrid RAG, a bounded LangGraph agent, and optional Jev criterion scoring.**
 
 [![CI](https://github.com/DucPh4t/TalentScreen-AI/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DucPh4t/TalentScreen-AI/actions/workflows/ci.yml)
 
@@ -14,12 +14,12 @@
 [![Hybrid RAG](https://img.shields.io/badge/Hybrid_RAG-E5_%2B_pgvector-64734B)](#rag-and-agent-workflow)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Bounded_Agent-1C3C3C)](services/backend/app/services/agent/assessment_graph.py)
 [![DeepSeek](https://img.shields.io/badge/DeepSeek-LLM-4D6BFE)](services/backend/app/services/llm)
-[![Jev 1.13](https://img.shields.io/badge/Jev-1.13_%7C_Optional_Reranking-64734B)](#jev-evidence-reranking)
+[![Jev 1.13](https://img.shields.io/badge/Jev-1.13_%7C_Optional_Scoring-64734B)](#jev-primary-scoring)
 [![LangSmith](https://img.shields.io/badge/LangSmith-Observability-1C3C3C)](docs/runbooks/langsmith-observability.md)
 
 TalentScreen AI turns a job description and candidate CV into a criterion-by-criterion assessment with traceable evidence. Built for a university HR use case, it combines CV review, application comparison, structured interviews, and auditable human decisions. Users define their own JD and rubric for each vacancy.
 
-**Status:** local MVP with regression and synthetic benchmark evidence. HR owns hiring decisions. Hybrid RAG V2 is opt-in; Jev reranking is implemented and live-tested, but remains **off by default** pending quality validation.
+**Status:** local MVP with regression and synthetic benchmark evidence. HR owns hiring decisions. Hybrid RAG V2 and Jev-primary scoring are opt-in; Jev reranking has separate evaluation gates. All remain **off by default** pending quality and operational validation.
 
 [Engineering](#engineering-highlights) · [Architecture](#architecture) · [RAG & agent](#rag-and-agent-workflow) · [Jev](#jev-evidence-reranking) · [Results](#evaluation-results) · [Quickstart](#quickstart) · [Code guide](#code-guide)
 
@@ -32,6 +32,7 @@ TalentScreen AI turns a job description and candidate CV into a criterion-by-cri
 | Capability | Implementation | Why it matters |
 |---|---|---|
 | **Versioned hybrid RAG** | Local multilingual E5, pgvector cosine search, PostgreSQL lexical search, RRF, and separate V1/V2 indexes | Retrieves evidence for each approved criterion within the current CV snapshot. |
+| **Optional Jev criterion scoring** | TypeSafe Jev 1.13 returns a 0–4 score distribution for criteria with validated CV citations; backend derives the fractional expected score | Separates scoring from DeepSeek's evidence extraction; scores stay advisory and non-comparable until holdout calibration. |
 | **Optional evidence reranking** | Jev Choice judgments over scoped criterion–passage pairs, protected evidence selection, private journal | Separates passage relevance from applicant scoring; default off and gated by measured results. |
 | **Bounded tool-calling agent** | Five-node LangGraph workflow, two read-only tools, explicit model/tool/repair limits | Searches for additional evidence without accessing other candidates or taking hiring actions. |
 | **Grounded structured output** | Pydantic contracts, exact span/quote validation, criterion-scoped citations | Rejects references outside the supplied evidence; missing or conflicting evidence stays `null`. |
@@ -84,7 +85,7 @@ The backend is a **modular monolith with a separate worker process**. PostgreSQL
 | Persistence | PostgreSQL 16, pgvector, async SQLAlchemy 2, Alembic |
 | Retrieval | Sentence Transformers, multilingual E5, lexical search, RRF |
 | Agent and inference | LangGraph, DeepSeek HTTP adapter, explicit local mock |
-| Optional passage evaluator | Jev 1.13 Choice API via OpenRouter; separate from primary scoring |
+| Optional passage evaluator | Jev 1.13 typed System One API via TypeSafe direct; separate from primary scoring |
 | Developer observability | Optional LangSmith spans with a metadata allowlist |
 | Documents and tooling | PDF/DOCX extraction, Tesseract, LibreOffice, Docker, pytest, GitHub Actions |
 
@@ -136,15 +137,21 @@ flowchart TD
 | `retrieve_more_evidence` | Search for evidence using a validated technical query hint | Current approved CV; at most four approved criterion IDs per request. |
 | `get_source_spans` | Read exact text for retrieved evidence | At most eight span IDs exposed by the preceding retrieval, within the same snapshot. |
 
-The graph permits **two tool executions, three normal model turns, and one repair**. With reranking off, the default assessment ceiling is four primary calls. Enabled reranking freezes separate limits of **four primary, nine Jev, and thirteen total calls**, including admitted/failed calls. Scope/limit violations stop execution. Tools cannot browse externally, write decisions, or send messages. Optional LangSmith traces export metadata, not CVs, prompts, model responses, or query text.
+The graph permits **two tool executions, three normal model turns, and one repair** for DeepSeek scoring. Jev-primary mode caps the evidence agent at at most three DeepSeek turns with no schema-repair call, preserving one of the **four total call slots** for Jev scoring; a DeepSeek explanation is optional if capacity remains. Reranking mode has separate limits of **four primary, nine Jev, and thirteen total calls**, including admitted/failed calls. Scope/limit violations stop execution. Tools cannot browse externally, write decisions, or send messages. Optional LangSmith traces export metadata, not CVs, prompts, model responses, or query text.
 
 ### 3. Validate observations before calculating scores
 
 The backend validates structured observations and exact citations before Decimal-based scoring. **Observed score**, **coverage**, and **comparable score** stay separate; comparability requires complete assessment without missing/conflicting criteria. Valid citations do not prove correct interpretation—HR reviews the evidence and reasoning.
 
+## Jev primary scoring
+
+With `ASSESSMENT_SCORER_MODE=jev`, DeepSeek drafts a rubric from the JD, retrieves and validates CV evidence without numeric scores, Jev scores only evidence-supported criteria against their approved anchors, and the backend validates and stores the probability distribution separately from historical integer scores. DeepSeek may explain the validated scores and propose follow-up questions; it cannot change the score or make a hiring recommendation. A run is capped at four external calls. Jev-primary mode is off by default, requires separate DeepSeek and TypeSafe credentials plus explicit processor approval, and does not create a comparable shortlist score until a labeled holdout passes calibration. See [architecture and gates](docs/architecture.md) and [.env.example](.env.example).
+
+Jev receives criterion-scoped questions in one bounded batch. The TypeSafe request format shares one CV-scoped state across those questions, so prompt instructions and backend provenance validation constrain each answer but do not technically isolate one criterion's reasoning from another. This limitation must be evaluated in the labeled holdout.
+
 ## Jev evidence reranking
 
-**Jev 1.13 evaluates passages; DeepSeek evaluates cited observations; HR decides.** Jev sits inside initial retrieval and agent retrieval tools, rather than adding another LangGraph node. The implementation uses the OpenRouter Choice endpoint and validates the served model against a frozen allowlist.
+**Jev 1.13 evaluates passages; DeepSeek evaluates cited observations; HR decides.** Jev sits inside initial retrieval and agent retrieval tools, rather than adding another LangGraph node. The implementation uses the TypeSafe System One endpoint and validates the served model against a frozen allowlist.
 
 **Which score?** Jev returns passage-category probabilities. The backend derives a relevance utility to rank evidence, not an applicant's 0–4 criterion score or overall fit score. Enabled reranking can indirectly change the primary assessment by changing the evidence shown to DeepSeek; Jev does not replace that assessment or the deterministic scoring rules.
 
@@ -161,7 +168,7 @@ Each approved criterion–passage pair receives one of five categories: `substan
 
 Calls have bounded batch/request sizes, reserve-before-call accounting, and a private run-scoped journal. Ambiguous provider outcomes retain their reservation and cannot be replayed automatically. HR sees an evidence-review notice when applicable; developer metadata goes to optional LangSmith traces.
 
-**Live evidence, 9 October 2026:** Jev actually served `typesafe/jev-1.13-20260917`. The synthetic suite accepted 21/22 assessments plus a contract probe. Eighteen assessments used **real Jev with a mock primary**; the live DeepSeek comparison covered only one Node.js case. These acceptance counts measure execution, not scoring accuracy.
+**Historical OpenRouter evidence, 9 October 2026:** Jev served `typesafe/jev-1.13-20260917`. The synthetic suite accepted 21/22 assessments plus a contract probe. Eighteen assessments used **real Jev with a mock primary**; the live DeepSeek comparison covered only one Node.js case. These acceptance counts measure execution, not scoring accuracy.
 
 Reranking delivered more annotated evidence overall, but lost some negative evidence available in the matching shadow baseline. One invocation has an unresolved outcome. An off/enabled query mismatch was fixed after the experiment; the corrected code has not had a paid rerun. **Activation gates are not met, so Jev stays off.**
 
@@ -256,6 +263,7 @@ Keep the worker running for extraction/assessments. Follow the [HR workflow](doc
 | Setting | Repository default | Optional configuration |
 |---|---|---|
 | `LLM_PROVIDER` | `mock` | Set `deepseek`, configure `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, and provider/budget settings. |
+| `ASSESSMENT_SCORER_MODE` | `deepseek` | Keep default for existing behavior. `jev` opts new runs into Jev's fractional 0–4 scoring and requires an approved TypeSafe processor plus a current verified rate card. |
 | `RAG_MODE` | `full_text_baseline` | Set `hybrid` for E5 + lexical/vector retrieval. |
 | `RAG_PIPELINE_VERSION` | `v1` | Set `v2` for the improved span index and bilingual query; `v1` rolls back new runs. |
 | `EMBEDDING_DEVICE` | `auto` | Explicit `cpu`, `mps`, or `cuda` when needed. |
@@ -264,7 +272,9 @@ Keep the worker running for extraction/assessments. Follow the [HR workflow](doc
 
 Restart **API and worker** after changing settings. Hybrid first use may download pinned E5 weights; offline benchmarks require a populated cache. Provider configuration alone does not verify live inference.
 
-Jev reranking uses a separate `JEV_API_KEY`, processor approval, a current verified rate card, and an accepted-model allowlist. For the measured Choice route, override `JEV_BASE_URL` with `https://openrouter.ai/api/alpha/decisions`; the template retains the older System One endpoint for compatibility. Do not copy expired rate dates from a report. The legacy `JEV_MODE` secondary scoring shadow is a different integration and cannot run together with reranking; keep `JEV_MODE=off` for this path. [Full configuration](.env.example).
+For a controlled synthetic Jev-primary run, first enable DeepSeek as the evidence/explanation provider, then set `ASSESSMENT_SCORER_MODE=jev`, `JEV_DATA_PROCESSING_APPROVED=true`, and a current `JEV_RATE_CARD_VERIFIED_AT` with the verified input price. Keep `JEV_MODE=off` and `JEV_RERANK_MODE=off`; the app rejects conflicting Jev purposes. Never enable this path for applicant CVs until the institution has approved TypeSafe for that processing. Restart both API and worker.
+
+Jev has two distinct opt-in paths: `ASSESSMENT_SCORER_MODE=jev` uses DeepSeek for the bounded evidence agent and post-score explanation, then one direct TypeSafe Jev 1.13 call for evidence-supported rubric criteria; `JEV_RERANK_MODE` is a separate retrieval experiment. They cannot run together. Jev scores are stored separately from historical DeepSeek integer scores, use a probability-weighted expected value, and remain HR-only proposals with no comparable shortlist score until a labeled holdout calibrates activation gates. Provider errors never fall back to DeepSeek scoring. Both paths require the official TypeSafe endpoint `https://api.typesafe.ai/v1/systemone`, a pinned model, processor approval and a current verified rate card. OpenRouter routing is not supported. Never copy an expired rate date from an old report. [Full configuration](.env.example).
 
 ## Verification and benchmark commands
 

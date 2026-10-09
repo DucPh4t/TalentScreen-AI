@@ -92,30 +92,30 @@ def test_safe_dict_redacts_secrets():
     assert "myuser:****@" in safe["DATABASE_URL"]
 
 
-def test_jev_defaults_to_openrouter_system_one_with_pinned_model():
+def test_jev_defaults_to_official_typesafe_system_one_with_pinned_model():
     settings = Settings(_env_file=None, APP_ENV="sandbox", LLM_PROVIDER="mock")
     assert settings.JEV_MODE == "off"
-    assert settings.JEV_BASE_URL == "https://openrouter.ai/api/v1/systemone"
-    assert settings.JEV_MODEL == "typesafe/jev-1.13"
+    assert settings.JEV_BASE_URL == "https://api.typesafe.ai/v1/systemone"
+    assert settings.JEV_MODEL == "jev-1.13.0"
 
 
-def test_openrouter_jev_requires_system_one_route_and_pinned_model():
+def test_official_jev_rejects_openrouter_endpoint_and_requires_pinned_model():
     shared = {
         "_env_file": None,
         "APP_ENV": "sandbox",
         "JEV_MODE": "shadow",
-        "JEV_API_KEY": "synthetic-openrouter-key",
+        "JEV_API_KEY": "synthetic-typesafe-key",
         "JEV_DATA_PROCESSING_APPROVED": True,
         "JEV_INPUT_PRICE_PER_MILLION_USD": 0.042,
         "JEV_RATE_CARD_VERIFIED_AT": "2026-09-21",
     }
     settings = Settings(**shared)
-    assert settings.JEV_BASE_URL == "https://openrouter.ai/api/v1/systemone"
+    assert settings.JEV_BASE_URL == "https://api.typesafe.ai/v1/systemone"
 
     with pytest.raises(ValueError, match="System One endpoint"):
-        Settings(**{**shared, "JEV_BASE_URL": "https://openrouter.ai/api/v1/chat/completions"})
-    with pytest.raises(ValueError, match="pinned Jev model ID"):
-        Settings(**{**shared, "JEV_MODEL": "typesafe/jev-latest"})
+        Settings(**{**shared, "JEV_BASE_URL": "https://openrouter.ai/api/v1/systemone"})
+    with pytest.raises(ValueError, match="pinned official TypeSafe Jev model ID"):
+        Settings(**{**shared, "JEV_MODEL": "jev-latest"})
 
 
 def test_non_sandbox_requires_explicit_positive_requisition_budget():
