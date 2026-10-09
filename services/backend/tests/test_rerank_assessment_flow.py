@@ -53,3 +53,48 @@ async def test_actual_service_calls_jev_before_primary(test_session_factory,agen
         assert run.status=='succeeded' and jev.calls>=1
         assert run.rerank_output['stages'][0]['stage']=='initial'
         assert run.execution_trace['model_round_trips']>=1
+
+@pytest.mark.asyncio
+async def test_actual_two_multi_criterion_tools_and_repair_share_call_caps(test_session_factory,owned_context,fresh_period,tmp_path,monkeypatch):
+    import json
+    from pathlib import Path
+    from app.services.llm.types import CompletionResult,ToolCall
+    from app.services.llm.provider import BaseLLMProvider
+    from app.services.evaluation.benchmark.dataset import load_inputs,select_runs
+    from app.services.evaluation.benchmark.runner import run_experiment
+    from app.services.evaluation.benchmark.preflight import plan_budget,context_bound
+    from app.services.evaluation.benchmark.reranking import experiment_policy,plan_rerank_budget,ScriptedJevProvider
+    from app.services.assessment.policy import benchmark_policy
+    from app.db.models import LLMInvocation
+    settings=get_settings();monkeypatch.setattr(settings,'DEEPSEEK_MODEL','mock');monkeypatch.setattr(settings,'DEV_EVAL_BUDGET_USD',1)
+    class ToolsAndRepair(BaseLLMProvider):
+        def __init__(self):self.calls=0
+        async def complete(self,request):
+            self.calls+=1
+            body=next(json.loads(m['content']) for m in request.messages if m['role']=='user' and m['content'].lstrip().startswith('{'))
+            if self.calls<=2:
+                return CompletionResult(content=None,requested_model='mock',reported_model='mock',input_tokens=0,output_tokens=0,
+                    tool_calls=[ToolCall(id=f'call_qa{self.calls}',name='retrieve_more_evidence',arguments={'criterion_ids':[c['criterion_id'] for c in (body['rubric'][:4] if self.calls==1 else body['rubric'][4:])],'query_hint':'triển khai kiểm thử API' if self.calls==1 else 'technical experience implementation'})])
+            if self.calls==3:result={}
+            else:result={'criteria':[{'criterion_id':c['criterion_id'],'status':'insufficient_evidence','score':None,'evidence':[],
+                'rationale':'Synthetic tool/repair contract','missing_information':['Clarify individual responsibility']} for c in body['rubric']]}
+            return CompletionResult(content=json.dumps(result),requested_model='mock',reported_model='mock',input_tokens=0,output_tokens=0)
+    root=Path(__file__).resolve().parents[3];inputs=load_inputs(root/'fixtures/ai_benchmark/v2')
+    sel=select_runs(inputs,split=None,case_ids=('v2-node-01',),profiles=('hybrid_agent',),seed=1)
+    b=plan_budget(inputs,sel,{'hybrid_agent':benchmark_policy('hybrid_agent',retrieval_version='v2')},model='mock',cap_usd=Decimal('1'),bound=context_bound('mock'))
+    p=experiment_policy('rerank','scripted',settings);rb=plan_rerank_budget(b,sel,policy=p,reranker_provider='scripted',cap_usd=Decimal('1'))
+    async with test_session_factory() as db:
+        from app.db.models import BudgetPeriod
+        period=await db.get(BudgetPeriod,fresh_period);period.limit_usd=1;await db.commit()
+        primary=ToolsAndRepair()
+        report=await run_experiment(db,inputs,sel,owned_context,provider=primary,budget_plan=b,output=tmp_path/'calls',embedding_mode='scripted',retrieval_version='v2',rerank_policy=p,reranker_provider=ScriptedJevProvider(),rerank_budget_plan=rb)
+        assert report.counts['accepted']==1,(report.stop_code,(tmp_path/'calls'/'runs.jsonl').read_text())
+        import uuid
+        record=json.loads((tmp_path/'calls'/'runs.jsonl').read_text().splitlines()[0])
+        run=await db.get(AssessmentRun,uuid.UUID(record['run_id']))
+        rows=(await db.scalars(select(LLMInvocation).where(LLMInvocation.job_id==run.job_id))).all()
+        assert primary.calls==4 and run.execution_trace['tool_execution_count']==2 and run.execution_trace['repair_count']==1
+        assert len(rows)<=13 and sum(r.logical_step.startswith('jev_rerank_') for r in rows)<=9
+        assert {s['stage'] for s in run.rerank_output['stages']}=={'initial','tool_1','tool_2'}
+
+from tests.test_ai_benchmark_isolation import owned_context

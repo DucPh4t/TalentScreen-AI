@@ -89,3 +89,44 @@ async def test_crash_after_settlement_before_journal_cannot_replay(test_session_
         with pytest.raises(RerankError,match='RECONCILIATION_REQUIRED'):
             await rerank_candidates(db=db,run=run,policy=p,stage='initial',candidates_by_criterion=pairs,provider_override=provider,financial_policy=f)
         assert provider.calls==1
+
+@pytest.mark.asyncio
+async def test_invalid_paid_judgment_fails_safely_without_expired_orm_access(test_session_factory,agent_context,fresh_period,monkeypatch):
+    from app.services.reranking.service import rerank_candidates,RerankError
+    from app.services.llm.call_policy import JevReservationPolicy
+    from decimal import Decimal
+    monkeypatch.setattr(get_settings(),'JEV_DATA_PROCESSING_APPROVED',True)
+    class BadProvider(ChoiceProvider):
+        async def complete(self,request):
+            good=await super().complete(request)
+            body=json.loads(good.content)
+            for answer in body['answers'].values():answer['confidence']='unsafe'
+            good.content=json.dumps(body)
+            return good
+    async with test_session_factory() as db:
+        run,p,pairs=await rerank_context(db,agent_context)
+        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        with pytest.raises(RerankError,match='JEV_RERANK_FAILED'):
+            await rerank_candidates(db=db,run=run,policy=p,stage='initial',candidates_by_criterion=pairs,provider_override=BadProvider(),financial_policy=f)
+
+@pytest.mark.asyncio
+async def test_restarted_partial_stage_uses_next_physical_ordinal(test_session_factory,agent_context,fresh_period,monkeypatch):
+    from app.services.reranking.service import rerank_candidates
+    from app.services.llm.call_policy import JevReservationPolicy
+    from app.services.reranking.prompt import pair_id_for
+    from decimal import Decimal
+    monkeypatch.setattr(get_settings(),'JEV_DATA_PROCESSING_APPROVED',True)
+    async with test_session_factory() as db:
+        run,p,pairs=await rerank_context(db,agent_context);provider=ChoiceProvider()
+        f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),'2026-10-09',frozenset(p.accepted_models),p.endpoint)
+        await rerank_candidates(db=db,run=run,policy=p,stage='initial',candidates_by_criterion=pairs,provider_override=provider,financial_policy=f)
+        first=pairs['api_design'][0];chunk=await db.get(RetrievalChunk,uuid.UUID(first.chunk_id))
+        second=RetrievalChunk(id=uuid.uuid4(),sanitized_version_id=chunk.sanitized_version_id,chunk_index=1,
+            text=chunk.text,span_ids=chunk.span_ids,embedding_config_id=chunk.embedding_config_id)
+        db.add(second);await db.commit()
+        pair2=first.model_copy(update={'chunk_id':str(second.id),'chunk_index':1,
+            'pair_id':pair_id_for(first.criterion,str(second.id),first.text,first.span_ids,sanitized_version_id=run.sanitized_version_id,rubric_version_id=run.rubric_version_id)})
+        result=await rerank_candidates(db=db,run=run,policy=p,stage='initial',candidates_by_criterion={'api_design':(first,pair2)},provider_override=provider,financial_policy=f)
+        assert provider.calls==2 and len(result.judgments)==2
+        rows=(await db.scalars(select(LLMInvocation).where(LLMInvocation.job_id==run.job_id).order_by(LLMInvocation.logical_step))).all()
+        assert [r.logical_step for r in rows]==['jev_rerank_initial_1','jev_rerank_initial_2']

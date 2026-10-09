@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 from typing import Literal
+from datetime import date
+from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Mode=Literal['off','shadow','rerank','gate_experiment']
@@ -52,6 +54,23 @@ class RerankPolicy(Contract):
         if isinstance(value,dict) and any(isinstance(v,bool) for v in value.values()):
             raise ValueError('RERANK_POLICY_INVALID')
         return value
+
+    @model_validator(mode='after')
+    def provider_contract(self):
+        if self.mode=='off':return self
+        try:
+            date.fromisoformat(self.rate_verified_at or '')
+            url=urlsplit(self.endpoint)
+            allowed={('openrouter.ai','/api/alpha/decisions'),('openrouter.ai','/api/v1/systemone'),('api.typesafe.ai','/v1/systemone')}
+            if (not self.requested_model.strip() or not self.accepted_models or len(set(self.accepted_models))!=len(self.accepted_models)
+                or any(not m.strip() for m in self.accepted_models) or url.scheme!='https'
+                or (url.hostname,url.path) not in allowed or url.port not in (None,443) or url.username or url.password or url.query or url.fragment):
+                raise ValueError()
+            if self.provider_kind=='scripted':
+                if self.accepted_models!=('scripted-jev-v1',) or self.rate_per_million_usd!=0:raise ValueError()
+            elif self.rate_per_million_usd<=0 or 'scripted-jev-v1' in self.accepted_models:raise ValueError()
+        except ValueError as exc:raise ValueError('RERANK_POLICY_INVALID') from exc
+        return self
 
     @property
     def enabled(self)->bool:return self.mode!='off'

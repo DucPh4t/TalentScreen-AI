@@ -143,6 +143,12 @@ class JevHTTPXProvider(BaseLLMProvider):
     ) -> JevDecisionResponse:
         settings = get_settings()
         authorized_rerank = purpose == "jev_rerank" and self.policy is not None and self.policy.enabled
+        if purpose == "jev_rerank":
+            if (not authorized_rerank or self.policy.provider_kind != "jev"
+                or self.api_url != self.policy.endpoint
+                or (requested_model or self.policy.requested_model) != self.policy.requested_model):
+                raise LLMProviderError("JEV_REQUEST_POLICY_MISMATCH")
+            requested_model = self.policy.requested_model
         if not authorized_rerank and settings.JEV_MODE != "shadow":
             raise LLMProviderError("Jev is disabled; set JEV_MODE=shadow only after provider and data approval.")
         if not settings.JEV_DATA_PROCESSING_APPROVED:

@@ -26,7 +26,7 @@ from .prompt import validate_pair_judgments,pair_id_for
 
 
 class RerankError(ValueError):
-    def __init__(self,code):super().__init__(code);self.error_code=code
+    def __init__(self,code):super().__init__(code);self.error_code=code;self.code=code
 
 
 def criterion_from_row(row)->ApprovedCriterion:
@@ -81,7 +81,8 @@ async def rerank_candidates(*,db,run,policy,stage,candidates_by_criterion,focus_
     provider=provider_override or get_jev_provider(policy=policy)
     started=time.monotonic();judgments=list(cached);status=None
     previous_ms=next((s.elapsed_ms for s in journal.stages if s.stage==stage),0)
-    for n,batch in enumerate(plan.batches,1):
+    ordinal=sum(i.logical_step.startswith(f'jev_rerank_{stage}_') for i in existing)
+    for n,batch in enumerate(plan.batches,ordinal+1):
         remaining=policy.aggregate_timeout_seconds-journal.cumulative_elapsed_ms/1000-(time.monotonic()-started)
         if remaining<=0:break
         await require_scope(db,run,policy,pairs)
@@ -95,6 +96,7 @@ async def rerank_candidates(*,db,run,policy,stage,candidates_by_criterion,focus_
         except RerankError:raise
         except (ValueError,LLMProviderError,PreconditionViolationError) as exc:
             await db.rollback()
+            await db.refresh(run)
             code=await snapshot_failure_code(db,run)
             if code:raise RerankError(code) from exc
             unresolved=await db.scalar(select(LLMInvocation.id).where(LLMInvocation.job_id==run.job_id,

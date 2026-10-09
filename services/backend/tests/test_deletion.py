@@ -401,6 +401,7 @@ async def test_purge_worker_execution_and_clean_verification_report(test_session
         run = (await session.execute(
             select(AssessmentRun).where(AssessmentRun.id == ctx["run_id"])
         )).scalar_one()
+        run.rerank_output = {"successful_judgments":{"opaque-pair":{"choice":"limiting_evidence"}}}
         run.execution_trace = {
             "outcome": "validated",
             "tool_execution_count": 1,
@@ -436,6 +437,9 @@ async def test_purge_worker_execution_and_clean_verification_report(test_session
     async with test_session_factory() as session:
         await execute_purge_job(session, job_id=uuid.UUID(job_id))
         await session.commit()
+
+    async with test_session_factory() as session:
+        assert await session.get(AssessmentRun,ctx["run_id"]) is None
 
     # Verify physical file is unlinked from storage
     assert blob_path.exists() is False

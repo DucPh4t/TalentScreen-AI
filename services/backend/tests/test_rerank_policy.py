@@ -51,3 +51,11 @@ def test_old_shadow_and_reranker_are_mutually_exclusive():
         Settings(_env_file=None,LLM_PROVIDER='mock',JEV_MODE='shadow',JEV_RERANK_MODE='rerank',
             JEV_API_KEY='synthetic',JEV_DATA_PROCESSING_APPROVED=True,
             JEV_INPUT_PRICE_PER_MILLION_USD=.042,JEV_RATE_CARD_VERIFIED_AT='2026-10-09')
+
+@pytest.mark.parametrize('changes',[{'accepted_models':[]},{'rate_per_million_usd':0},{'rate_verified_at':None},
+    {'endpoint':'http://unapproved.example/api'}, {'provider_kind':'scripted','accepted_models':['real-live-model']}])
+def test_enabled_snapshot_cannot_bypass_provider_contract(changes):
+    from app.services.reranking.contracts import RerankPolicy
+    from tests.test_rerank_kernel import policy
+    raw=policy().model_dump(mode='json');raw.update(changes)
+    with pytest.raises(ValueError):RerankPolicy.model_validate(raw)
