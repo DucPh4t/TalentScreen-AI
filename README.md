@@ -45,6 +45,12 @@ The Vietnamese UI supports desktop, tablet, and phone layouts; CVs may be Vietna
 
 Responsive behavior, keyboard navigation, and synthetic-browser checks: [UI verification](docs/reviews/2026-10-08-candidate-list-ux.md) · [screening and interview workflow](docs/hr-workflow.md)
 
+## CV text extraction and OCR
+
+PDF pages are text-extracted with `pypdf` first. If a page yields fewer than 25 characters and contains embedded images, each image is OCRed locally with Tesseract through `pytesseract` using `vie+eng`; if that call fails, the parser retries with `eng`. The parse-quality report records whether OCR ran and which pages were recovered. This is a targeted fallback, not OCR on every page.
+
+OCR requires the system `tesseract` executable and the Vietnamese/English language data. DOCX paragraphs and tables are extracted directly; LibreOffice verifies page count, and multi-page DOCX renders go through the PDF parser. See the [parser implementation](services/backend/app/services/parser.py).
+
 ## Architecture
 
 ```mermaid
