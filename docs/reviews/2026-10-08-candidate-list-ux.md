@@ -45,13 +45,9 @@ The following checks were repeated after the new palette was applied:
 
 The menu groups are **Tuyển dụng** (Tổng quan; Đợt tuyển & JD) and **Quản trị dữ liệu** (Dữ liệu & riêng tư). Existing destinations were grouped instead of adding placeholder routes. Palette changes cover the shell, login, dashboard, list tables, dossier cards, toasts and PDF viewer background. No backend, migration, external-provider call or real candidate decision was changed by this pass.
 
-## Screenshots
+## Visual verification
 
-The screenshots below show the current warm neutral theme and contain synthetic records. Mobile shows a search matching one of seven records.
-
-![Desktop candidate queue](candidate-list-desktop-2026-10-08.jpg)
-
-<img src="candidate-list-mobile-2026-10-08.jpg" alt="Mobile candidate queue with synthetic records" width="390" />
+Desktop and mobile captures used synthetic records and were taken on 8 October 2026. Screenshot files are intentionally not retained in the repository; responsive behavior and viewport checks are recorded above.
 
 
 ## Follow-up: draft requisition intake guidance

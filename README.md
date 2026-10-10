@@ -1,31 +1,22 @@
 # TalentScreen AI
 
-**Evidence-based CV screening with hybrid RAG, a bounded LangGraph agent, and optional Jev criterion scoring.**
+**A Vietnamese HR workspace for responsive, evidence-based candidate review.**
 
 [![CI](https://github.com/DucPh4t/TalentScreen-AI/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DucPh4t/TalentScreen-AI/actions/workflows/ci.yml)
 
-[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](services/backend/pyproject.toml)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](services/backend/app/main.py)
-[![Next.js 15](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)](apps/web/package.json)
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](apps/web/package.json)
-[![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](docker-compose.yml)
-[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](services/backend/pyproject.toml) [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](services/backend/app/main.py) [![Next.js 15](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)](apps/web/package.json) [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](apps/web/package.json)
+[![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](docker-compose.yml) [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 
-[![Hybrid RAG](https://img.shields.io/badge/Hybrid_RAG-E5_%2B_pgvector-64734B)](#rag-and-agent-workflow)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Bounded_Agent-1C3C3C)](services/backend/app/services/agent/assessment_graph.py)
-[![DeepSeek](https://img.shields.io/badge/DeepSeek-LLM-4D6BFE)](services/backend/app/services/llm)
-[![Jev 1.13](https://img.shields.io/badge/Jev-1.13_%7C_Optional_Scoring-64734B)](#jev-primary-scoring)
-[![LangSmith](https://img.shields.io/badge/LangSmith-Observability-1C3C3C)](docs/runbooks/langsmith-observability.md)
+[![Hybrid RAG](https://img.shields.io/badge/Hybrid_RAG-E5_%2B_pgvector-64734B)](#rag-and-agent-workflow) [![LangGraph](https://img.shields.io/badge/LangGraph-Bounded_Agent-1C3C3C)](services/backend/app/services/agent/assessment_graph.py) [![DeepSeek](https://img.shields.io/badge/DeepSeek-LLM-4D6BFE)](services/backend/app/services/llm)
+[![Jev 1.13](https://img.shields.io/badge/Jev-1.13_%7C_Optional_Scoring-64734B)](#jev-primary-scoring) [![LangSmith](https://img.shields.io/badge/LangSmith-Observability-1C3C3C)](docs/runbooks/langsmith-observability.md)
 
-TalentScreen AI turns a job description and candidate CV into a criterion-by-criterion assessment with traceable evidence. Built for a university HR use case, it combines CV review, application comparison, structured interviews, and auditable human decisions. Users define their own JD and rubric for each vacancy.
+TalentScreen AI helps HR review each CV against a job description and an approved, versioned rubric. Every assessment links criterion-level observations to cited evidence, coverage, and uncertainty; HR records the final decision.
 
 **Status:** portfolio project / local MVP with substantive workflow, safety, reliability, and evaluation tooling. It is **not a production-validated hiring system**: HR retains every hiring decision, and real-world scoring quality, fairness, and operational readiness remain unverified. Hybrid RAG V2 and Jev-primary scoring are opt-in; Jev reranking is a separate opt-in path. All are off by default.
 
 [Engineering](#engineering-highlights) · [Architecture](#architecture) · [RAG & agent](#rag-and-agent-workflow) · [Jev modes](#jev-primary-scoring) · [Results](#evaluation-results) · [Quickstart](#quickstart) · [Code guide](#code-guide)
 
-![TalentScreen AI candidate review workspace with synthetic records](docs/reviews/candidate-list-desktop-2026-10-08.jpg)
-
-*Vietnamese HR workspace with responsive candidate review. Screenshot uses synthetic records, captured on 8 October 2026.*
+> Responsive candidate-review screenshots use synthetic records and were captured on **8 October 2026**. The image files are intentionally omitted from this repository.
 
 ## Engineering highlights
 
@@ -52,14 +43,7 @@ Recorded software verification from **9 October 2026**: [backend/frontend checks
 
 The Vietnamese UI supports desktop, tablet, and phone layouts; CVs may be Vietnamese, English, or mixed-language. Original CV access is role-gated and audited. Anonymized labels, duplicate hints, and review-SLA alerts support the queue without changing capability scores.
 
-<details>
-<summary><strong>View the mobile workspace</strong></summary>
-
-<img src="docs/reviews/candidate-list-mobile-2026-10-08.jpg" alt="Responsive candidate queue with synthetic records" width="360" />
-
-[UI verification](docs/reviews/2026-10-08-candidate-list-ux.md) · [Screening and interview workflow](docs/hr-workflow.md)
-
-</details>
+Responsive behavior, keyboard navigation, and synthetic-browser checks: [UI verification](docs/reviews/2026-10-08-candidate-list-ux.md) · [screening and interview workflow](docs/hr-workflow.md)
 
 ## Architecture
 
