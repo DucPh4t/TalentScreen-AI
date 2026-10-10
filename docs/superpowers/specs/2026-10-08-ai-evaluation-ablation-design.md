@@ -1,5 +1,7 @@
 # TalentScreen AI: production-pipeline evaluation and RAG/agent ablation
 
+> Superseded as the benchmark corpus on 10 October 2026. The old v1/v2, standalone RAG and pairwise rerank fixtures were removed. The active software-regression set is `fixtures/ai_benchmark/synthetic_100_multi_role`; the Backend Python-only `golden_100` remains legacy. Its AI-authored references follow unapproved draft rubrics and are not HR/IT gold or hiring-quality evidence. Real quality evaluation still requires independent human labels.
+
 - Date: 2026-10-08
 - Design status: written spec approved by the user on 2026-10-08; implementation awaits plan review.
 - Selected approach: B — a developer evaluation runner that exercises application services.
@@ -29,7 +31,7 @@ The backend already provides pgvector retrieval, multilingual E5 embeddings, sou
 
 The current application graph contains `authorize`, `model`, `tools`, `validate` and `repair`. Allowed evidence tools are `retrieve_more_evidence` and `get_source_spans`. They read approved evidence within the application snapshot; they do not browse, send messages or make hiring decisions.
 
-`scripts/run_rag_benchmark.py` aggregates supplied predictions and retrieval results. It does not call the model or run the application pipeline. `scripts/run_synthetic_assessment_probe.py` performs model probes, but is not the proposed multi-role application-service benchmark.
+The former standalone RAG benchmark CLI and its dataset were retired. The active 100-case synthetic Backend Python set exercises the application pipeline for regression only; it does not establish hiring performance.
 
 Local configuration was observed using the direct DeepSeek endpoint, model `deepseek-flash`, hybrid retrieval and `intfloat/multilingual-e5-base`. Preserve that configuration unless the user separately requests a provider change. Jev is disabled and is not a dependency of this work. Existing offline report contracts that mention Jev remain compatible.
 

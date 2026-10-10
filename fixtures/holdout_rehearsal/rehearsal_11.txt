@@ -1,1 +1,0 @@
-For an inventory service, I refactored a Python backend into separate validation and persistence modules. I compared a direct rewrite with a staged migration, kept the old API contract during rollout, and verified both paths with regression tests.

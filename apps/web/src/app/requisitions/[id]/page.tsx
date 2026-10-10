@@ -48,7 +48,6 @@ export default function RequisitionDetailPage({ params }: PageProps) {
   const [shortlistLoading, setShortlistLoading] = useState(false);
   const [shortlistError, setShortlistError] = useState<string | null>(null);
   const [shortlistTierFilter, setShortlistTierFilter] = useState<string>("all");
-  const [shortlistThresholdInput, setShortlistThresholdInput] = useState<number>(70);
   const [rubric, setRubric] = useState<any>(null);
   const [rubricVersions, setRubricVersions] = useState<any[]>([]);
   const [setupLoading, setSetupLoading] = useState(true);
@@ -245,14 +244,12 @@ export default function RequisitionDetailPage({ params }: PageProps) {
     }
   }
 
-  async function loadShortlist(thresholdVal?: number) {
+  async function loadShortlist() {
     setShortlistLoading(true);
     setShortlistError(null);
     try {
-      const targetThreshold = thresholdVal !== undefined ? thresholdVal : shortlistThresholdInput;
-      const res = await api.getShortlist(id, targetThreshold);
+      const res = await api.getShortlist(id);
       setShortlist(res);
-      setShortlistThresholdInput(res.threshold);
     } catch (err: any) {
       setShortlistError(err.message || "Không tải được dữ liệu Shortlist.");
     } finally {
@@ -524,7 +521,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
           <span>Đánh giá tham khảo</span>
           {shortlist && (
             <span className="badge badge-open" style={{ fontSize: "0.65rem", padding: "0.15rem 0.4rem", marginLeft: "0.35rem" }}>
-              {shortlist.shortlisted_candidates} ưu tiên
+              {shortlist.shortlisted_candidates} đạt ngưỡng tham khảo
             </span>
           )}
         </button>
@@ -623,33 +620,16 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                   <h2 className="card-title">Đối chiếu mức đáp ứng JD</h2>
                 </div>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "0.25rem" }}>
-                  Tự động lọc, xếp thứ hạng và phân nhóm ứng viên dựa trên điểm chuẩn hóa, độ phủ bằng chứng và tiêu chuẩn cốt lõi (Core Competencies).
+                  Nhóm hồ sơ theo policy của rubric để HR/IT xem xét. Điểm và threshold chỉ là tín hiệu tham khảo; không tự động loại ứng viên.
                 </p>
               </div>
 
-              {/* Threshold Adjuster */}
+              {/* Threshold is fixed by the current approved rubric policy. */}
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Ngưỡng xét tuyển /100:</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  className="form-input"
-                  style={{ width: "70px", padding: "0.3rem 0.5rem" }}
-                  value={shortlistThresholdInput}
-                  onChange={(e) => setShortlistThresholdInput(Number(e.target.value))}
-                />
+                <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Threshold của rubric: {shortlist?.threshold ?? "—"}/100</span>
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
-                  onClick={() => void loadShortlist(shortlistThresholdInput)}
-                  disabled={shortlistLoading}
-                >
-                  Lọc theo ngưỡng mới
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
                   onClick={() => void loadShortlist()}
                   disabled={shortlistLoading}
                 >
@@ -672,29 +652,29 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <div style={{ fontSize: "0.75rem", color: "var(--emerald-text)", fontWeight: 600 }}>🌟 KHUYẾN NGHỊ ƯU TIÊN</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--emerald-text)", fontWeight: 600 }}>ĐẠT NGƯỠNG THAM KHẢO</div>
                   <div style={{ fontSize: "1.45rem", fontWeight: 700, color: "var(--emerald-text)", marginTop: "0.2rem" }}>
                     {shortlist.tier_summary.recommend || 0}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Điểm ≥ {shortlist.threshold} & đạt Core</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Đủ floors; HR/IT tự quyết định bước tiếp</div>
                 </div>
 
                 <div
-                  onClick={() => setShortlistTierFilter(shortlistTierFilter === "borderline" ? "all" : "borderline")}
+                  onClick={() => setShortlistTierFilter(shortlistTierFilter === "needs_clarification" ? "all" : "needs_clarification")}
                   style={{
                     padding: "0.85rem 1rem",
                     borderRadius: "var(--radius-sm)",
-                    background: shortlistTierFilter === "borderline" ? "var(--border-glow)" : "var(--accent-soft)",
-                    border: `1px solid ${shortlistTierFilter === "borderline" ? "var(--accent-cyan)" : "var(--border-glow)"}`,
+                    background: shortlistTierFilter === "needs_clarification" ? "var(--amber-border)" : "var(--amber-bg)",
+                    border: `1px solid var(--amber-border)`,
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <div style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontWeight: 600 }}>⚖️ CÂN NHẮC / PHỎNG VẤN THÊM</div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 700, color: "var(--accent-cyan)", marginTop: "0.2rem" }}>
-                    {shortlist.tier_summary.borderline || 0}
+                  <div style={{ fontSize: "0.75rem", color: "var(--amber-text)", fontWeight: 600 }}>CẦN HR LÀM RÕ</div>
+                  <div style={{ fontSize: "1.45rem", fontWeight: 700, color: "var(--amber-text)", marginTop: "0.2rem" }}>
+                    {shortlist.clarification_candidates || 0}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Điểm {Math.max(0, shortlist.threshold - 15)} – {shortlist.threshold}</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Thiếu/mâu thuẫn evidence; nice-to-have không chặn điểm</div>
                 </div>
 
                 <div
@@ -708,11 +688,11 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <div style={{ fontSize: "0.75rem", color: "var(--amber-text)", fontWeight: 600 }}>⚠️ THIẾU TIÊU CHÍ CỐT LÕI</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--amber-text)", fontWeight: 600 }}>MUST-HAVE DƯỚI FLOOR</div>
                   <div style={{ fontSize: "1.45rem", fontWeight: 700, color: "var(--amber-text)", marginTop: "0.2rem" }}>
                     {shortlist.tier_summary.core_fail || 0}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Chưa đạt mức sàn năng lực chính</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>HR/IT xem xét; không tự động loại</div>
                 </div>
 
                 <div
@@ -726,11 +706,11 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>📉 DƯỚI NGƯỠNG TIÊU CHUẨN</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>DƯỚI NGƯỠNG THAM KHẢO</div>
                   <div style={{ fontSize: "1.45rem", fontWeight: 700, color: "var(--text-secondary)", marginTop: "0.2rem" }}>
                     {shortlist.tier_summary.below_threshold || 0}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Điểm &lt; {Math.max(0, shortlist.threshold - 15)}</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>Điểm dưới {shortlist.threshold}; HR/IT xem xét</div>
                 </div>
               </div>
             )}
@@ -780,12 +760,11 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                   </thead>
                   <tbody>
                     {shortlist.candidates
-                      .filter(c => shortlistTierFilter === "all" || c.tier === shortlistTierFilter)
+                    .filter(c => shortlistTierFilter === "all" || (shortlistTierFilter === "needs_clarification" ? c.recommendation === "needs_clarification" : c.tier === shortlistTierFilter))
                       .map((c) => {
                         const rankColor = c.rank === 1 ? "var(--accent-olive)" : "var(--text-secondary)";
                         const tierBadgeClass =
                           c.tier === "recommend" ? "badge-open" :
-                          c.tier === "borderline" ? "badge-subtle" :
                           c.tier === "core_fail" ? "badge-paused" : "badge-subtle";
 
                         return (
@@ -826,12 +805,18 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                             </td>
                             <td>
                               <span className={`badge ${tierBadgeClass}`} style={{ fontSize: "0.75rem" }}>
-                                {c.tier === "recommend" && "🌟 KHUYẾN NGHỊ"}
-                                {c.tier === "borderline" && "⚖️ CÂN NHẮC"}
-                                {c.tier === "core_fail" && "⚠️ THIẾU CORE"}
-                                {c.tier === "below_threshold" && "📉 DƯỚI NGƯỠNG"}
+                                {c.tier === "recommend" && "ĐẠT NGƯỠNG THAM KHẢO"}
+                                {c.tier === "needs_clarification" && "CẦN HR LÀM RÕ"}
+                                {c.tier === "review_required" && "CẦN HR/IT ĐỐI CHIẾU"}
+                                {c.tier === "core_fail" && "MUST-HAVE DƯỚI FLOOR"}
+                                {c.tier === "below_threshold" && "DƯỚI NGƯỠNG THAM KHẢO"}
                                 {c.tier === "not_assessed" && "CHƯA ĐÁNH GIÁ"}
                               </span>
+                              {c.recommendation === "needs_clarification" && c.comparable_score !== null && (
+                                <span className="badge badge-subtle" style={{ display: "inline-block", marginTop: "0.25rem", fontSize: "0.68rem" }}>
+                                  Thiếu evidence nice-to-have; điểm vẫn được tính
+                                </span>
+                              )}
                             </td>
                             <td>
                               {c.comparable_score !== null ? (
@@ -880,7 +865,7 @@ export default function RequisitionDetailPage({ params }: PageProps) {
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", maxWidth: "200px" }}>
                                   {c.core_failed_criteria.map((cf, idx) => (
                                     <span key={idx} className="badge badge-paused" style={{ fontSize: "0.68rem", padding: "0.1rem 0.35rem" }}>
-                                      Thiếu {cf}
+                                      Cần HR xem xét {cf}
                                     </span>
                                   ))}
                                 </div>

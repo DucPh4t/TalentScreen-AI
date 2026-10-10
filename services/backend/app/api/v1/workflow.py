@@ -129,13 +129,12 @@ async def review_queue(
 @router.get("/requisitions/{id}/shortlist")
 async def get_requisition_shortlist_endpoint(
     id: uuid.UUID,
-    threshold: float | None = None,
     db: AsyncSession = Depends(get_db),
     ctx: AuthenticatedContext = Depends(get_current_context),
 ):
-    """AI Shortlist Engine: Returns ranked candidates categorized by tier (recommend, borderline, below_threshold, core_fail)."""
+    """Return HR review groups from the threshold and floors in the current approved rubric."""
     from app.services.shortlist import compute_requisition_shortlist
-    return await compute_requisition_shortlist(db, requisition_id=id, ctx=ctx, custom_threshold=threshold)
+    return await compute_requisition_shortlist(db, requisition_id=id, ctx=ctx)
 
 
 @router.get("/requisitions/{id}/comparison")

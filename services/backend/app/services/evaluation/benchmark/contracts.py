@@ -126,6 +126,7 @@ import uuid
 class CriterionObservation(Contract):
     status: Literal['assessed','insufficient_evidence','conflicting_evidence']
     score: StrictInt | None = Field(default=None,ge=0,le=4)
+    jev_score: Decimal | None = Field(default=None,ge=0,le=4)
     evidence_ids: tuple[str,...] = ()
     clarification_count: StrictInt = Field(default=0,ge=0)
 
@@ -144,6 +145,15 @@ class InvocationRecord(Contract):
     estimated_peak_usd: Decimal | None = Field(default=None,ge=0)
     rate_card_version: str | None = None
 
+class JevPrimaryObservation(Contract):
+    outcome: Literal['succeeded','skipped_no_evidence','provider_error']
+    requested_model: str | None = Field(default=None,max_length=100)
+    eligible_criterion_count: StrictInt = Field(default=0,ge=0)
+    error_code: str | None = Field(default=None,max_length=64,pattern=r'^[A-Za-z0-9_-]+$')
+    explanation_outcome: Literal['succeeded','failed'] | None = None
+    explanation_error_code: str | None = Field(default=None,max_length=64,pattern=r'^[A-Za-z0-9_-]+$')
+
+
 class RunRecord(Contract):
     case_id: str
     profile: ProfileName
@@ -155,6 +165,7 @@ class RunRecord(Contract):
     source_ids: dict[str,str] = Field(default_factory=dict)
     policy_hash: str
     criteria: dict[str,CriterionObservation] = Field(default_factory=dict)
+    jev_primary: JevPrimaryObservation | None = None
     diagnostics: dict = Field(default_factory=dict)
     invocations: tuple[InvocationRecord,...] = ()
     tool_execution_count: StrictInt = Field(default=0,ge=0)

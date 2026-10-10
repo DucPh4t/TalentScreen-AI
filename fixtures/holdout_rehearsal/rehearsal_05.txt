@@ -1,1 +1,0 @@
-Tôi sửa hàm Python chuẩn hóa mã đơn vị trong dịch vụ backend và thêm kiểm tra đầu vào rỗng. Chưa tự triển khai endpoint hoặc thiết kế bảng dữ liệu.

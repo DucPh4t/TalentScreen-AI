@@ -8,6 +8,8 @@ from app.services.reranking.policy import load_rerank_policy
 from app.services.reranking.contracts import canonical
 
 
+MAX_JEV_OUTPUT_TOKENS = 1024
+
 @dataclass(frozen=True)
 class InvocationBudgetPolicy:
     primary_limit:int
@@ -44,7 +46,7 @@ class JevReservationPolicy:
         if not isinstance(body,dict) or set(body)-{'model','state','questions'} or not {'state','questions'}<=set(body):
             raise ValueError('JEV_REQUEST_INVALID')
         body={**body,'model':request.model}
-        if (request.provider!='jev' or request.max_output_tokens!=0 or request.strict_reservation_policy is not None
+        if (request.provider!='jev' or request.max_output_tokens!=MAX_JEV_OUTPUT_TOKENS or request.strict_reservation_policy is not None
             or len(canonical(body).encode())>32768 or len(canonical(body['state']).encode())>16384
             or not isinstance(body['questions'],dict) or not 1<=len(body['questions'])<=20):
             raise ValueError('JEV_REQUEST_BOUND_EXCEEDED')

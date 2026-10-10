@@ -1,1 +1,0 @@
-Project: I built a Flask search API with pagination and a stable response schema. Kiểm thử: tôi viết test cho trang rỗng và tham số sai; phần triển khai do nhóm hạ tầng phụ trách.

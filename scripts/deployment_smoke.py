@@ -57,12 +57,16 @@ def main() -> None:
         req = call("POST", "/requisitions", 201, json={"title": "SYNTHETIC Deployment Review — Backend Python"})
         req_id = req["id"]
         jd = call("POST", f"/requisitions/{req_id}/jd-versions", 201, json={
-            "source_text": (root / "fixtures/seeds/jd-backend-python.vi.md").read_text(),
+            # v3 JD/rubric are sandbox seeds only; this smoke is pinned to
+            # loopback + sandbox + mock and still exercises explicit approvals.
+            "source_text": (root / "fixtures/seeds/jd-backend-python.v3.vi.md").read_text(),
             "change_reason": "Synthetic deployment smoke check",
             "expected_requisition_version": req["row_version"],
         })
         rubric = call("POST", f"/requisitions/{req_id}/rubrics", 201, json={"source": "seed"})
         req = call("GET", f"/requisitions/{req_id}")
+        # Exercise the existing approval endpoints against synthetic records
+        # in the isolated mock sandbox; this is not a real HR/IT approval.
         call("POST", f"/rubrics/{rubric['id']}/approve", json={
             "expected_requisition_version": req["row_version"],
             "expected_jd_version_id": jd["id"], "acknowledge_thresholds": True,

@@ -1,0 +1,655 @@
+{
+  "schema_version": "1.0.0",
+  "rubric_id": "RUBRIC-BACKEND-PYTHON-001",
+  "version": 2,
+  "status": "draft",
+  "locale": "vi",
+  "requisition_title": "Chuyên viên phát triển phần mềm Backend Python cho hệ thống nội bộ trường",
+  "purpose": "Seed revision 2 để HR/IT rà soát; chưa được phê duyệt, chưa được hiệu chuẩn và chỉ dùng trong sandbox.",
+  "source_jd": {
+    "document_id": "JD-BACKEND-PYTHON-001",
+    "revision": 2,
+    "file": "jd-backend-python.v2.vi.md",
+    "status": "draft_seed",
+    "source_of_truth": "Sáu đoạn yêu cầu chuẩn trong mục 2 của JD; mọi quote phải khớp nguyên văn."
+  },
+  "approval": {
+    "required_role": "recruiter",
+    "required_membership": "owner",
+    "approved_by": null,
+    "approved_at": null,
+    "approved_content_hash": null,
+    "note": "Draft seed không tạo approval. approved_by, approved_at và approved_content_hash phải giữ null cho đến khi người có thẩm quyền thật duyệt đúng nội dung."
+  },
+  "scoring_contract": {
+    "allowed_outcomes": [
+      "assessed",
+      "insufficient_evidence",
+      "conflicting_evidence"
+    ],
+    "score_type": "integer_or_null",
+    "score_min": 0,
+    "score_max": 4,
+    "expected_criterion_count": 6,
+    "weight_sum": 100,
+    "missing_information_score": null,
+    "skills_only_outcome": "insufficient_evidence",
+    "not_applicable_allowed": false,
+    "rules": [
+      "Mỗi criterion xuất hiện đúng một lần. assessed bắt buộc score integer 0..4 và evidence; insufficient_evidence và conflicting_evidence bắt buộc score null.",
+      "Chọn anchor cao nhất khi toàn bộ điều kiện bắt buộc của anchor đó được chính nội dung CV chứng minh; không suy ra từ chức danh, số năm, thương hiệu framework, danh tiếng tổ chức hoặc kết quả nhóm.",
+      "Evidence tối thiểu phải là quote nguyên văn có vị trí/section và span offset từ CV đã được duyệt; quote phải đủ ngữ cảnh để nhận biết hành động cá nhân và liên hệ với criterion.",
+      "Nếu thiếu bất kỳ điều kiện bắt buộc của anchor, phần việc cá nhân không rõ, hoặc quote không đủ ngữ cảnh thì dùng insufficient_evidence và score null; không hạ xuống 0.",
+      "Score 0 chỉ hợp lệ khi CV có phát biểu trực tiếp, rõ phạm vi, khớp chính xác điều kiện anchor 0 của criterion và không có evidence tích cực mâu thuẫn trong cùng phạm vi; thiếu từ khóa/kinh nghiệm trong CV không phải score 0.",
+      "Một bằng chứng mạnh có thể đáp ứng anchor cao mà không cần liệt kê mọi tác vụ của anchor thấp hơn, nhưng phải đáp ứng đầy đủ mọi yếu tố bắt buộc của anchor cao được chọn.",
+      "Mức 1 yêu cầu hành động cá nhân và tác vụ/chức năng có hành vi cụ thể; mức 2 yêu cầu đầy đủ các yếu tố nghiệp vụ, validation/error hoặc tính đúng dữ liệu ghi tại anchor; mức 3 yêu cầu ràng buộc/tình huống cụ thể và cách kiểm chứng; mức 4 yêu cầu trade-off, ranh giới thiết kế/phát hành và kiểm chứng tương ứng.",
+      "Mô tả có hai phát biểu không tương thích về cùng hành động, đối tượng và khoảng thời gian dùng conflicting_evidence, score null và câu hỏi xác minh; không chuyển xung đột thành not_evidenced hoặc contradicted.",
+      "not_evidenced nghĩa là không có evidence liên quan trong nguồn đã rà; contradicted nghĩa là có phát biểu trực tiếp, đơn nghĩa phủ định một mệnh đề cụ thể; conflicting_evidence nghĩa là có từ hai span trở lên bất đồng cùng phạm vi. Ba trạng thái này không thay thế lẫn nhau.",
+      "Thông tin không có trong CV không chứng minh ứng viên không có năng lực. Không yêu cầu tiết lộ bí mật hệ thống, dữ liệu cá nhân hoặc chi tiết khai thác để chứng minh security.",
+      "Dự án nhóm chỉ hỗ trợ điểm khi phần đóng góp cá nhân được nêu. CV song ngữ không được đếm một tác vụ hai lần; ngôn ngữ, độ dài, trình bày và số liệu kết quả không tự cộng điểm.",
+      "Kết quả là mức evidence được thể hiện trong CV, không xác minh khai báo và không phải dự đoán kết quả tuyển dụng."
+    ],
+    "status_alignment": {
+      "scope": "Explicit interface contract between the live assessment outcome and human-evaluation annotation status; never infer a mapping from field names.",
+      "mapping": {
+        "assessed": {
+          "evaluator_status": [
+            "supported",
+            "partial",
+            "contradicted"
+          ],
+          "score": "integer 0..4 only when the selected anchor is fully supported; contradicted does not automatically mean score 0.",
+          "meaning": "The criterion has a scoreable, cited evidence assessment. Use supported for clear positive support, partial for incomplete support that still meets an anchor, and contradicted only for a direct, unambiguous contrary statement about the assessed proposition."
+        },
+        "insufficient_evidence": {
+          "evaluator_status": "not_evidenced",
+          "score": null,
+          "evidence": "empty",
+          "meaning": "No relevant evidence was found in the reviewed source. This does not assert lack of ability."
+        },
+        "conflicting_evidence": {
+          "evaluator_status": "conflicting_evidence",
+          "score": null,
+          "evidence": "at least two exact spans that disagree about the same action, object and scope/time",
+          "meaning": "Unresolved evidence conflict; ask for verification. Do not map to not_evidenced or contradicted."
+        }
+      },
+      "contradicted_vs_conflict": "contradicted is a single unambiguous direct negative statement about a proposition; two CV statements that disagree within the same scope/time are conflicting_evidence and remain unscored until reviewed.",
+      "implementation_requirement": "The human-labeled evaluator must accept conflicting_evidence as a distinct status, require null score and at least two evidence spans, and preserve it in status agreement. A consumer that cannot represent this status must reject the record rather than silently map it."
+    }
+  },
+  "recommendation_policy": {
+    "policy_version": 1,
+    "status": "draft_requires_owner_approval",
+    "require_full_coverage": true,
+    "threshold": 70,
+    "core_minimum_scores": {
+      "python_backend": 2,
+      "api_design": 2,
+      "sql_data": 2
+    },
+    "rules_in_priority_order": [
+      {
+        "condition": "Bất kỳ criterion có score null",
+        "recommendation": "needs_clarification",
+        "display_vi": "Cần làm rõ thông tin"
+      },
+      {
+        "condition": "Tất cả criterion assessed; comparable_score >= 70; python_backend >= 2; api_design >= 2; sql_data >= 2",
+        "recommendation": "consider_next_round",
+        "display_vi": "Có thể cân nhắc vòng tiếp theo"
+      },
+      {
+        "condition": "Tất cả criterion assessed và không thỏa điều kiện consider_next_round",
+        "recommendation": "review_required",
+        "display_vi": "Cần HR xem xét"
+      }
+    ],
+    "technical_failure_behavior": "Không tạo recommendation hợp lệ; chuyển luồng xử lý lỗi/thủ công.",
+    "automatic_hiring_decisions_allowed": false,
+    "automatic_rejection_allowed": false,
+    "automatic_top_n_allowed": false,
+    "validation_status": "unvalidated",
+    "note": "Ngưỡng 70 và core floor 2 giữ nguyên từ v1, chỉ là đề xuất draft chưa hiệu chuẩn; HR/IT phải quyết định sau khi xem công việc thực và bằng chứng phù hợp. Không sử dụng để tự động quyết định tuyển dụng.",
+    "calibration_notes": [
+      "Cả sáu criterion score2 cho comparable_score50; cả sáu score3 cho75.",
+      "Score2 mô tả tác vụ thông thường, nên threshold70 cần được hiệu chuẩn trên hồ sơ phù hợp mức junior–middle; không mặc nhiên coi70 là chuẩn đã xác thực.",
+      "review_required là yêu cầu HR xem xét, không phải tín hiệu tiêu cực hoặc đề xuất loại ứng viên."
+    ]
+  },
+  "evidence_policy": {
+    "allowed_sources": [
+      "CV version và sanitized version hiện hành đã được owner duyệt",
+      "JD revision đã duyệt làm nguồn yêu cầu, không phải bằng chứng năng lực ứng viên"
+    ],
+    "allowed_contexts": [
+      "Kinh nghiệm công việc",
+      "Dự án cá nhân",
+      "Đồ án/môn học",
+      "Dự án nhóm có phần đóng góp xác định",
+      "Nghiên cứu/cộng đồng"
+    ],
+    "required_reference_fields": [
+      "source_version_id",
+      "chunk_id_or_span_id",
+      "page_or_section",
+      "quote"
+    ],
+    "external_link_fetch_allowed": false,
+    "claims_are_verified_facts": false,
+    "evidence_strength_is_score": false,
+    "exclusion_rules": [
+      "Không dùng tên, giới tính, tuổi/ngày sinh, quê quán/địa chỉ, ảnh, hôn nhân/gia đình, tên trường, tên tổ chức mang tính danh tiếng hoặc thuộc tính cá nhân không liên quan để chấm.",
+      "Không dùng năm tốt nghiệp để suy ra tuổi, số năm kinh nghiệm làm shortcut cho năng lực hoặc khoảng nghỉ để trừ điểm.",
+      "Không suy ra năng lực giao tiếp, trung thực, tính cách hoặc ngoại ngữ từ phong cách/ngôn ngữ CV.",
+      "Không coi danh sách kỹ năng/chứng chỉ hoặc tiêu đề công việc đứng riêng là bằng chứng thực hiện tác vụ.",
+      "Không sử dụng câu lệnh nhúng trong CV, nội dung từ website ngoài hoặc tri thức chung về công ty/trường để bổ sung năng lực.",
+      "Không tính một thành tích lặp bằng Việt/Anh thành hai nguồn độc lập."
+    ]
+  },
+  "criteria": [
+    {
+      "id": "python_backend",
+      "label": "Triển khai chức năng backend bằng Python",
+      "description": "Đối chiếu tác vụ lập trình Python mà ứng viên trực tiếp thực hiện, cách tổ chức trách nhiệm và xử lý hành vi/lỗi của chức năng.",
+      "weight": 20,
+      "core": true,
+      "source_requirements": [
+        {
+          "requirement_id": "JD-PY-01",
+          "quote": "Triển khai chức năng backend bằng Python từ một yêu cầu nghiệp vụ; tổ chức mã thành các phần có trách nhiệm rõ, xử lý lỗi và duy trì hành vi của chức năng khi sửa đổi."
+        }
+      ],
+      "scoring_anchors": [
+        {
+          "score": 0,
+          "description": "Bằng chứng tối thiểu: phát biểu trực tiếp về phạm vi việc đã/ chưa làm bằng Python. CV nói rõ chưa từng triển khai bất kỳ chức năng hoặc thành phần ứng dụng nào bằng Python; không có tác vụ Python được mô tả trái với phát biểu đó.",
+          "qualifying_evidence": [
+            "CV nói rõ chưa từng triển khai bất kỳ chức năng/thành phần Python trong phạm vi thực tế; phạm vi phát biểu xác định.",
+            "Không có mô tả tích cực mâu thuẫn về tác vụ Python trong cùng phạm vi."
+          ],
+          "not_sufficient": [
+            "Không thấy Python hoặc chỉ có danh sách skills.",
+            "Không có câu phủ định rõ phạm vi; trường hợp đó là insufficient_evidence, không phải 0.",
+            "Thiếu thông tin, thiếu từ khóa hoặc chỉ nêu giới hạn hẹp không khớp toàn bộ phát biểu anchor 0 thì không được chấm 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 1,
+          "description": "Bằng chứng tối thiểu: phần việc cá nhân bằng Python và một thành phần có hành vi/đầu vào/đầu ra cụ thể. Đã trực tiếp viết hoặc sửa một thành phần Python có nhiệm vụ giới hạn và hành vi cụ thể, chẳng hạn hàm kiểm tra đầu vào hoặc chuyển đổi dữ liệu cho backend.",
+          "qualifying_evidence": [
+            "Nêu hành động cá nhân và chức năng/thành phần cụ thể.",
+            "Có thể xác định hành vi chính hoặc dữ liệu đầu vào/đầu ra; không cần làm toàn hệ thống."
+          ],
+          "not_sufficient": [
+            "Chỉ có Python/FastAPI trong skills hoặc chức danh.",
+            "Dự án có Python nhưng không rõ ứng viên làm gì hoặc chức năng có hành vi nào.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 2,
+          "description": "Bằng chứng tối thiểu: một chức năng backend nghiệp vụ do ứng viên triển khai. Đã triển khai một chức năng backend Python thông thường từ yêu cầu đến xử lý nghiệp vụ, với tổ chức phần việc và xử lý lỗi được mô tả cụ thể.",
+          "qualifying_evidence": [
+            "Mô tả xử lý nghiệp vụ và phần mã có trách nhiệm rõ.",
+            "Nêu ít nhất một nhánh lỗi/đầu vào không hợp lệ và cách duy trì hành vi đúng."
+          ],
+          "not_sufficient": [
+            "Chỉ nêu tên sản phẩm/chức danh/script không liên hệ chức năng.",
+            "Thiếu nghiệp vụ, hành động cá nhân, cách phân trách nhiệm hoặc xử lý lỗi bắt buộc.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 3,
+          "description": "Bằng chứng tối thiểu: một ràng buộc kỹ thuật bổ sung và cách kiểm chứng. Đã xử lý một chức năng Python có ràng buộc bổ sung như tác vụ nền, tích hợp dịch vụ hoặc xử lý đồng thời; giải thích cách giữ hành vi đúng khi lỗi xảy ra và cách kiểm tra giải pháp.",
+          "qualifying_evidence": [
+            "Nêu tình huống như tích hợp dịch vụ, tác vụ nền hoặc đồng thời.",
+            "Nêu xử lý lỗi/nhất quán hành vi và kiểm tra liên quan."
+          ],
+          "not_sufficient": [
+            "Chỉ có từ async, microservices hoặc quy mô.",
+            "Thiếu quyết định cá nhân hoặc cách kiểm chứng.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 4,
+          "description": "Bằng chứng tối thiểu: thay đổi thiết kế Python có ranh giới module và trade-off được kiểm chứng. Đã thiết kế hoặc cải tổ một phần backend Python với ranh giới module rõ, cân nhắc ít nhất một trade-off thực tế và kiểm chứng việc thay đổi không làm mất hành vi cần giữ.",
+          "qualifying_evidence": [
+            "Mô tả vấn đề, lựa chọn thiết kế và trade-off.",
+            "Nêu cách chuyển đổi/bảo toàn hành vi và kiểm tra sau thay đổi."
+          ],
+          "not_sufficient": [
+            "Chỉ tự nhận senior/architect hoặc clean architecture.",
+            "Thiếu trade-off, bảo toàn hành vi hoặc kiểm chứng.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "api_design",
+      "label": "Thiết kế và triển khai HTTP API",
+      "description": "Đối chiếu tác vụ API và cách bảo đảm hợp đồng đầu vào/đầu ra, validation, lỗi và hành vi ở các tình huống liên quan.",
+      "weight": 25,
+      "core": true,
+      "source_requirements": [
+        {
+          "requirement_id": "JD-API-01",
+          "quote": "Thiết kế và triển khai HTTP API có hợp đồng đầu vào, đầu ra và mã trạng thái phù hợp; kiểm tra dữ liệu đầu vào và xử lý lỗi để bên sử dụng API nhận được hành vi nhất quán."
+        }
+      ],
+      "scoring_anchors": [
+        {
+          "score": 0,
+          "description": "Bằng chứng tối thiểu: phát biểu trực tiếp về việc chưa từng triển khai/sửa HTTP server API trong phạm vi thực tế. CV nói rõ chưa từng triển khai hoặc sửa một HTTP API; không có tác vụ API được mô tả trái với phát biểu đó.",
+          "qualifying_evidence": [
+            "Nêu rõ chưa triển khai hoặc sửa endpoint phía server; phạm vi phát biểu xác định.",
+            "Không có tác vụ endpoint mâu thuẫn trong cùng phạm vi."
+          ],
+          "not_sufficient": [
+            "Không nhắc endpoint/REST hoặc chỉ làm API client/frontend.",
+            "Phát biểu chỉ nói chưa làm frontend/backend chung chung, không đủ cho 0.",
+            "Thiếu thông tin, thiếu từ khóa hoặc chỉ nêu giới hạn hẹp không khớp toàn bộ phát biểu anchor 0 thì không được chấm 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 1,
+          "description": "Bằng chứng tối thiểu: endpoint/hành vi request–response cơ bản do ứng viên trực tiếp làm. Đã trực tiếp triển khai hoặc sửa một endpoint theo hợp đồng có sẵn, nêu được nghiệp vụ và đầu vào/đầu ra cơ bản của endpoint.",
+          "qualifying_evidence": [
+            "Nêu hành động cá nhân và nghiệp vụ/endpoint cụ thể.",
+            "Nêu được đầu vào/đầu ra hoặc hành vi chính của endpoint."
+          ],
+          "not_sufficient": [
+            "Chỉ có REST/Swagger/Postman trong skills.",
+            "Dự án có API nhưng không rõ endpoint, hành vi hay đóng góp.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 2,
+          "description": "Bằng chứng tối thiểu: một API chức năng thông thường có hợp đồng và xử lý lỗi. Đã thiết kế và triển khai API cho một chức năng thông thường, nêu hợp đồng request/response cùng validation và cách trả lỗi/mã trạng thái.",
+          "qualifying_evidence": [
+            "Nêu request/response của chức năng.",
+            "Nêu validation đầu vào và phản hồi lỗi/mã trạng thái phù hợp."
+          ],
+          "not_sufficient": [
+            "Chỉ nêu số lượng endpoint hoặc CRUD chung.",
+            "Thiếu hợp đồng hoặc một trong validation/xử lý lỗi bắt buộc.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 3,
+          "description": "Bằng chứng tối thiểu: tình huống ngoài luồng thuận và cách kiểm chứng. Đã xử lý tình huống API ngoài luồng thuận như request lặp, phân trang có ràng buộc, xung đột cập nhật hoặc tích hợp client; nêu lựa chọn hành vi và cách kiểm tra.",
+          "qualifying_evidence": [
+            "Mô tả request lặp, phân trang có ràng buộc, xung đột cập nhật hoặc tích hợp client cụ thể.",
+            "Nêu lựa chọn hành vi/hợp đồng và test hoặc cách kiểm chứng."
+          ],
+          "not_sufficient": [
+            "Chỉ liệt kê idempotency/pagination/versioning hoặc traffic.",
+            "Thiếu quyết định hành vi hay kiểm chứng.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 4,
+          "description": "Bằng chứng tối thiểu: thay đổi hợp đồng API qua nhiều client/phiên bản có trade-off và compatibility check. Đã thiết kế hoặc chuyển đổi hợp đồng API qua nhiều bên sử dụng/phiên bản với trade-off rõ; có biện pháp bảo toàn tương thích hoặc chuyển đổi và kiểm chứng lỗi biên.",
+          "qualifying_evidence": [
+            "Nêu ràng buộc client/phiên bản và quyết định hợp đồng.",
+            "Nêu cách chuyển đổi/bảo toàn tương thích và kiểm tra lỗi biên."
+          ],
+          "not_sufficient": [
+            "Chỉ nói enterprise API, versioning hoặc khách hàng lớn.",
+            "Thiếu nhiều client/phiên bản, trade-off hoặc compatibility verification.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sql_data",
+      "label": "SQL, mô hình và tính đúng đắn dữ liệu",
+      "description": "Đối chiếu tác vụ cơ sở dữ liệu quan hệ: truy vấn, mô hình, ràng buộc, giao dịch và thay đổi dữ liệu phù hợp nghiệp vụ.",
+      "weight": 20,
+      "core": true,
+      "source_requirements": [
+        {
+          "requirement_id": "JD-SQL-01",
+          "quote": "Làm việc với cơ sở dữ liệu quan hệ để lưu và truy vấn dữ liệu nghiệp vụ; thiết kế hoặc sửa cấu trúc dữ liệu, dùng ràng buộc và giao dịch khi cần để giữ tính đúng đắn của dữ liệu."
+        }
+      ],
+      "scoring_anchors": [
+        {
+          "score": 0,
+          "description": "Bằng chứng tối thiểu: phát biểu trực tiếp chưa từng dùng SQL/cơ sở dữ liệu quan hệ trong tác vụ thực tế. CV nói rõ chưa từng dùng cơ sở dữ liệu quan hệ hoặc SQL trong một tác vụ thực tế; không có mô tả tác vụ SQL trái với phát biểu đó.",
+          "qualifying_evidence": [
+            "Phạm vi phát biểu bao quát việc dùng SQL hoặc relational database trong tác vụ thực.",
+            "Không có tác vụ SQL/relational mâu thuẫn trong cùng phạm vi."
+          ],
+          "not_sufficient": [
+            "Không liệt kê SQL hoặc chỉ thấy NoSQL.",
+            "Chỉ nói chưa thiết kế schema nhưng chưa nói chưa từng thao tác/truy vấn SQL.",
+            "Thiếu thông tin, thiếu từ khóa hoặc chỉ nêu giới hạn hẹp không khớp toàn bộ phát biểu anchor 0 thì không được chấm 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 1,
+          "description": "Bằng chứng tối thiểu: thao tác truy vấn/bảng quan hệ và mục đích dữ liệu cụ thể. Đã trực tiếp viết/sửa truy vấn hoặc thao tác một bảng quan hệ để phục vụ tác vụ cụ thể, nêu dữ liệu được đọc hoặc cập nhật và mục đích.",
+          "qualifying_evidence": [
+            "Nêu hành động cá nhân với query/table.",
+            "Nêu dữ liệu đọc/cập nhật và mục đích nghiệp vụ."
+          ],
+          "not_sufficient": [
+            "Chỉ liệt kê PostgreSQL/MySQL/SQL hoặc nói quản trị database.",
+            "Không xác định query/table, dữ liệu hoặc mục đích.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 2,
+          "description": "Bằng chứng tối thiểu: mô hình + truy vấn cho một chức năng và quy tắc giữ dữ liệu hợp lệ. Đã thiết kế hoặc sửa mô hình dữ liệu cho một chức năng và viết truy vấn liên quan; mô tả một quan hệ/ràng buộc hoặc cách cập nhật giữ dữ liệu hợp lệ.",
+          "qualifying_evidence": [
+            "Nêu bảng/quan hệ hoặc thay đổi cấu trúc gắn chức năng.",
+            "Nêu query/thao tác và ràng buộc, transaction hoặc quy tắc cập nhật cần thiết."
+          ],
+          "not_sufficient": [
+            "Chỉ dùng ORM hoặc đếm bảng/bản ghi.",
+            "Thiếu mô hình, truy vấn hoặc quy tắc toàn vẹn bắt buộc.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 3,
+          "description": "Bằng chứng tối thiểu: vấn đề dữ liệu cụ thể, lựa chọn kỹ thuật và xác minh hiệu quả lẫn tính đúng. Đã giải quyết vấn đề truy vấn, đồng thời hoặc toàn vẹn dữ liệu bằng lựa chọn cụ thể như index, transaction hoặc migration; nêu cách kiểm tra hiệu quả và tính đúng.",
+          "qualifying_evidence": [
+            "Nêu vấn đề và thay đổi cá nhân như index, transaction hoặc migration.",
+            "Nêu query plan, test đồng thời hoặc đối chiếu dữ liệu sau migration tương ứng."
+          ],
+          "not_sufficient": [
+            "Chỉ nói tối ưu database/ACID hoặc nêu tốc độ.",
+            "Thiếu cách kiểm tra hiệu năng hay tính đúng dữ liệu.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 4,
+          "description": "Bằng chứng tối thiểu: thay đổi dữ liệu có ràng buộc vận hành, trade-off và phương án an toàn. Đã thiết kế/thực hiện thay đổi dữ liệu có ràng buộc vận hành rõ; cân nhắc trade-off giữa cấu trúc, truy vấn và toàn vẹn, kèm cách chuyển đổi/khôi phục và kiểm chứng.",
+          "qualifying_evidence": [
+            "Nêu ràng buộc cùng trade-off schema/query/integrity.",
+            "Nêu chuyển đổi/khôi phục và kiểm tra không mất/sai dữ liệu."
+          ],
+          "not_sufficient": [
+            "Chỉ nói hệ phân tán/dung lượng lớn/chức danh DBA.",
+            "Thiếu rollback/restore hoặc validation dữ liệu.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "testing_debugging",
+      "label": "Kiểm thử và xử lý lỗi",
+      "description": "Đối chiếu cách ứng viên kiểm tra hành vi backend, tái hiện, xác định nguyên nhân và ngăn tái diễn một lỗi cụ thể.",
+      "weight": 15,
+      "core": false,
+      "source_requirements": [
+        {
+          "requirement_id": "JD-TEST-01",
+          "quote": "Kiểm thử hành vi backend và tái hiện lỗi từ tình huống cụ thể; xác định nguyên nhân, sửa lỗi và bổ sung kiểm tra phù hợp để hạn chế lỗi tái diễn."
+        }
+      ],
+      "scoring_anchors": [
+        {
+          "score": 0,
+          "description": "Bằng chứng tối thiểu: phát biểu trực tiếp chưa từng kiểm thử và chưa từng tái hiện/xử lý lỗi phần mềm trong phạm vi thực tế. CV nói rõ chưa từng kiểm thử hoặc tái hiện/xử lý lỗi cho chức năng phần mềm; không có tác vụ kiểm thử/debug trái với phát biểu đó.",
+          "qualifying_evidence": [
+            "Phát biểu rõ cả phạm vi test và debug; không có tác vụ trái ngược.",
+            "Điểm 0 chỉ theo phạm vi tường minh này."
+          ],
+          "not_sufficient": [
+            "Không có mục testing, chứng chỉ hoặc coverage thấp/cao.",
+            "Chỉ thiếu một trong hai phần hoặc phát biểu mơ hồ thì insufficient_evidence.",
+            "Thiếu thông tin, thiếu từ khóa hoặc chỉ nêu giới hạn hẹp không khớp toàn bộ phát biểu anchor 0 thì không được chấm 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 1,
+          "description": "Bằng chứng tối thiểu: một kiểm tra có input và expected outcome, hoặc một lỗi hẹp được mô tả. Đã thực hiện một kiểm tra có đầu vào và kết quả mong đợi xác định, hoặc tái hiện/sửa một lỗi hẹp được mô tả rõ.",
+          "qualifying_evidence": [
+            "Nêu phần việc cá nhân và hành vi/lỗi cụ thể.",
+            "Có bước kiểm tra/kết quả mong đợi hoặc cách tái hiện/sửa hẹp."
+          ],
+          "not_sufficient": [
+            "Chỉ liệt kê pytest/JUnit/Postman hoặc nói test/fix bug thường xuyên.",
+            "Không có tình huống và expected outcome/reproduction.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 2,
+          "description": "Bằng chứng tối thiểu: test tự động nhánh thường + lỗi/biên, hoặc chuỗi reproduce→fix→regression test. Đã viết kiểm thử tự động cho hành vi bình thường và ít nhất một trường hợp lỗi/biên, hoặc đã tái hiện, sửa và bổ sung regression test cho một lỗi cụ thể.",
+          "qualifying_evidence": [
+            "Nêu chức năng và ít nhất hai nhánh có ý nghĩa; hoặc mô tả lỗi, sửa và regression test.",
+            "Cách xác nhận không tái diễn phù hợp."
+          ],
+          "not_sufficient": [
+            "Chỉ công bố coverage hoặc nêu đã sửa bug.",
+            "Thiếu nhánh lỗi/biên hay kiểm tra hồi quy cần thiết.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 3,
+          "description": "Bằng chứng tối thiểu: lỗi nhiều thành phần/khó tái hiện, chẩn đoán nguyên nhân và test tại đúng ranh giới. Đã chẩn đoán lỗi qua nhiều thành phần hoặc điều kiện khó tái hiện bằng dữ liệu kiểm tra/log phù hợp; xác định nguyên nhân và bổ sung test đúng ranh giới bị lỗi.",
+          "qualifying_evidence": [
+            "Nêu lỗi/tình huống cụ thể và dữ liệu/log kiểm tra phù hợp.",
+            "Nêu thu hẹp nguyên nhân, sửa và regression verification."
+          ],
+          "not_sufficient": [
+            "Chỉ tự nhận xử lý lỗi phức tạp hoặc đếm bug/test.",
+            "Thiếu root cause hoặc kiểm chứng regression.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 4,
+          "description": "Bằng chứng tối thiểu: thiết kế chiến lược test theo rủi ro/layer, có trade-off và failure mode được phát hiện. Đã thiết kế cách kiểm thử cho một thay đổi/rủi ro backend rõ ràng, lựa chọn ranh giới unit/integration/contract phù hợp và chứng minh kiểm tra phát hiện được failure mode cần ngăn.",
+          "qualifying_evidence": [
+            "Giải thích rủi ro và lựa chọn unit/integration/contract.",
+            "Nêu trade-off reliability/chi phí và ví dụ test bắt/ngăn failure mode."
+          ],
+          "not_sufficient": [
+            "Chỉ nêu framework, CI hoặc coverage 100%.",
+            "Thiếu lý do chọn ranh giới và bằng chứng test có tác dụng.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security_privacy",
+      "label": "Bảo vệ truy cập và dữ liệu",
+      "description": "Đối chiếu biện pháp xác thực/phân quyền/bảo vệ dữ liệu trực tiếp do ứng viên thực hiện, gắn với ranh giới truy cập hoặc failure case cụ thể.",
+      "weight": 10,
+      "core": false,
+      "source_requirements": [
+        {
+          "requirement_id": "JD-SEC-01",
+          "quote": "Áp dụng xác thực, phân quyền và bảo vệ dữ liệu trong phạm vi tính năng phụ trách; kiểm soát dữ liệu nhạy cảm trong truy cập, cấu hình và log, đồng thời xử lý các trường hợp truy cập không hợp lệ."
+        }
+      ],
+      "scoring_anchors": [
+        {
+          "score": 0,
+          "description": "Bằng chứng tối thiểu: phát biểu trực tiếp chưa từng thực hiện biện pháp xác thực, phân quyền hoặc bảo vệ dữ liệu trong phần mềm. CV nói rõ chưa từng thực hiện biện pháp xác thực, phân quyền hoặc bảo vệ dữ liệu nào trong phần mềm; không có tác vụ bảo vệ dữ liệu trái với phát biểu đó.",
+          "qualifying_evidence": [
+            "Phát biểu bao quát phạm vi bảo vệ dữ liệu phần mềm và rõ ràng.",
+            "Không có biện pháp bảo vệ mâu thuẫn trong cùng phạm vi."
+          ],
+          "not_sufficient": [
+            "Không nhắc security hoặc chưa có chứng chỉ.",
+            "Chỉ nói chưa làm một kỹ thuật cụ thể; không đủ để xác lập 0.",
+            "Thiếu thông tin, thiếu từ khóa hoặc chỉ nêu giới hạn hẹp không khớp toàn bộ phát biểu anchor 0 thì không được chấm 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 1,
+          "description": "Bằng chứng tối thiểu: hành động cá nhân, đối tượng được bảo vệ và một biện pháp cụ thể. Đã trực tiếp áp dụng một biện pháp bảo vệ cụ thể trong tính năng, như kiểm tra người đăng nhập, che dữ liệu log hoặc đưa secret ra khỏi mã nguồn.",
+          "qualifying_evidence": [
+            "Nêu dữ liệu/tài nguyên/người dùng được bảo vệ.",
+            "Nêu kiểm tra identity, che log hoặc quản lý secret thực hiện ở đâu."
+          ],
+          "not_sufficient": [
+            "Chỉ có JWT/OAuth/encryption trong skills hoặc sản phẩm có login.",
+            "Không rõ ứng viên phụ trách gì hoặc biện pháp bảo vệ đối tượng nào.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 2,
+          "description": "Bằng chứng tối thiểu: quy tắc ai được làm gì, cách từ chối sai quyền và bảo vệ dữ liệu liên quan. Đã triển khai kiểm soát quyền đối với một hành động/dữ liệu cụ thể và xử lý tình huống không đủ quyền; mô tả thêm cách tránh lộ dữ liệu hoặc secret trong phạm vi đó.",
+          "qualifying_evidence": [
+            "Nêu resource/action và quyền cần thiết.",
+            "Nêu phản hồi khi thiếu quyền cùng cách bảo vệ log/secret/dữ liệu."
+          ],
+          "not_sufficient": [
+            "Chỉ nói RBAC/role hoặc mã hóa.",
+            "Thiếu ranh giới quyền, hành vi từ chối hoặc biện pháp dữ liệu.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 3,
+          "description": "Bằng chứng tối thiểu: nguy cơ/ranh giới tin cậy, kiểm soát backend và test hai phía. Đã xác định và sửa một nguy cơ truy cập sai phạm vi hoặc lộ dữ liệu, áp dụng kiểm soát tại backend và kiểm thử trường hợp được phép/bị chặn.",
+          "qualifying_evidence": [
+            "Nêu nguy cơ cụ thể và biện pháp ở backend.",
+            "Nêu kiểm tra truy cập hợp lệ lẫn bị chặn; không yêu cầu disclosure nhạy cảm."
+          ],
+          "not_sufficient": [
+            "Chỉ liệt kê OWASP/RBAC hoặc tuyên bố an toàn.",
+            "Thiếu test allowed/denied hoặc ranh giới.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 4,
+          "description": "Bằng chứng tối thiểu: kiểm soát xuyên luồng nhiều bước, least privilege/trade-off và kiểm chứng đường lỗi. Đã thiết kế kiểm soát truy cập/dữ liệu xuyên một luồng có nhiều bước hoặc thành phần, cân nhắc least privilege và đường lỗi, kèm kiểm chứng các ranh giới quan trọng.",
+          "qualifying_evidence": [
+            "Nêu luồng, quyền cần thiết và trade-off.",
+            "Nêu bảo vệ vượt quyền/lộ dữ liệu qua lỗi và kiểm chứng ranh giới."
+          ],
+          "not_sufficient": [
+            "Chỉ nêu chức danh/chứng chỉ/sản phẩm bảo mật.",
+            "Thiếu luồng, trade-off hoặc kiểm chứng lỗi.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "delivery_ops",
+      "label": "Đưa thay đổi vào vận hành có kiểm soát",
+      "description": "Đối chiếu phần việc Git, kiểm tra, triển khai và theo dõi/khôi phục dịch vụ phù hợp với phạm vi ứng viên phụ trách.",
+      "weight": 10,
+      "core": false,
+      "source_requirements": [
+        {
+          "requirement_id": "JD-OPS-01",
+          "quote": "Đưa thay đổi backend qua quy trình Git, kiểm tra và triển khai có kiểm soát; cấu hình môi trường, quan sát tình trạng dịch vụ và có cách xử lý khi bản triển khai gặp lỗi."
+        }
+      ],
+      "scoring_anchors": [
+        {
+          "score": 0,
+          "description": "Bằng chứng tối thiểu: phát biểu trực tiếp chưa từng quản lý thay đổi mã hoặc chạy/đóng gói/triển khai dịch vụ phần mềm. CV nói rõ chưa từng tham gia quy trình quản lý thay đổi hoặc chạy/triển khai một dịch vụ phần mềm; không có tác vụ delivery/ops trái với phát biểu đó.",
+          "qualifying_evidence": [
+            "Nêu rõ phạm vi công việc software change và service run/deploy.",
+            "Không có tác vụ Git/deploy mâu thuẫn cùng phạm vi."
+          ],
+          "not_sufficient": [
+            "Không có mục DevOps, không biết Kubernetes hoặc chỉ chạy local.",
+            "Không có câu phủ định rõ thì insufficient_evidence, không phải 0.",
+            "Thiếu thông tin, thiếu từ khóa hoặc chỉ nêu giới hạn hẹp không khớp toàn bộ phát biểu anchor 0 thì không được chấm 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 1,
+          "description": "Bằng chứng tối thiểu: một tác vụ Git/change hoặc chạy/đóng gói service do ứng viên trực tiếp làm, có ngữ cảnh và kết quả. Đã trực tiếp đưa một thay đổi qua Git hoặc chạy/đóng gói một dịch vụ theo quy trình xác định, nêu phần việc và kết quả thao tác cụ thể.",
+          "qualifying_evidence": [
+            "Nêu phần việc cá nhân và quy trình/tác vụ xác định.",
+            "Nêu kết quả thao tác cụ thể; tên tool riêng lẻ không đủ."
+          ],
+          "not_sufficient": [
+            "Chỉ có Git/Docker/cloud/CI-CD trong skills.",
+            "Chỉ “tham gia/hỗ trợ” mà không rõ phần việc hoặc kết quả.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 2,
+          "description": "Bằng chứng tối thiểu: thay đổi → kiểm tra → triển khai vào môi trường → xác nhận dịch vụ. Đã đưa thay đổi backend qua kiểm tra và triển khai vào một môi trường xác định, quản lý cấu hình và kiểm tra dịch vụ chạy đúng sau triển khai.",
+          "qualifying_evidence": [
+            "Nêu phần việc ứng viên và môi trường cụ thể.",
+            "Nêu cấu hình cần thiết và bước xác nhận service sau deploy."
+          ],
+          "not_sufficient": [
+            "Chỉ nói deploy thành công hoặc tên nhà cung cấp.",
+            "Thiếu một bước kiểm tra/cấu hình/health verification bắt buộc.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 3,
+          "description": "Bằng chứng tối thiểu: failure case, chẩn đoán bằng tín hiệu và khôi phục/phòng ngừa đã kiểm tra. Đã xử lý lỗi triển khai/vận hành bằng tín hiệu cụ thể như health check hoặc log; bổ sung cách phát hiện và rollback/khôi phục hoặc tự động hóa kiểm tra trước triển khai.",
+          "qualifying_evidence": [
+            "Nêu lỗi deploy/ops và log/health signal.",
+            "Nêu rollback/restore hoặc automated pre-deploy check cùng xác minh dịch vụ/dữ liệu."
+          ],
+          "not_sufficient": [
+            "Chỉ nói CI/CD/monitoring/rollback hoặc uptime.",
+            "Thiếu failure case hoặc kết quả khôi phục được kiểm chứng.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        },
+        {
+          "score": 4,
+          "description": "Bằng chứng tối thiểu: release process lặp lại theo rủi ro với kiểm tra, cấu hình, quan sát và diễn tập failure/restore. Đã thiết kế quy trình phát hành có thể lặp lại với kiểm tra, cấu hình, quan sát và khôi phục phù hợp rủi ro; giải thích trade-off và diễn tập/kiểm chứng đường thất bại.",
+          "qualifying_evidence": [
+            "Nêu quy trình do cá nhân thiết kế, ràng buộc và trade-off.",
+            "Nêu kiểm chứng phát hành và đường khôi phục khi lỗi; không bắt buộc cloud/Kubernetes."
+          ],
+          "not_sufficient": [
+            "Danh sách công cụ hoặc chức danh lead.",
+            "Thiếu trade-off, kiểm chứng release hay diễn tập failure path.",
+            "Nếu thiếu một yếu tố bắt buộc ở anchor này, không hạ thành score 0; dùng insufficient_evidence/null."
+          ]
+        }
+      ]
+    }
+  ],
+  "review_before_activation": [
+    "HR và người chuyên môn IT xác nhận sáu yêu cầu phản ánh công việc thực.",
+    "Owner kiểm tra các anchor và cách phân biệt null với0; không đánh đồng bằng chứng ngắn với năng lực thấp.",
+    "Owner duyệt tổng trọng số100, ngưỡng70 và ba core floor2; lưu approval gắn JD/rubric snapshot.",
+    "Benchmark độc lập HR/IT và kiểm thử fairness chưa hoàn thành thì validation_status vẫn unvalidated.",
+    "Import seed chỉ dùng draft/sandbox; không mở production qualification hoặc approved state."
+  ],
+  "publication_gate": {
+    "status": "blocked_draft_unapproved",
+    "can_publish_or_assess_real_applicants": false,
+    "required_before_publication": [
+      "HR cung cấp và xác nhận toàn bộ điều kiện tuyển dụng bắt buộc còn thiếu trong JD v2.",
+      "HR và IT xác nhận nhiệm vụ thực tế, sáu tiêu chí, điều kiện tối thiểu của từng anchor, trọng số, threshold và core floors.",
+      "Người có thẩm quyền phê duyệt JD và rubric đúng phiên bản; lưu actor, thời điểm và content hash qua workflow hiện hành.",
+      "Kiểm tra tích hợp xác nhận rubric draft không thể mở requisition hoặc enqueue assessment thật."
+    ]
+  },
+  "v2_change_log": [
+    "Clarified minimum evidence, mandatory elements and insufficient-evidence conditions in every criterion anchor using the runtime-supported qualifying_evidence and not_sufficient fields.",
+    "Made score zero valid only for explicit, scoped evidence matching anchor 0 with no positive conflicting evidence.",
+    "Added an explicit, non-implicit status alignment contract; conflicting_evidence stays separate from not_evidenced and contradicted.",
+    "Kept the six criterion weights, threshold 70, core floors and all approval fields unapproved/unvalidated."
+  ]
+}

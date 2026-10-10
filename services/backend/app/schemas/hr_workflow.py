@@ -19,6 +19,11 @@ class ScreeningDecisionRequest(BaseModel):
     acknowledged: Literal[True]
     outcome: DecisionOutcome
     reason: str = Field(min_length=20, max_length=2000)
+    clarification_resolution: Literal[
+        'candidate_confirmed_no_experience',
+        'no_response_after_contact',
+        'independent_evidence_based_reason',
+    ] | None = None
     expected_previous_decision_id: uuid.UUID | None = None
     expected_rubric_version_id: uuid.UUID
 

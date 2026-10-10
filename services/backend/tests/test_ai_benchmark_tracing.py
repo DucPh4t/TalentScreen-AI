@@ -12,13 +12,15 @@ from tests.test_ai_benchmark_budget import fresh_period
 from tests.test_langsmith_observability import enable_recording
 
 def test_trace_allowlist_rejects_sensitive_and_secret_shaped_values():
-    experiment_id=str(uuid.uuid4());case_hash=hashlib.sha256(b'node-01').hexdigest()
+    experiment_id=str(uuid.uuid4());case_hash=hashlib.sha256(b'backend-008').hexdigest()
     values={'experiment_id':experiment_id,'benchmark_profile':'hybrid_agent','case_id_sha256':case_hash,
-        'cached_input_tokens':3,'rejected_citations':1,'normalized_criteria':2,
+        'cached_input_tokens':3,'rejected_citations':1,'citation_malformed':1,'citation_unknown_span':2,
+        'citation_out_of_scope':3,'citation_quote_mismatch':4,'normalized_criteria':2,
         'cv_text':'RAW_SECRET_CV','prompt':'RAW_SECRET_CV','case_id':'Linh Nguyen','gold':'GOLD_NOT_FOR_MODEL'}
     filtered=safe_metadata(values)
     assert filtered=={k:v for k,v in values.items() if k not in {'cv_text','prompt','case_id','gold'}}
-    assert not safe_metadata({'case_id_sha256':'sk-secret','benchmark_profile':'candidate-name','experiment_id':'lsv2_key','cached_input_tokens':True})
+    assert not safe_metadata({'case_id_sha256':'sk-secret','benchmark_profile':'candidate-name','experiment_id':'lsv2_key',
+        'cached_input_tokens':True,'citation_unknown_span':'RAW_SECRET_CV'})
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('outage',[False,True])
@@ -37,7 +39,7 @@ async def test_langsmith_outage_does_not_change_assessment(outage,experiment,tes
         roots=[p for p in client.posts if p['name']=='benchmark_combination']
         assert len(roots)==4
         assert all(p['extra']['metadata']['experiment_id']==str(context.experiment_id) for p in roots)
-        assert all(p['extra']['metadata']['case_id_sha256']==hashlib.sha256(b'node-01').hexdigest() for p in roots)
+        assert all(p['extra']['metadata']['case_id_sha256']==hashlib.sha256(b'backend-008').hexdigest() for p in roots)
         assert len({r.trace_id for r in records})==4
         assert all(not p.get('inputs') and not p.get('outputs') for p in client.posts+client.patches)
 

@@ -1,1 +1,0 @@
-I reproduced an intermittent retry bug by sending the same event twice, located the missing idempotency check, and added a regression test. The event consumer was written by another teammate.

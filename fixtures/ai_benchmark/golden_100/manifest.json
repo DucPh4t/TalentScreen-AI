@@ -1,0 +1,37 @@
+{
+  "schema_version": "ai-benchmark.v1",
+  "dataset_revision": "backend-python-golden-100-v1",
+  "data_origin": "synthetic",
+  "labels_origin": "design_expected",
+  "seed": 20261010,
+  "public_test_is_protected_holdout": false,
+  "annotation_method": "AI-authored deterministic templates mapped to v3 draft anchors; no HR/IT review, no independent labels, no human gold.",
+  "reference_not_hr_validated": true,
+  "rubric_status": "draft_unapproved",
+  "rubric_sha256": "bdae484e9c9c3cb86a2e439039dec7cb33e95f747b345ea77dbf63f48996a244",
+  "jd_sha256": "da21f228bf6a862fb030cdcaf791c26a7b68358df52888a2437f8b28716ec389",
+  "expected_cases": 100,
+  "expected_role_counts": {
+    "backend_python": 100
+  },
+  "expected_language_counts": {
+    "vi": 34,
+    "en": 33,
+    "mixed": 33
+  },
+  "expected_split_counts": {
+    "development": 80,
+    "public_test": 20
+  },
+  "generation": {
+    "builder": "scripts/build_backend_python_golden_100.py",
+    "builder_sha256": "305a5b71e96ff3634eabaaff3a2651d7ad6ecf36cda0ec46e7fce53124733d14",
+    "source_rubric": "fixtures/seeds/rubric-backend-python.v3.json",
+    "source_jd": "fixtures/seeds/jd-backend-python.v3.vi.md"
+  },
+  "files": {
+    "cases.jsonl": "ff7441129c79da2b1f1187bfe8570587703c36c33a7b1822dcdc9416b1982a86",
+    "roles.json": "b2178abf63cb7cda51d9cc8ac49d2dee50aac8d2a2800d64c80d0dc998206bc6",
+    "references.jsonl": "09538f95c640ffbdbc00b105a09d0254bc0189db629afedb575877ef733eaca1"
+  }
+}

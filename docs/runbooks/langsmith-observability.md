@@ -88,8 +88,13 @@ Available metadata: opaque run/job/JD IDs, prompt versions, retrieval strategy,
 provider/model, actual counters, result counts, usage token counts when reported,
 ledger-calculated cost and fixed error codes. Span start/end times provide latency.
 Unknown token counts stay unknown; LangSmith's displayed estimated provider prices
-are not the billing ledger. This integration is a manual RunTree span hierarchy,
-not LangGraph checkpointing or an HR-facing graph visualization.
+are not the billing ledger. Validation diagnostics export only integer aggregates for
+malformed citations, unknown spans, criterion-scope violations and exact-quote
+mismatches; no citation text or span identifier is included in those counters. This
+integration is a manual RunTree span hierarchy, not LangGraph checkpointing or an
+HR-facing graph visualization. Offline benchmark reports label rejection totals from
+older records without category counts as unclassified rather than implying each
+category was zero.
 
 ## Privacy and failure boundaries
 

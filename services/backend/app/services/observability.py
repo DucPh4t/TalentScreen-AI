@@ -39,7 +39,8 @@ COUNTERS = frozenset({"model_round_trips", "tool_execution_count", "repair_count
     "result_criterion_count", "result_count", "source_span_count", "tool_call_count",
     "input_tokens", "output_tokens", "total_tokens", "validation_error_count", "attempt_no",
     "max_output_tokens", "external_call_count", "provider_latency_ms", "cached_input_tokens",
-    "rejected_citations", "normalized_criteria", "schema_failures", "rerank_elapsed_ms", "omitted_count"})
+    "rejected_citations", "citation_malformed", "citation_unknown_span", "citation_out_of_scope",
+    "citation_quote_mismatch", "normalized_criteria", "schema_failures", "rerank_elapsed_ms", "omitted_count"})
 UUID_FIELDS = frozenset({"assessment_run_id", "job_id", "jd_version_id", "experiment_id"})
 ENUMS = {
     "rerank_mode": {"off", "shadow", "rerank", "gate_experiment"},

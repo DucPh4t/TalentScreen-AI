@@ -51,13 +51,47 @@ class JevNarrativeOutput(BaseModel):
 def _ordered_anchors(anchors: Any) -> list[str]:
     if isinstance(anchors, dict):
         values = [anchors.get(str(i), anchors.get(i)) for i in range(5)]
+    elif isinstance(anchors, list) and all(isinstance(anchor, dict) for anchor in anchors):
+        by_score = {}
+        for anchor in anchors:
+            score = anchor.get("score")
+            if type(score) is not int or not 0 <= score <= 4 or score in by_score:
+                raise ValueError("JEV_PRIMARY_RUBRIC_ANCHORS_INVALID")
+            by_score[score] = anchor
+        values = [by_score.get(i) for i in range(5)]
     elif isinstance(anchors, list):
         values = anchors
     else:
         values = []
-    if len(values) != 5 or any(not isinstance(value, str) or not value.strip() for value in values):
+
+    def anchor_text(value: Any) -> str | None:
+        if isinstance(value, str):
+            return value.strip()
+        if not isinstance(value, dict):
+            return None
+        description = value.get("description")
+        qualifying = value.get("qualifying_evidence", [])
+        not_sufficient = value.get("not_sufficient", [])
+        if (
+            not isinstance(description, str)
+            or not description.strip()
+            or not isinstance(qualifying, list)
+            or any(not isinstance(item, str) or not item.strip() for item in qualifying)
+            or not isinstance(not_sufficient, list)
+            or any(not isinstance(item, str) or not item.strip() for item in not_sufficient)
+        ):
+            return None
+        parts = [description.strip()]
+        if qualifying:
+            parts.append("Bằng chứng đáp ứng: " + "; ".join(item.strip() for item in qualifying))
+        if not_sufficient:
+            parts.append("Chưa đủ bằng chứng: " + "; ".join(item.strip() for item in not_sufficient))
+        return "\n".join(parts)
+
+    ordered = [anchor_text(value) for value in values]
+    if len(ordered) != 5 or any(not value for value in ordered):
         raise ValueError("JEV_PRIMARY_RUBRIC_ANCHORS_INVALID")
-    return [value.strip() for value in values]
+    return ordered
 
 
 def build_jev_primary_payload(
@@ -124,22 +158,28 @@ def validate_jev_primary_response(
         raise ValueError("JEV_PRIMARY_ANSWER_SET_INVALID")
     scores: dict[str, JevPrimaryScore] = {}
     expected_keys = {str(index) for index in range(5)}
+    expected_answer_keys = {"type", "score", "confidence", "probabilities"}
     for criterion_id, answer in response.answers.items():
-        if set(answer) != {"type", "score", "confidence", "probabilities"} or answer.get("type") != "score":
-            raise ValueError("JEV_PRIMARY_ANSWER_SCHEMA_INVALID")
+        if not expected_answer_keys.issubset(answer):
+            raise ValueError("JEV_PRIMARY_ANSWER_FIELDS_MISSING")
+        if answer.get("type") != "score":
+            raise ValueError("JEV_PRIMARY_ANSWER_TYPE_INVALID")
         try:
             raw_score = Decimal(str(answer["score"]))
             confidence = Decimal(str(answer["confidence"]))
             probabilities = {key: Decimal(str(value)) for key, value in answer["probabilities"].items()}
         except (InvalidOperation, TypeError, AttributeError) as exc:
-            raise ValueError("JEV_PRIMARY_ANSWER_SCHEMA_INVALID") from exc
-        probability_total = sum(probabilities.values())
+            raise ValueError("JEV_PRIMARY_ANSWER_VALUES_INVALID") from exc
         if (not raw_score.is_finite() or not Decimal("0") <= raw_score <= Decimal("4")
-            or not confidence.is_finite() or not Decimal("0") <= confidence <= Decimal("1")
-            or set(probabilities) != expected_keys
-            or any(not value.is_finite() or not Decimal("0") <= value <= Decimal("1") for value in probabilities.values())
-            or abs(probability_total - Decimal("1")) > Decimal("0.02")):
-            raise ValueError("JEV_PRIMARY_ANSWER_SCHEMA_INVALID")
+            or not confidence.is_finite() or not Decimal("0") <= confidence <= Decimal("1")):
+            raise ValueError("JEV_PRIMARY_ANSWER_VALUES_INVALID")
+        if set(probabilities) != expected_keys:
+            raise ValueError("JEV_PRIMARY_PROBABILITY_LEVELS_INVALID")
+        if any(not value.is_finite() or not Decimal("0") <= value <= Decimal("1") for value in probabilities.values()):
+            raise ValueError("JEV_PRIMARY_PROBABILITY_VALUES_INVALID")
+        probability_total = sum(probabilities.values())
+        if abs(probability_total - Decimal("1")) > Decimal("0.02"):
+            raise ValueError("JEV_PRIMARY_PROBABILITY_MASS_INVALID")
         # Jev returns rounded probabilities that may sum to 0.98..1.02.
         # Normalize before calculating/persisting the expected score so it
         # can never escape the rubric's 0..4 scale due only to rounding.

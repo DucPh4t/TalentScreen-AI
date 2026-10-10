@@ -1,6 +1,6 @@
 # 07 — Local runtime, chi phí, SLO và chuẩn bị deploy
 
-> Historical MVP proposal (26 September 2026), retained as the source of the legacy benchmark threshold profile. This is not the current runtime setup or a record of passing gates. See [current readiness](../runbooks/rag-agent-readiness.md), [reproduction](ai-benchmark-reproducibility.md), and the root README for current commands.
+> Historical MVP proposal (26 September 2026), retained as an earlier policy record. It is not current runtime configuration or a gate result. See [current readiness](../runbooks/rag-agent-readiness.md) and the [independent human-labeled evaluation design](independent-human-evaluation-design.md).
 
 ## 1. Mục tiêu môi trường
 

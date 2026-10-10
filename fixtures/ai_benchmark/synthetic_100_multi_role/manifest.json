@@ -1,0 +1,65 @@
+{
+  "schema_version": "ai-benchmark.v1",
+  "dataset_revision": "multi-role-synthetic-100-v1",
+  "data_origin": "synthetic",
+  "labels_origin": "design_expected",
+  "seed": 20261010,
+  "public_test_is_protected_holdout": false,
+  "annotation_method": "AI-authored deterministic templates mapped to role-specific draft anchors; no HR/IT review, no independent labels, no human gold.",
+  "reference_not_hr_validated": true,
+  "rubric_status": "draft_unapproved",
+  "expected_cases": 100,
+  "expected_role_counts": {
+    "senior_ai_engineer": 20,
+    "software_development_manager": 20,
+    "java_backend_developer": 20,
+    "mobile_web_qa": 20,
+    "agentic_engineer": 20
+  },
+  "expected_language_counts": {
+    "vi": 35,
+    "en": 35,
+    "mixed": 30
+  },
+  "expected_split_counts": {
+    "development": 80,
+    "public_test": 20
+  },
+  "expected_criterion_count_per_role": {
+    "senior_ai_engineer": 6,
+    "software_development_manager": 6,
+    "java_backend_developer": 6,
+    "mobile_web_qa": 6,
+    "agentic_engineer": 6
+  },
+  "expected_label_status_counts": {
+    "insufficient_evidence": 94,
+    "assessed": 423,
+    "conflicting_evidence": 83
+  },
+  "expected_anchor_score_counts": {
+    "2": 85,
+    "4": 86,
+    "1": 85,
+    "3": 85,
+    "0": 82
+  },
+  "counterfactual_pairs": 5,
+  "generation": {
+    "builder": "scripts/build_multi_role_synthetic_100.py",
+    "builder_sha256": "bc2c9b0b9e783ba0391c1fe418c6cc886f47975c3d8e4a24c62d0f87a1128fd7",
+    "role_specs_sha256": {
+      "senior_ai_engineer": "00a67b728ae1639480a25497e6369c8de09aa34f964e18d9d0dd9f79c874bae8",
+      "software_development_manager": "2fc34344d545c5fbebeead19537d9af528defdbda624c0f42340134851aa5329",
+      "java_backend_developer": "80ac7d3f06f8f569041cd283cf8e749655da67d1a8e820ad2b0519e9a0d570ef",
+      "mobile_web_qa": "a617d915983755aced8387db9090cb3564e297682c2c0eadd40d042d86ac9e09",
+      "agentic_engineer": "a647cd7ac5bb474332ecad44ffc6828a75b30d9883bb7907a3f219f8fbf78ebe"
+    },
+    "annotation_method": "deterministic claims_by_score; no model-generated labels at build time"
+  },
+  "files": {
+    "cases.jsonl": "f8832ff90b22cf36c1d8f44d05066000c8aece5ed23e4f8228233b656585a74b",
+    "roles.json": "e3350d92a1a1723f5ac96457b1ae4a7611e56520d052f38aa6b99249ba9eecfb",
+    "references.jsonl": "f3ebaaf8f9ab18466598acf97d3a1b3034aae2ec3c50fc54470321fdd43d9d6c"
+  }
+}

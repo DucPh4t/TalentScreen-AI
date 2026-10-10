@@ -50,9 +50,9 @@ def test_pipeline_policies_keep_legacy_snapshot_and_pin_new_version():
 
 
 def test_cli_plan_declares_retrieval_version(capsys):
-    data=Path(__file__).resolve().parents[3]/'fixtures/ai_benchmark/v2'
+    data=Path(__file__).resolve().parents[3]/'fixtures/ai_benchmark/golden_100'
     assert main(['plan','--dataset',str(data),'--provider','mock','--embedding-mode','scripted',
-        '--cases','v2-node-10','--retrieval-version','v2'])==0
+        '--cases','backend-003','--retrieval-version','v2'])==0
     payload=json.loads(capsys.readouterr().out)
     assert payload['retrieval_version']=='v2'
 

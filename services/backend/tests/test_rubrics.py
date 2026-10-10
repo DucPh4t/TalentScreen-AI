@@ -2,6 +2,7 @@
 Covers Task B04 requirements and invariants.
 """
 from datetime import datetime, timezone
+from pathlib import Path
 import uuid
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -26,17 +27,7 @@ from app.domain.security import hash_password
 from app.main import app
 from app.services.auth import create_session
 
-SAMPLE_JD_TEXT = """# Tuyển dụng Kỹ sư Backend Python
-## Sáu yêu cầu năng lực được phép đánh giá
-| Requirement ID | Criterion ID / trọng số | Nội dung yêu cầu chuẩn để trích dẫn |
-|---|---|---|
-| `JD-PY-01` | `python_backend` /20 | Triển khai chức năng backend bằng Python từ một yêu cầu nghiệp vụ rõ ràng. |
-| `JD-API-01` | `api_design` /25 | Thiết kế và triển khai HTTP API có hợp đồng đầu vào, đầu ra phù hợp. |
-| `JD-SQL-01` | `sql_data` /20 | Làm việc với cơ sở dữ liệu quan hệ PostgreSQL để lưu và truy vấn dữ liệu. |
-| `JD-TEST-01` | `testing_debugging` /15 | Kiểm thử hành vi backend và tái hiện lỗi từ tình huống cụ thể. |
-| `JD-SEC-01` | `security_privacy` /10 | Áp dụng xác thực và phân quyền, bảo vệ dữ liệu cá nhân. |
-| `JD-OPS-01` | `delivery_ops` /10 | Đưa thay đổi backend qua quy trình Git và Docker kiểm soát. |
-"""
+SAMPLE_JD_TEXT = (Path(__file__).resolve().parents[3] / "fixtures" / "seeds" / "jd-backend-python.v3.vi.md").read_text(encoding="utf-8")
 
 
 async def setup_requisition_with_jd(
@@ -151,10 +142,11 @@ async def test_import_seed_rubric_draft(test_session_factory):
 
         # Verify threshold config
         policy = data["threshold_config"]
-        assert policy["threshold"] == 70
+        assert policy["threshold"] == 50
         assert policy["core_minimum_scores"]["python_backend"] == 2
         assert policy["core_minimum_scores"]["api_design"] == 2
         assert policy["core_minimum_scores"]["sql_data"] == 2
+        assert policy["required_criterion_ids"] == ["python_backend", "api_design", "sql_data"]
 
 
 @pytest.mark.asyncio

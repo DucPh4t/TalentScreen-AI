@@ -62,6 +62,29 @@ def test_dynamic_rubric_rejects_duplicate_ids_bad_weight_and_unknown_core() -> N
         validate_canonical_rubric(_rubric(valid, {"python_backend": 2}))
 
 
+def test_partial_coverage_policy_requires_known_explicit_criteria():
+    criteria = [_criterion("python_skill", 60), _criterion("testing_skill", 40)]
+    valid = _rubric(criteria)
+    valid["recommendation_policy"].update({
+        "require_full_coverage": False,
+        "required_criterion_ids": ["python_skill"],
+    })
+    validate_canonical_rubric(valid)
+
+    unknown = _rubric(criteria)
+    unknown["recommendation_policy"].update({
+        "require_full_coverage": False,
+        "required_criterion_ids": ["not_in_rubric"],
+    })
+    with pytest.raises(RubricValidationError, match="required_criterion_ids tham chiếu"):
+        validate_canonical_rubric(unknown)
+
+    missing_contract = _rubric(criteria)
+    missing_contract["recommendation_policy"]["require_full_coverage"] = False
+    with pytest.raises(RubricValidationError, match="phải khai báo required_criterion_ids"):
+        validate_canonical_rubric(missing_contract)
+
+
 def test_dynamic_assessment_schema_and_exact_rubric_set_validation() -> None:
     span_id = "spn_" + "a" * 24
     payload = {

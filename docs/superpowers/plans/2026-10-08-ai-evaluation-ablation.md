@@ -1,5 +1,7 @@
 # AI Evaluation and RAG/Agent Ablation Implementation Plan
 
+> Archived 10 October 2026. The v1/v2 datasets and old case IDs described below were removed. The active synthetic regression set is `fixtures/ai_benchmark/synthetic_100_multi_role`; the earlier Backend Python-only `golden_100` remains a legacy fixture. The references are AI-authored design expectations, not independent HR/IT labels.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a reproducible developer benchmark that measures the actual TalentScreen assessment pipeline across four evidence/agent profiles and publishes honest portfolio evidence.
@@ -49,7 +51,7 @@
 | Preflight/cost | `benchmark/preflight.py`; existing LLM types/provider/orchestrator/cost | Conservative planning, usage collection and ledger enforcement |
 | Runner/artifacts | `benchmark/{runner,artifacts,mock_provider}.py`; `scripts/run_ai_benchmark.py` | Actual assessment execution and durable journals |
 | Metrics/report | `benchmark/{metrics,reporting}.py`; existing evaluation metric primitives | Offline reference comparisons and static reports |
-| Verification/docs | New benchmark test files; existing regression tests; CI; README; `docs/evaluation/ai-benchmark-reproducibility.md` | Offline CI, real-E5/live evidence and truthful presentation |
+| Verification/docs | New benchmark test files; existing regression tests; CI; README; `docs/evaluation/independent-human-evaluation-design.md` | Offline CI, real-E5/live evidence and truthful presentation |
 
 `app/services/...` resolves under `services/backend/app/services/...`; `assessment/...`, `agent/...` and `llm/...` resolve under that services directory. `benchmark/...` resolves under `services/backend/app/services/evaluation/benchmark/...`; tests resolve under `services/backend/tests`. Scripts run from the repository root. Use existing `.venv/bin/python`; run pytest through the disposable database script because backend conftest requires isolation even for otherwise pure tests.
 
@@ -181,7 +183,7 @@ Only `DatasetInputs` travels into runner/seeding. `load_references` is used for 
 
 ### Task 9: Bounded live verification, regression and portfolio evidence
 
-**Files:** Create `docs/evaluation/ai-benchmark-reproducibility.md` and a dated measured-result summary after actual execution; update README evaluation/architecture references. Save full run artifacts under ignored `reports/ai-benchmark/`.
+**Files:** Create `docs/evaluation/independent-human-evaluation-design.md` and a dated measured-result summary after actual execution; update README evaluation/architecture references. Save full run artifacts under ignored `reports/ai-benchmark/`.
 
 **Interfaces:** Consume all prior tasks and frozen hashes. Publish only verified synthetic aggregates plus reproducible commands; live reports declare origin and actual scope.
 

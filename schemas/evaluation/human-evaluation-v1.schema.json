@@ -1,0 +1,664 @@
+{
+  "$defs": {
+    "AssessmentCase": {
+      "additionalProperties": false,
+      "properties": {
+        "case_key": {
+          "pattern": "^case_[a-f0-9]{24}$",
+          "title": "Case Key",
+          "type": "string"
+        },
+        "candidate_key": {
+          "pattern": "^cand_[a-f0-9]{24}$",
+          "title": "Candidate Key",
+          "type": "string"
+        },
+        "jd_key": {
+          "pattern": "^jd_[a-f0-9]{24}$",
+          "title": "Jd Key",
+          "type": "string"
+        },
+        "rubric_key": {
+          "pattern": "^rub_[a-f0-9]{24}$",
+          "title": "Rubric Key",
+          "type": "string"
+        },
+        "criterion_key": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Criterion Key",
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "train",
+            "dev",
+            "holdout"
+          ],
+          "title": "Split",
+          "type": "string"
+        },
+        "adjudicator_key": {
+          "pattern": "^ann_[a-f0-9]{24}$",
+          "title": "Adjudicator Key",
+          "type": "string"
+        },
+        "adjudicated": {
+          "$ref": "#/$defs/CriterionLabel"
+        },
+        "annotations": {
+          "items": {
+            "$ref": "#/$defs/IndependentCriterionAnnotation"
+          },
+          "minItems": 2,
+          "title": "Annotations",
+          "type": "array"
+        },
+        "adjudication_reason": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adjudication Reason"
+        },
+        "prediction": {
+          "$ref": "#/$defs/CriterionLabel"
+        }
+      },
+      "required": [
+        "case_key",
+        "candidate_key",
+        "jd_key",
+        "rubric_key",
+        "criterion_key",
+        "split",
+        "adjudicator_key",
+        "adjudicated",
+        "annotations",
+        "prediction"
+      ],
+      "title": "AssessmentCase",
+      "type": "object"
+    },
+    "CriterionLabel": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "supported",
+            "partial",
+            "not_evidenced",
+            "contradicted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidenceSpan"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "score"
+      ],
+      "title": "CriterionLabel",
+      "type": "object"
+    },
+    "EvidenceSpan": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "exclusiveMinimum": 0,
+          "title": "End",
+          "type": "integer"
+        },
+        "quote": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "quote"
+      ],
+      "title": "EvidenceSpan",
+      "type": "object"
+    },
+    "IndependentCriterionAnnotation": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "supported",
+            "partial",
+            "not_evidenced",
+            "contradicted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 4,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidenceSpan"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "annotator_key": {
+          "pattern": "^ann_[a-f0-9]{24}$",
+          "title": "Annotator Key",
+          "type": "string"
+        },
+        "annotator_role": {
+          "enum": [
+            "hr",
+            "it"
+          ],
+          "title": "Annotator Role",
+          "type": "string"
+        },
+        "blind_to_model": {
+          "const": true,
+          "title": "Blind To Model",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "status",
+        "score",
+        "annotator_key",
+        "annotator_role",
+        "blind_to_model"
+      ],
+      "title": "IndependentCriterionAnnotation",
+      "type": "object"
+    },
+    "RetrievalAnnotation": {
+      "additionalProperties": false,
+      "properties": {
+        "annotator_key": {
+          "pattern": "^ann_[a-f0-9]{24}$",
+          "title": "Annotator Key",
+          "type": "string"
+        },
+        "annotator_role": {
+          "enum": [
+            "hr",
+            "it"
+          ],
+          "title": "Annotator Role",
+          "type": "string"
+        },
+        "blind_to_model": {
+          "const": true,
+          "title": "Blind To Model",
+          "type": "boolean"
+        },
+        "judgments": {
+          "items": {
+            "$ref": "#/$defs/RetrievalJudgment"
+          },
+          "minItems": 1,
+          "title": "Judgments",
+          "type": "array"
+        }
+      },
+      "required": [
+        "annotator_key",
+        "annotator_role",
+        "blind_to_model",
+        "judgments"
+      ],
+      "title": "RetrievalAnnotation",
+      "type": "object"
+    },
+    "RetrievalJudgment": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_key": {
+          "pattern": "^cand_[a-f0-9]{24}$",
+          "title": "Candidate Key",
+          "type": "string"
+        },
+        "relevance": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Relevance",
+          "type": "integer"
+        },
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidenceSpan"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_key",
+        "relevance"
+      ],
+      "title": "RetrievalJudgment",
+      "type": "object"
+    },
+    "RetrievalQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "query_key": {
+          "pattern": "^qry_[a-f0-9]{24}$",
+          "title": "Query Key",
+          "type": "string"
+        },
+        "jd_key": {
+          "pattern": "^jd_[a-f0-9]{24}$",
+          "title": "Jd Key",
+          "type": "string"
+        },
+        "rubric_key": {
+          "pattern": "^rub_[a-f0-9]{24}$",
+          "title": "Rubric Key",
+          "type": "string"
+        },
+        "criterion_key": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Criterion Key",
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "train",
+            "dev",
+            "holdout"
+          ],
+          "title": "Split",
+          "type": "string"
+        },
+        "query_source": {
+          "enum": [
+            "jd",
+            "jd_criterion"
+          ],
+          "title": "Query Source",
+          "type": "string"
+        },
+        "query_text": {
+          "maxLength": 4000,
+          "minLength": 5,
+          "title": "Query Text",
+          "type": "string"
+        },
+        "judgments": {
+          "items": {
+            "$ref": "#/$defs/RetrievalJudgment"
+          },
+          "minItems": 1,
+          "title": "Judgments",
+          "type": "array"
+        },
+        "annotations": {
+          "items": {
+            "$ref": "#/$defs/RetrievalAnnotation"
+          },
+          "minItems": 2,
+          "title": "Annotations",
+          "type": "array"
+        },
+        "adjudicator_key": {
+          "pattern": "^ann_[a-f0-9]{24}$",
+          "title": "Adjudicator Key",
+          "type": "string"
+        },
+        "adjudication_reason": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Adjudication Reason",
+          "type": "string"
+        },
+        "ranked_candidates": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Ranked Candidates",
+          "type": "array"
+        }
+      },
+      "required": [
+        "query_key",
+        "jd_key",
+        "rubric_key",
+        "criterion_key",
+        "split",
+        "query_source",
+        "query_text",
+        "judgments",
+        "annotations",
+        "adjudicator_key",
+        "adjudication_reason"
+      ],
+      "title": "RetrievalQuery",
+      "type": "object"
+    },
+    "RubricCriterion": {
+      "additionalProperties": false,
+      "properties": {
+        "criterion_key": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Criterion Key",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "anchors": {
+          "items": {
+            "$ref": "#/$defs/ScoreAnchor"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "title": "Anchors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "criterion_key",
+        "description",
+        "anchors"
+      ],
+      "title": "RubricCriterion",
+      "type": "object"
+    },
+    "RubricSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "rubric_key": {
+          "pattern": "^rub_[a-f0-9]{24}$",
+          "title": "Rubric Key",
+          "type": "string"
+        },
+        "jd_key": {
+          "pattern": "^jd_[a-f0-9]{24}$",
+          "title": "Jd Key",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "approved_by_refs": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "title": "Approved By Refs",
+          "type": "array"
+        },
+        "criteria": {
+          "items": {
+            "$ref": "#/$defs/RubricCriterion"
+          },
+          "minItems": 1,
+          "title": "Criteria",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rubric_key",
+        "jd_key",
+        "sha256",
+        "approved_by_refs",
+        "criteria"
+      ],
+      "title": "RubricSnapshot",
+      "type": "object"
+    },
+    "ScoreAnchor": {
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Score",
+          "type": "integer"
+        },
+        "description": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "score",
+        "description"
+      ],
+      "title": "ScoreAnchor",
+      "type": "object"
+    },
+    "SourceDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "document_key": {
+          "pattern": "^(cand|jd)_[a-f0-9]{24}$",
+          "title": "Document Key",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "cv",
+            "jd"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_key",
+        "kind",
+        "sha256"
+      ],
+      "title": "SourceDocument",
+      "type": "object"
+    },
+    "SourceProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "snapshot": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Snapshot",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "permission_ref": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Permission Ref",
+          "type": "string"
+        },
+        "text_extractor_version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Text Extractor Version",
+          "type": "string"
+        },
+        "redaction_version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Redaction Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "snapshot",
+        "sha256",
+        "permission_ref",
+        "text_extractor_version",
+        "redaction_version"
+      ],
+      "title": "SourceProvenance",
+      "type": "object"
+    },
+    "SplitAssignment": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_key": {
+          "pattern": "^cand_[a-f0-9]{24}$",
+          "title": "Candidate Key",
+          "type": "string"
+        },
+        "jd_key": {
+          "pattern": "^jd_[a-f0-9]{24}$",
+          "title": "Jd Key",
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "train",
+            "dev",
+            "holdout"
+          ],
+          "title": "Split",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_key",
+        "jd_key",
+        "split"
+      ],
+      "title": "SplitAssignment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "human-evaluation.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceProvenance"
+    },
+    "source_documents": {
+      "items": {
+        "$ref": "#/$defs/SourceDocument"
+      },
+      "minItems": 2,
+      "title": "Source Documents",
+      "type": "array"
+    },
+    "rubrics": {
+      "items": {
+        "$ref": "#/$defs/RubricSnapshot"
+      },
+      "minItems": 1,
+      "title": "Rubrics",
+      "type": "array"
+    },
+    "splits": {
+      "items": {
+        "$ref": "#/$defs/SplitAssignment"
+      },
+      "minItems": 1,
+      "title": "Splits",
+      "type": "array"
+    },
+    "retrieval": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RetrievalQuery"
+      },
+      "title": "Retrieval",
+      "type": "array"
+    },
+    "assessments": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/AssessmentCase"
+      },
+      "title": "Assessments",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source",
+    "source_documents",
+    "rubrics",
+    "splits"
+  ],
+  "title": "Human evaluation annotations",
+  "type": "object",
+  "$id": "https://talentscreen.local/schemas/human-evaluation-v1.schema.json"
+}

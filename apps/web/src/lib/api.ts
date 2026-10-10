@@ -171,7 +171,7 @@ export interface ShortlistCandidate {
   candidate_id: string;
   public_label: string;
   rank: number | null;
-  tier: "recommend" | "borderline" | "below_threshold" | "core_fail" | "not_assessed";
+  tier: "recommend" | "below_threshold" | "core_fail" | "needs_clarification" | "review_required" | "not_assessed";
   tier_display: string;
   comparable_score: number | null;
   observed_score: number | null;
@@ -193,6 +193,7 @@ export interface ShortlistResponse {
   total_candidates: number;
   assessed_candidates: number;
   shortlisted_candidates: number;
+  clarification_candidates: number;
   average_score: number | null;
   tier_summary: Record<string, number>;
   criteria: Array<{ id: string; label: string; weight: number; core: boolean }>;
@@ -433,9 +434,8 @@ export const api = {
     return apiRequest<CandidateComparison>(`/requisitions/${requisitionId}/comparison`);
   },
 
-  async getShortlist(requisitionId: string, threshold?: number): Promise<ShortlistResponse> {
-    const query = threshold !== undefined ? `?threshold=${threshold}` : "";
-    return apiRequest<ShortlistResponse>(`/requisitions/${requisitionId}/shortlist${query}`);
+  async getShortlist(requisitionId: string): Promise<ShortlistResponse> {
+    return apiRequest<ShortlistResponse>(`/requisitions/${requisitionId}/shortlist`);
   },
 
   async getIndependentReviewWorklist(requisitionId: string): Promise<Array<{ application_id: string; public_label: string; ready: boolean; submitted: boolean; received_at: string }>> {

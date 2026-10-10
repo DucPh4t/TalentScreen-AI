@@ -12,10 +12,11 @@ import signal
 import sys
 import time
 import uuid
-from .contracts import PROFILES,RunManifest,RunRecord,CriterionObservation,InvocationRecord
+from .contracts import PROFILES,RunManifest,RunRecord,CriterionObservation,InvocationRecord,JevPrimaryObservation
 from .dataset import load_inputs,select_runs
 from .artifacts import create_output,atomic_json,append_record,append_event
 from .provenance import git_source_provenance
+DEFAULT_DATASET = Path(__file__).resolve().parents[6] / 'fixtures/ai_benchmark/synthetic_100_multi_role_v2'
 
 def now():return datetime.now(timezone.utc).isoformat()
 def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
@@ -85,10 +86,11 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
     from app.db.models import AssessmentRun,CriterionAssessment,CriterionEvidence,LLMInvocation,Job,BudgetReservation
     from app.domain.enums import BudgetScope,JobStatus,LLMInvocationStatus
     from app.schemas.assessment import AssessmentRunCreateRequest,AssessmentOutputSchema
+    from app.services.assessment import service as assessment_service
     from app.services.assessment.service import create_assessment_run,execute_assessment_job
     from app.services.assessment.policy import benchmark_policy
-    from app.services.assessment.prompt import get_assessment_prompt
-    from app.services.agent.assessment_graph import _AGENT_PROMPTS,AGENT_PROMPT_VERSION
+    from app.services.assessment.prompt import get_assessment_prompt,EVIDENCE_ONLY_AGENT_PROMPT_VERSION
+    from app.services.agent.assessment_graph import _AGENT_PROMPTS,AGENT_PROMPT_VERSION,_EVIDENCE_ONLY_PROMPT
     from app.services.assessment.diagnostics import AssessmentDiagnostics
     from app.services.embedding import embedding_config_id
     from app.services.agent.request_budget import REQUEST_PACKING_VERSION
@@ -126,11 +128,21 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
     create_output(output)
     seeded=await seed_cases(db,inputs,selection,context)
     await db.commit()
+    if settings.ASSESSMENT_SCORER_MODE=='jev':
+        effective_prompt=_EVIDENCE_ONLY_PROMPT
+        effective_agent_prompt_version=EVIDENCE_ONLY_AGENT_PROMPT_VERSION
+    else:
+        effective_prompt=get_assessment_prompt('assessment-v1.6.0')+'\n\n'+_AGENT_PROMPTS[AGENT_PROMPT_VERSION]
+        effective_agent_prompt_version=AGENT_PROMPT_VERSION
+
     manifest=RunManifest(experiment_id=context.experiment_id,status='running',mode='contract_only' if is_mock else 'live_model',
         model_quality='unmeasured' if is_mock else 'synthetic_reference_only',provider='mock' if is_mock else 'deepseek',
         requested_model=budget_plan.model,embedding_mode=embedding_mode,selection=selection,dataset_hash=inputs.manifest_hash,
         dataset_files=inputs.hashes,policies={p:policy.to_snapshot() for p,policy in policies.items()},
-        provenance={**git_source_provenance(),'effective_prompt_sha256':hashlib.sha256((get_assessment_prompt('assessment-v1.6.0')+'\n\n'+_AGENT_PROMPTS[AGENT_PROMPT_VERSION]).encode()).hexdigest(),
+        provenance={**git_source_provenance(),'effective_prompt_sha256':hashlib.sha256(effective_prompt.encode()).hexdigest(),
+            'evidence_agent_prompt_version':effective_agent_prompt_version,
+            'assessment_scorer_mode':settings.ASSESSMENT_SCORER_MODE,
+            'scorer_model':settings.JEV_MODEL if settings.ASSESSMENT_SCORER_MODE=='jev' else budget_plan.model,
             'schema_sha256':digest(AssessmentOutputSchema.model_json_schema()),'embedding_config':embedding_config_id(retrieval_version),
             'retrieval_version':retrieval_version,'request_packing_version':REQUEST_PACKING_VERSION,
             'temperature':0,'thinking':'disabled','max_output_tokens':4096,'concurrency':1,'repetitions':1,
@@ -144,7 +156,7 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
             'budget':rerank_budget_plan.model_dump(mode='json')})
     atomic_json(output/'manifest.json',manifest)
     strict=StrictReservationPolicy(period.id,budget_plan.cap_usd,budget_plan.bound,budget_plan.model)
-    stop=None;interrupted=False;records=[];model_identity=ExperimentModelIdentity();jev_identity=ExperimentModelIdentity()
+    stop=None;interrupted=False;records=[];model_identity=ExperimentModelIdentity();jev_identity=ExperimentModelIdentity();primary_jev_identity=ExperimentModelIdentity()
     with scripted_embeddings(embedding_mode=='scripted'):
         setup_start=time.perf_counter();device=None
         try:
@@ -165,7 +177,7 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                 record=RunRecord(case_id=case_id,profile=profile,status='skipped',error_code=stop,policy_hash=policies[profile].digest)
                 append_record(output/'runs.jsonl',record);records.append(record)
                 continue
-            run=None;wrapper=None;jev_wrapper=None;trace_id=None
+            run=None;wrapper=None;jev_wrapper=None;primary_jev_wrapper=None;trace_id=None
             diagnostic=AssessmentDiagnostics({c.id for c in inputs.roles[next(c.role_family for c in inputs.cases if c.case_id==case_id)].criteria})
             try:
                 assert_frozen(inputs)
@@ -175,6 +187,8 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                 await db.commit()
                 run=await db.get(AssessmentRun,response.id)
                 wrapper=(BenchmarkMockRecordingProvider if is_mock else DeepSeekRecordingProvider)(provider,db,run.job_id,inputs,output,model_identity)
+                if settings.ASSESSMENT_SCORER_MODE == 'jev':
+                    primary_jev_wrapper=JevRecordingProvider(assessment_service.get_jev_provider(),db,run.job_id,inputs,output,primary_jev_identity)
                 rerank_arguments={}
                 if rerank_policy.enabled:
                     from app.services.llm.call_policy import JevReservationPolicy
@@ -185,7 +199,8 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                 with trace_span('benchmark_combination',metadata={'experiment_id':str(context.experiment_id),'benchmark_profile':profile,
                     'case_id_sha256':hashlib.sha256(case_id.encode()).hexdigest()}) as span:
                     trace_id=uuid.UUID(span.run_id) if span.run_id else None
-                    await execute_assessment_job(db,run.job_id,provider_override=wrapper,diagnostics=diagnostic,strict_reservation_policy=strict,**rerank_arguments)
+                    await execute_assessment_job(db,run.job_id,provider_override=wrapper,jev_provider_override=primary_jev_wrapper,
+                        diagnostics=diagnostic,strict_reservation_policy=strict,**rerank_arguments)
                     span.record(diagnostic.snapshot()["counters"])
                 await db.commit()
                 # Hash changes during the final response also invalidate the batch.
@@ -209,17 +224,24 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
                 criteria=(await db.scalars(select(CriterionAssessment).where(CriterionAssessment.run_id==run.id))).all()
                 evidence=(await db.scalars(select(CriterionEvidence).where(CriterionEvidence.run_id==run.id))).all()
                 if run.status=='succeeded' and not stop:
-                    observations={c.criterion_id:CriterionObservation(status=c.status.value,score=c.score,
+                    observations={c.criterion_id:CriterionObservation(status=c.status.value,score=c.score,jev_score=c.jev_score,
                         evidence_ids=tuple(e.span_id for e in evidence if e.criterion_id==c.criterion_id),
                         clarification_count=len(c.missing_information or [])) for c in criteria}
                 llms=(await db.scalars(select(LLMInvocation).where(LLMInvocation.job_id==run.job_id).order_by(LLMInvocation.created_at))).all()
                 for invocation in llms:
-                    is_jev=invocation.logical_step.startswith("jev_rerank_")
-                    recorder=jev_wrapper if is_jev else wrapper
+                    is_jev_primary=invocation.logical_step=="jev_primary_score"
+                    is_jev_rerank=invocation.logical_step.startswith("jev_rerank_")
+                    recorder=(primary_jev_wrapper if is_jev_primary else
+                        jev_wrapper if is_jev_rerank else wrapper)
                     result=recorder.results.get(invocation.id) if recorder else None
+                    requested_model=(run.snapshot["scorer_model"] if is_jev_primary else
+                        rerank_policy.requested_model if is_jev_rerank else budget_plan.model)
+                    reported_model=(safe_metadata({"model":result.reported_model}).get("model") if result else
+                        safe_metadata({"model":invocation.model_resolved}).get("model")
+                        if is_jev_primary and invocation.status.value=="succeeded" else None)
                     invocations.append(InvocationRecord(invocation_id=invocation.id,logical_step=invocation.logical_step,
-                        attempt_no=invocation.attempt_no,status=invocation.status.value,requested_model=rerank_policy.requested_model if is_jev else budget_plan.model,
-                        reported_model=safe_metadata({"model":result.reported_model}).get("model") if result else None,input_tokens=invocation.input_tokens,output_tokens=invocation.output_tokens,
+                        attempt_no=invocation.attempt_no,status=invocation.status.value,requested_model=requested_model,
+                        reported_model=reported_model,input_tokens=invocation.input_tokens,output_tokens=invocation.output_tokens,
                         cached_input_tokens=result.cached_input_tokens if result else None,provider_latency_ms=result.latency_ms if result else None,
                         reserved_usd=invocation.cost_reserved,estimated_peak_usd=invocation.cost_actual,rate_card_version=invocation.rate_card_version))
                 if any(i.status in {'reserved','admitted','outcome_unknown'} for i in invocations) and not stop:
@@ -234,9 +256,18 @@ async def run_experiment(db,inputs,selection,context,*,provider,budget_plan,outp
             status='interrupted' if interrupted else ('accepted' if observations else 'failed')
             source={k:run.snapshot[k] for k in ('application_id','document_id','sanitized_version_id','sanitized_sha256','rubric_version_id','application_generation')} if run else {}
             context_limit_code='ASSESSMENT_CONTEXT_LIMIT' if run and (run.execution_trace or {}).get('error_code')=='ASSESSMENT_CONTEXT_LIMIT' else None
+            primary_trace=(run.execution_trace or {}).get('jev_primary') if run else None
+            jev_primary=JevPrimaryObservation(
+                outcome=primary_trace.get('outcome'),
+                requested_model=primary_trace.get('requested_model'),
+                eligible_criterion_count=primary_trace.get('eligible_criterion_count',0),
+                error_code=primary_trace.get('error_code'),
+                explanation_outcome=primary_trace.get('explanation_outcome'),
+                explanation_error_code=primary_trace.get('explanation_error_code'),
+            ) if isinstance(primary_trace,dict) else None
             record=RunRecord(case_id=case_id,profile=profile,status=status,error_code=stop or (run.failure_code if run else None) or context_limit_code,
                 run_id=run.id if run else None,job_id=run.job_id if run else None,source_snapshot_hash=digest(source) if source else None,
-                source_ids={k:str(v) for k,v in source.items()},policy_hash=policies[profile].digest,criteria=observations,
+                source_ids={k:str(v) for k,v in source.items()},policy_hash=policies[profile].digest,criteria=observations,jev_primary=jev_primary,
                 diagnostics=diagnostic.snapshot(),invocations=tuple(invocations),tool_execution_count=(run.execution_trace or {}).get('tool_execution_count',0) if run else 0,
                 repair_count=(run.execution_trace or {}).get('repair_count',0) if run else 0,trace_id=trace_id)
             append_record(output/'runs.jsonl',record);records.append(record)
@@ -263,7 +294,7 @@ def parser():
     p=ArgumentParser(description='Synthetic production-pipeline AI benchmark')
     sub=p.add_subparsers(dest='command',required=True)
     for name in ('validate','plan','run'):
-        q=sub.add_parser(name);q.add_argument('--dataset',type=Path,required=True)
+        q=sub.add_parser(name);q.add_argument('--dataset',type=Path,default=DEFAULT_DATASET)
         if name!='validate':
             q.add_argument('--provider',choices=('mock','deepseek'),required=True)
             q.add_argument('--profiles',default='all')
@@ -278,7 +309,7 @@ def parser():
         if name=='run':
             q.add_argument('--output',type=Path,required=True)
     q=sub.add_parser('report');q.add_argument('--input',type=Path,required=True);q.add_argument('--output',type=Path,required=True)
-    q.add_argument('--dataset',type=Path,default=Path('fixtures/ai_benchmark/v1'))
+    q.add_argument('--dataset',type=Path,default=DEFAULT_DATASET)
     return p
 
 def main(argv=None):
@@ -293,13 +324,18 @@ def main(argv=None):
         if args.command=='validate':
             from .dataset import load_references
             load_references(inputs.root,inputs)
-            print(json.dumps({'origin':'synthetic_design_expected','cases':len(inputs.cases),'hash':inputs.manifest_hash}))
+            role_counts={role:sum(case.role_family==role for case in inputs.cases) for role in inputs.roles}
+            criteria_per_role={role:len(value.criteria) for role,value in inputs.roles.items()}
+            print(json.dumps({'origin':'synthetic_design_expected','labels_origin':'AI-authored design expectations',
+                'reference_not_hr_validated':True,'hiring_quality_claim':'not_evaluated',
+                'cases':len(inputs.cases),'role_counts':role_counts,'criteria_per_role':criteria_per_role,
+                'criteria_total':sum(criteria_per_role.values()),'hash':inputs.manifest_hash}))
             return 0
-        selection=select_runs(inputs,split=args.split or (None if args.cases else 'development'),
+        selection=select_runs(inputs,split=args.split or (None if args.cases else 'all'),
             case_ids=tuple(args.cases.split(',')) if args.cases else (),profiles=PROFILES if args.profiles=='all' else tuple(args.profiles.split(',')),seed=args.seed)
-        from .preflight import plan_budget,context_bound,verify_utf8_artifacts,execution_prerequisites
         from app.services.assessment.policy import benchmark_policy
         from app.config import get_settings
+        from .preflight import context_bound, execution_prerequisites, plan_budget, verify_utf8_artifacts
         model='mock' if args.provider=='mock' else get_settings().DEEPSEEK_MODEL
         try:bound=verify_utf8_artifacts(Path('reports/ai-benchmark-cache'))
         except ValueError:bound=context_bound(model)

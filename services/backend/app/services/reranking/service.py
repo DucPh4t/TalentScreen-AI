@@ -13,7 +13,7 @@ from app.services.agent.tools import snapshot_failure_code,_anchor_query_terms
 from app.services.llm.orchestrator import execute_bounded_llm_call,PreconditionViolationError
 from app.services.llm.exceptions import LLMProviderError
 from app.services.llm.types import CompletionRequest
-from app.services.llm.call_policy import JevReservationPolicy
+from app.services.llm.call_policy import JevReservationPolicy,MAX_JEV_OUTPUT_TOKENS
 from app.services.llm.ledger import get_or_create_active_budget_period
 from app.services.jev.provider import get_jev_provider
 from app.services.sanitizer import residual_contact_types
@@ -92,7 +92,7 @@ async def rerank_candidates(*,db,run,policy,stage,candidates_by_criterion,focus_
         if remaining<=0:break
         await require_scope(db,run,policy,pairs)
         request=CompletionRequest(task_kind='assessment',system_prompt='',user_prompt=canonical(batch.payload),model=policy.requested_model,
-            provider='jev',purpose='jev_rerank',max_output_tokens=0,timeout_seconds=min(policy.request_timeout_seconds,remaining),jev_reservation_policy=financial_policy)
+            provider='jev',purpose='jev_rerank',max_output_tokens=MAX_JEV_OUTPUT_TOKENS,timeout_seconds=min(policy.request_timeout_seconds,remaining),jev_reservation_policy=financial_policy)
         try:
             result=await execute_bounded_llm_call(db,run.job_id,request,f'jev_rerank_{stage}_{n}',1,
                 sanitized_version_id=run.sanitized_version_id,provider_override=provider)

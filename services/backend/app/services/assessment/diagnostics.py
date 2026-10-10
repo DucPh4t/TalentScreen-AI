@@ -9,11 +9,12 @@ import re
 import time
 from typing import Any
 from pydantic import ValidationError
-from app.schemas.assessment import AssessmentOutputSchema
+from app.schemas.assessment import AssessmentOutputSchema, EvidenceOnlyAssessmentSchema
 
 STAGES=frozenset({'indexing','retrieval','graph','validation_scoring','total'})
 SPAN=re.compile(r'^spn_[0-9a-f]{24}$')
 CRITERION=re.compile(r'^[a-z][a-z0-9_]{1,49}$')
+CITATION_REJECTION_CATEGORIES=('citation_malformed','citation_unknown_span','citation_out_of_scope','citation_quote_mismatch')
 
 class AssessmentDiagnostics:
     def __init__(self,criterion_ids: set[str]):
@@ -25,7 +26,8 @@ class AssessmentDiagnostics:
         self.context=None
         self.packing=None
         self.requests=[]
-        self.counters={'rejected_citations':0,'normalized_criteria':0,'schema_failures':0}
+        self.counters={'rejected_citations':0,'normalized_criteria':0,'schema_failures':0,
+            **{name:0 for name in CITATION_REJECTION_CATEGORIES}}
 
     @staticmethod
     def _spans(value):
@@ -77,8 +79,14 @@ class AssessmentDiagnostics:
         entry={k:v for k,v in values.items() if k in allowed and type(v) is int and v>=0}
         self.requests.append({'phase':phase,**entry})
 
-    def record_validation(self,*,rejected_citations: int,normalized_criteria: int,schema_failures: int) -> None:
-        for name,value in (('rejected_citations',rejected_citations),('normalized_criteria',normalized_criteria),('schema_failures',schema_failures)):
+    def record_validation(self,*,rejected_citations: int,normalized_criteria: int,schema_failures: int,
+                          citation_malformed: int=0,citation_unknown_span: int=0,
+                          citation_out_of_scope: int=0,citation_quote_mismatch: int=0) -> None:
+        values=(('rejected_citations',rejected_citations),('normalized_criteria',normalized_criteria),
+            ('schema_failures',schema_failures),('citation_malformed',citation_malformed),
+            ('citation_unknown_span',citation_unknown_span),('citation_out_of_scope',citation_out_of_scope),
+            ('citation_quote_mismatch',citation_quote_mismatch))
+        for name,value in values:
             if type(value) is int and value>=0:self.counters[name]+=value
 
     def snapshot(self) -> dict[str,Any]:
@@ -108,12 +116,17 @@ def measured(stage: str):
     return decorate
 
 
-def inspect_raw_output(raw: str,registry: dict,allowed: dict[str,set[str]],expected_ids: set[str]) -> dict[str,int]:
-    counts={'rejected_citations':0,'normalized_criteria':0,'schema_failures':0}
+def inspect_raw_output(raw: str,registry: dict,allowed: dict[str,set[str]],expected_ids: set[str],*,evidence_only: bool=False) -> dict[str,int]:
+    counts={'rejected_citations':0,'normalized_criteria':0,'schema_failures':0,
+        **{name:0 for name in CITATION_REJECTION_CATEGORIES}}
+    def reject(category):
+        counts['rejected_citations']+=1
+        counts[category]+=1
     try:
         parsed=json.loads(raw)
+        schema=EvidenceOnlyAssessmentSchema if evidence_only else AssessmentOutputSchema
         try:
-            dto=AssessmentOutputSchema.model_validate(parsed)
+            dto=schema.model_validate(parsed)
             if {c.criterion_id for c in dto.criteria}!=expected_ids:counts['schema_failures']=1
         except (ValidationError,TypeError,ValueError):counts['schema_failures']=1
         if not isinstance(parsed,dict) or not isinstance(parsed.get('criteria'),list):return counts
@@ -126,10 +139,20 @@ def inspect_raw_output(raw: str,registry: dict,allowed: dict[str,set[str]],expec
                 counts['normalized_criteria']+=1
             if not isinstance(evidence,list):continue
             for e in evidence:
-                if not isinstance(e,dict):counts['rejected_citations']+=1;continue
+                if not isinstance(e,dict):
+                    reject('citation_malformed')
+                    continue
                 span_id=e.get('span_id')
-                span=registry.get(span_id) if isinstance(span_id,str) else None
-                if span is None or span_id not in allowed.get(criterion_id,set()) or e.get('quote')!=span.text:
-                    counts['rejected_citations']+=1
+                quote=e.get('quote')
+                if not isinstance(span_id,str) or not isinstance(quote,str):
+                    reject('citation_malformed')
+                    continue
+                span=registry.get(span_id)
+                if span is None:
+                    reject('citation_unknown_span')
+                elif span_id not in allowed.get(criterion_id,set()):
+                    reject('citation_out_of_scope')
+                elif quote!=span.text:
+                    reject('citation_quote_mismatch')
     except (json.JSONDecodeError,TypeError,ValueError):counts['schema_failures']=1
     return counts

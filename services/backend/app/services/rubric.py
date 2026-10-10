@@ -38,14 +38,14 @@ from app.services.requisition import extract_jd_source_refs
 def get_seed_rubric_path() -> Path:
     """Find the path to the canonical seed rubric JSON."""
     candidates = [
-        Path("fixtures/seeds/rubric-backend-python.v1.json"),
-        Path("../fixtures/seeds/rubric-backend-python.v1.json"),
-        Path(__file__).parents[4] / "fixtures" / "seeds" / "rubric-backend-python.v1.json",
+        Path("fixtures/seeds/rubric-backend-python.v3.json"),
+        Path("../fixtures/seeds/rubric-backend-python.v3.json"),
+        Path(__file__).parents[4] / "fixtures" / "seeds" / "rubric-backend-python.v3.json",
     ]
     for p in candidates:
         if p.exists():
             return p.resolve()
-    raise FileNotFoundError("Không tìm thấy file rubric-backend-python.v1.json")
+    raise FileNotFoundError("Không tìm thấy file rubric-backend-python.v3.json")
 
 
 def load_seed_rubric_dict() -> dict[str, Any]:

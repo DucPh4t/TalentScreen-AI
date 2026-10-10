@@ -1,0 +1,39 @@
+{
+  "schema_version": "human-evaluation.v1",
+  "source": {
+    "name": "REPLACE_WITH_AUTHORIZED_SOURCE_NAME",
+    "snapshot": "REPLACE_WITH_IMMUTABLE_SOURCE_REVISION_OR_EXPORT_ID",
+    "sha256": "REPLACE_WITH_64_HEX_SHA256_OF_PINNED_LOCAL_SOURCE_MANIFEST",
+    "permission_ref": "REPLACE_WITH_LOCAL_APPROVAL_OR_CONSENT_REFERENCE",
+    "text_extractor_version": "REPLACE_WITH_PINNED_EXTRACTOR_VERSION",
+    "redaction_version": "REPLACE_WITH_PINNED_REDACTION_VERSION"
+  },
+  "source_documents": [
+    {"document_key": "cand_REPLACE_WITH_24_HEX_CHARS", "kind": "cv", "sha256": "REPLACE_WITH_HASH_OF_SANITIZED_TEXT_BLOB"},
+    {"document_key": "jd_REPLACE_WITH_24_HEX_CHARS", "kind": "jd", "sha256": "REPLACE_WITH_HASH_OF_JD_TEXT_BLOB"}
+  ],
+  "rubrics": [
+    {
+      "rubric_key": "rub_REPLACE_WITH_24_HEX_CHARS",
+      "jd_key": "jd_REPLACE_WITH_24_HEX_CHARS",
+      "sha256": "REPLACE_WITH_HASH_OF_CANONICAL_RUBRIC_SNAPSHOT",
+      "approved_by_refs": ["OPAQUE_HR_APPROVAL_REF", "OPAQUE_IT_APPROVAL_REF"],
+      "criteria": [
+        {
+          "criterion_key": "REPLACE_WITH_CRITERION_KEY",
+          "description": "REPLACE_WITH_APPROVED_COMPETENCY_TEXT",
+          "anchors": [
+            {"score": 0, "description": "REPLACE_WITH_APPROVED_ANCHOR"},
+            {"score": 1, "description": "REPLACE_WITH_APPROVED_ANCHOR"},
+            {"score": 2, "description": "REPLACE_WITH_APPROVED_ANCHOR"},
+            {"score": 3, "description": "REPLACE_WITH_APPROVED_ANCHOR"},
+            {"score": 4, "description": "REPLACE_WITH_APPROVED_ANCHOR"}
+          ]
+        }
+      ]
+    }
+  ],
+  "splits": [],
+  "retrieval": [],
+  "assessments": []
+}

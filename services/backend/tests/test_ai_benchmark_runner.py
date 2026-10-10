@@ -17,7 +17,7 @@ from app.services.evaluation.benchmark.mock_provider import BenchmarkMockProvide
 from tests.test_ai_benchmark_isolation import owned_context
 from tests.test_ai_benchmark_budget import fresh_period, byte_bound
 
-DATA=Path(__file__).resolve().parents[3]/'fixtures/ai_benchmark/v1'
+DATA=Path(__file__).resolve().parents[3]/'fixtures/ai_benchmark/golden_100'
 
 @pytest.fixture
 async def experiment(test_session_factory,owned_context,fresh_period,monkeypatch,tmp_path):
@@ -25,7 +25,7 @@ async def experiment(test_session_factory,owned_context,fresh_period,monkeypatch
     monkeypatch.setattr(settings,'DEEPSEEK_MODEL','mock')
     monkeypatch.setattr(settings,'JEV_MODE','off')
     inputs=load_inputs(DATA)
-    selection=select_runs(inputs,split=None,case_ids=('node-01',),profiles=PROFILES,seed=20261008)
+    selection=select_runs(inputs,split=None,case_ids=('backend-008',),profiles=PROFILES,seed=20261010)
     plan=plan_budget(inputs,selection,{p:benchmark_policy(p) for p in PROFILES},model='mock',cap_usd=Decimal(5),bound=byte_bound())
     return inputs,selection,plan,owned_context,tmp_path/'result'
 
@@ -51,13 +51,128 @@ async def test_runner_invokes_real_assessment_service_and_ledger(test_session_fa
         for r in rows:
             run=await db.get(AssessmentRun,r.run_id)
             assert run.status=='succeeded' and r.status=='accepted'
-            assert len((await db.scalars(select(CriterionAssessment).where(CriterionAssessment.run_id==r.run_id))).all())==5
+            assert len((await db.scalars(select(CriterionAssessment).where(CriterionAssessment.run_id==r.run_id))).all())==6
             assert len((await db.scalars(select(LLMInvocation).where(LLMInvocation.job_id==r.job_id))).all())==1
     assert manifest.mode=='contract_only' and manifest.model_quality=='unmeasured'
     assert len(provider.requests)==4 and len(seen)==4
     assert 'GOLD_NOT_FOR_MODEL' not in json.dumps([r.messages for r in provider.requests])
     assert 'cv_text' not in (output/'manifest.json').read_text()
     assert 'Linh' not in (output/'admissions.jsonl').read_text()
+
+@pytest.mark.asyncio
+async def test_jev_primary_tokens_and_model_are_attributed_in_benchmark_artifact(
+    test_session_factory, owned_context, fresh_period, monkeypatch, tmp_path
+):
+    from datetime import date
+    from app.config import Settings
+    from app.services.assessment import service
+    from app.services.agent import assessment_graph
+    from app.services.llm import orchestrator
+    from app.services.llm.provider import BaseLLMProvider
+    from app.services.llm.types import CompletionResult
+    from app.services.evaluation.benchmark.dataset import load_inputs, select_runs
+    from app.services.evaluation.benchmark.preflight import plan_budget
+
+    settings = Settings(
+        _env_file=None, APP_ENV="sandbox", LLM_PROVIDER="deepseek",
+        DEEPSEEK_API_KEY="synthetic-deepseek-key", DEEPSEEK_MODEL="mock",
+        ASSESSMENT_SCORER_MODE="jev", JEV_API_KEY="synthetic-jev-key",
+        JEV_BASE_URL="https://api.typesafe.ai/v1/systemone", JEV_MODEL="jev-1.13.0",
+        JEV_DATA_PROCESSING_APPROVED=True, JEV_INPUT_PRICE_PER_MILLION_USD=0.042,
+        JEV_RATE_CARD_VERIFIED_AT=date.today().isoformat(), JEV_MODE="off",
+        DEV_EVAL_BUDGET_USD=5.0,
+    )
+    monkeypatch.setattr("app.config.get_settings", lambda: settings)
+    monkeypatch.setattr(service, "get_settings", lambda: settings)
+    monkeypatch.setattr(assessment_graph, "get_settings", lambda: settings)
+    monkeypatch.setattr(orchestrator, "get_settings", lambda: settings)
+
+    class JevProvider(BaseLLMProvider):
+        calls = 0
+
+        async def complete(self, request):
+            self.calls += 1
+            questions = json.loads(request.user_prompt)["questions"]
+            answers = {
+                criterion_id: {
+                    "type": "score", "score": 0 if self.calls == 1 else 2, "confidence": 0.75,
+                    "probabilities": {"0": 0, "1": 0, "2": 1, "3": 0, "4": 0},
+                }
+                for criterion_id in questions
+            }
+            content = json.dumps({
+                "model": request.model, "answers": answers,
+                "usage": {"input_tokens": 100, "output_tokens": 91},
+            })
+            return CompletionResult(
+                content=content, requested_model=request.model, reported_model=request.model,
+                input_tokens=100, output_tokens=91, cached_input_tokens=25, latency_ms=120,
+            )
+
+    jev_provider = JevProvider()
+    monkeypatch.setattr(service, "get_jev_provider", lambda: jev_provider)
+
+    inputs = load_inputs(DATA)
+    selection = select_runs(inputs, split=None, case_ids=("backend-001",), profiles=PROFILES, seed=20261010)
+    plan = plan_budget(inputs, selection, {p: benchmark_policy(p) for p in selection.profiles},
+        model="mock", cap_usd=Decimal(5), bound=byte_bound())
+    output = tmp_path / "jev-primary-artifact"
+    mock_provider = BenchmarkMockProvider()
+    async with test_session_factory() as db:
+        manifest = await run_experiment(
+            db, inputs, selection, owned_context, provider=mock_provider,
+            budget_plan=plan, output=output, embedding_mode="scripted",
+        )
+        rows = read_records(output / "runs.jsonl")
+
+    assert manifest.status == "complete"
+    assert manifest.provenance["assessment_scorer_mode"] == "jev"
+    assert manifest.provenance["scorer_model"] == "jev-1.13.0"
+    import hashlib
+    from app.services.agent.assessment_graph import _EVIDENCE_ONLY_PROMPT
+    from app.services.assessment.prompt import EVIDENCE_ONLY_AGENT_PROMPT_VERSION
+    assert manifest.provenance["evidence_agent_prompt_version"] == EVIDENCE_ONLY_AGENT_PROMPT_VERSION
+    assert manifest.provenance["effective_prompt_sha256"] == hashlib.sha256(_EVIDENCE_ONLY_PROMPT.encode()).hexdigest()
+    assert sum(row.jev_primary.outcome == "provider_error" for row in rows) == 1
+    assert sum(row.jev_primary.outcome == "succeeded" for row in rows) == len(PROFILES) - 1
+    rejected = next(row.jev_primary for row in rows if row.jev_primary.outcome == "provider_error")
+    assert rejected.error_code == "JEV_PRIMARY_SCORE_DISTRIBUTION_MISMATCH"
+    assert rejected.eligible_criterion_count == 0
+    assert all(row.jev_primary.eligible_criterion_count == 6 for row in rows if row.jev_primary.outcome == "succeeded")
+    successful = [row for row in rows if row.jev_primary.outcome == "succeeded"]
+    assert all(row.jev_primary.explanation_outcome == "succeeded" for row in successful)
+    narrative_requests = [request for request in mock_provider.requests if request.purpose == "jev_primary_explanation"]
+    assert len(narrative_requests) == len(successful)
+    assert all(request.thinking_mode == "disabled" and request.max_output_tokens == 2048 for request in narrative_requests)
+    assert all(request.response_format == {"type": "json_object"} for request in narrative_requests)
+    assert all(observation.jev_score == Decimal("2") for row in successful for observation in row.criteria.values())
+    rejected_row = next(row for row in rows if row.jev_primary.outcome == "provider_error")
+    assert all(observation.jev_score is None for observation in rejected_row.criteria.values())
+    assert "answers" not in (output / "runs.jsonl").read_text()
+    assert len(rows) == len(PROFILES)
+    for row in rows:
+        jev = [invocation for invocation in row.invocations if invocation.logical_step == "jev_primary_score"]
+        assert len(jev) == 1
+        invocation = jev[0]
+        assert invocation.requested_model == "jev-1.13.0"
+        assert invocation.reported_model == "jev-1.13.0"
+        assert (invocation.input_tokens, invocation.output_tokens) == (100, 91)
+        assert invocation.cached_input_tokens == 25
+        assert invocation.provider_latency_ms == 120
+        assert invocation.estimated_peak_usd == Decimal("0.00000420")
+    from app.services.evaluation.benchmark.reporting import generate_reports
+    report = generate_reports(output, tmp_path / "jev-primary-report", DATA)
+    assert report.status == "complete"
+    assert report.journal["integrity_errors"] == []
+    assert report.journal["financial_reconciled"] is True
+    assert report.journal["admitted_invocations"] == sum(len(row.invocations) for row in rows)
+    expected_diagnostics = {
+        "rejected_citations", "citation_malformed", "citation_unknown_span",
+        "citation_out_of_scope", "citation_quote_mismatch", "citation_unclassified",
+        "normalized_criteria", "schema_failures",
+    }
+    assert all(set(profile["prevalidation"]) == expected_diagnostics for profile in report.profiles.values())
+    assert all(profile["prevalidation"]["citation_unclassified"] == 0 for profile in report.profiles.values())
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('failure',['snapshot','dataset','interrupt'])
@@ -130,7 +245,7 @@ async def test_raw_score_types_fail_at_provider_to_service_boundary(bad_score,te
 @pytest.mark.parametrize('change_within_combination',[False,True])
 async def test_alternating_served_models_stop_the_experiment(change_within_combination,test_session_factory,experiment,monkeypatch):
     inputs,_,_,context,output=experiment
-    selection=select_runs(inputs,split=None,case_ids=('node-01','ai-01'),profiles=('full_text',),seed=1)
+    selection=select_runs(inputs,split=None,case_ids=('backend-008','backend-009'),profiles=('full_text',),seed=1)
     monkeypatch.setattr(get_settings(),'DEEPSEEK_MODEL','deepseek-flash')
     plan=plan_budget(inputs,selection,{'full_text':benchmark_policy('full_text')},model='deepseek-flash',cap_usd=Decimal(5),bound=byte_bound())
     provider=BenchmarkMockProvider();original=provider.complete
@@ -163,7 +278,7 @@ async def test_context_diagnostics_survive_disposable_database(all_oversize,test
     import hashlib
     inputs,_,_,context,output=experiment
     profile='hybrid' if all_oversize else 'full_text'
-    selection=select_runs(inputs,split=None,case_ids=('node-01',),profiles=(profile,),seed=1)
+    selection=select_runs(inputs,split=None,case_ids=('backend-008',),profiles=(profile,),seed=1)
     plan=plan_budget(inputs,selection,{profile:benchmark_policy(profile)},model='mock',cap_usd=Decimal(5),bound=byte_bound())
     if all_oversize:monkeypatch.setattr(service,'MAX_ASSESSMENT_EVIDENCE_CHARS',1)
     else:

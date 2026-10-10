@@ -288,8 +288,7 @@ async def execute_bounded_llm_call(
             if result.reported_model not in admission.accepted_models:
                 raise LLMModelChangedError()
             if (result.input_tokens > admission.input_upper_tokens
-                or (request.provider == 'jev' and result.output_tokens != 0)
-                or (request.provider != 'jev' and result.output_tokens > request.max_output_tokens)):
+                or result.output_tokens > request.max_output_tokens):
                 raise LLMUsageBoundError()
     except (LLMAuthenticationError, LLMQuotaExhaustedError, LLMModelUnavailableError) as e:
         # Non-retryable configuration errors: zero actual cost if network call was not made/rejected

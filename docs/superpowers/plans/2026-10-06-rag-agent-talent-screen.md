@@ -1,5 +1,7 @@
 # TalentScreen AI RAG and Bounded Agent Implementation Plan
 
+> Archived 10 October 2026. The standalone RAG benchmark script and fixtures described below were retired. The active synthetic regression set is now `fixtures/ai_benchmark/synthetic_100_multi_role`; the earlier Backend Python-only `golden_100` is retained as a legacy fixture. Both contain AI-authored design expectations, not HR/IT gold or hiring-quality evidence.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add validated multilingual hybrid RAG and one bounded read-only agent to the existing HR assessment workflow, then prove its behavior on role-specific evaluation data before enabling recommendations for a real hiring round.
@@ -245,7 +247,7 @@ Expected: PASS; concurrent reservations cannot exceed either ceiling and DeepSee
 - Create: `services/backend/app/services/evaluation/metrics.py`
 - Create: `services/backend/tests/test_evaluation_metrics.py`
 - Create: `scripts/run_rag_benchmark.py`
-- Create: `docs/evaluation/rag-agent-benchmark-protocol.md`
+- Create: `docs/evaluation/independent-human-evaluation-design.md`
 - Create: `docs/runbooks/rag-agent-readiness.md`
 - Create: `fixtures/rag_benchmark/synthetic.jsonl`
 - Create: `fixtures/rag_benchmark/synthetic.manifest.json`

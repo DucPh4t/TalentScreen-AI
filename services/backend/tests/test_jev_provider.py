@@ -100,11 +100,17 @@ async def test_jev_posts_typed_contract_and_accepts_fractional_score(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_jev_completion_adapts_usage_without_emitting_text(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("usage", "expected_output_tokens"),
+    [({"input_tokens": 42, "output_tokens": 91}, 91), ({"input_tokens": 42}, None)],
+)
+async def test_jev_completion_preserves_reported_usage_without_emitting_text(monkeypatch, usage, expected_output_tokens) -> None:
     monkeypatch.setattr("app.services.jev.provider.get_settings", lambda: _settings())
 
     def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=_score_response())
+        body = _score_response()
+        body["usage"] = usage
+        return httpx.Response(200, json=body)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         provider = JevHTTPXProvider(client=client, model="jev-1.13.0")
@@ -114,14 +120,14 @@ async def test_jev_completion_adapts_usage_without_emitting_text(monkeypatch) ->
                 system_prompt="",
                 user_prompt=json.dumps({"state": {"evidence": "React"}, "questions": {"react_ui": _question()}}),
                 model="jev-1.13.0",
-                max_output_tokens=0,
+                max_output_tokens=1024,
                 provider="jev",
             )
         )
 
     assert json.loads(result.content)["answers"]["react_ui"]["score"] == 3.25
     assert result.input_tokens == 42
-    assert result.output_tokens == 0
+    assert result.output_tokens == expected_output_tokens
     assert result.reported_model == "jev-1.13.0"
 
 

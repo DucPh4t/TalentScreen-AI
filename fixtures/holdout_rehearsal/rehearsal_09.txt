@@ -1,1 +1,0 @@
-Tôi chỉ phát triển giao diện React; chưa từng viết chức năng hoặc thành phần ứng dụng bằng Python. Có học SQL cơ bản nhưng chưa áp dụng trong dự án.

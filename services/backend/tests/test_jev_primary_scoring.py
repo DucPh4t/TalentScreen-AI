@@ -93,6 +93,38 @@ def test_jev_question_builder_only_includes_evidence_supported_nonconflicting_cr
     assert payload["state"]["criteria"]["python_skill"]["source_spans"] == [{"span_id": span, "quote": "Built API"}]
 
 
+def test_jev_question_builder_preserves_structured_anchor_guidance():
+    from app.schemas.assessment import EvidenceOnlyAssessmentSchema
+    from app.services.assessment.jev_scoring import build_jev_primary_payload
+
+    span = "spn_" + "d" * 24
+    evidence = EvidenceOnlyAssessmentSchema.model_validate({"criteria": [
+        {"criterion_id": "python_skill", "status": "assessed",
+         "evidence": [{"span_id": span, "quote": "Built API"}],
+         "rationale": "CV nêu tác vụ.", "missing_information": []},
+    ]})
+    class Criterion:
+        criterion_id = "python_skill"
+        label_vi = "Python"
+        description_vi = "Triển khai Python"
+        anchors = [
+            {"score": index, "description": f"Mức {index}",
+             "qualifying_evidence": [f"Bằng chứng đạt mức {index}"],
+             "not_sufficient": [f"Chưa đủ mức {index}"]}
+            for index in range(5)
+        ]
+
+    payload, eligible = build_jev_primary_payload(evidence, [Criterion()], {"python_skill": {span: "Built API"}})
+    assert eligible == {"python_skill"}
+    anchors = payload["questions"]["python_skill"]["criteria"]
+    assert len(anchors) == 5
+    assert anchors[0].splitlines() == [
+        "Mức 0",
+        "Bằng chứng đáp ứng: Bằng chứng đạt mức 0",
+        "Chưa đủ bằng chứng: Chưa đủ mức 0",
+    ]
+    assert anchors[4].splitlines()[0] == "Mức 4"
+
 def test_jev_response_validator_pins_model_and_probability_distribution():
     from app.services.assessment.jev_scoring import validate_jev_primary_response
     from app.services.jev.provider import JevDecisionResponse
@@ -126,7 +158,7 @@ def test_jev_response_validator_normalizes_rounded_probability_mass_at_score_bou
 
 def test_jev_request_limits_question_count_and_serialized_size():
     import uuid
-    from app.services.llm.call_policy import JevReservationPolicy
+    from app.services.llm.call_policy import JevReservationPolicy, MAX_JEV_OUTPUT_TOKENS
     from app.services.llm.types import CompletionRequest
 
     policy = JevReservationPolicy(
@@ -138,9 +170,15 @@ def test_jev_request_limits_question_count_and_serialized_size():
     request = CompletionRequest(
         task_kind="assessment", system_prompt="", user_prompt=json.dumps({
             "state": {"criteria": {}}, "questions": {f"c-{i}": {"type": "score"} for i in range(21)}
-        }), model="jev-1.13.0", max_output_tokens=0, provider="jev", purpose="jev_primary",
+        }), model="jev-1.13.0", max_output_tokens=MAX_JEV_OUTPUT_TOKENS, provider="jev", purpose="jev_primary",
         response_format=None,
     )
+    with pytest.raises(ValueError, match="JEV_REQUEST_BOUND_EXCEEDED"):
+        policy.input_reservation_tokens(request)
+    request.user_prompt = json.dumps({
+        "state": {"criteria": {}}, "questions": {"python_skill": {"type": "score"}}
+    })
+    request.max_output_tokens = MAX_JEV_OUTPUT_TOKENS + 1
     with pytest.raises(ValueError, match="JEV_REQUEST_BOUND_EXCEEDED"):
         policy.input_reservation_tokens(request)
 
@@ -155,6 +193,34 @@ def test_jev_response_validator_rejects_unrequested_or_wrong_model():
         validate_jev_primary_response(response, {"python_skill"}, "jev-1.13.0")
     with pytest.raises(ValueError, match="JEV_PRIMARY_MODEL_MISMATCH"):
         validate_jev_primary_response(response, {"other"}, "jev-1.13.1")
+
+def test_jev_primary_response_ignores_unconsumed_provider_metadata():
+    from app.services.assessment.jev_scoring import validate_jev_primary_response
+    from app.services.jev.provider import JevDecisionResponse
+
+    answer = {
+        "type": "score", "score": 2, "confidence": 0.8,
+        "probabilities": {"0": 0, "1": 0, "2": 1, "3": 0, "4": 0},
+        "rationale": "untrusted provider metadata",
+    }
+    response = JevDecisionResponse.model_construct(
+        model="jev-1.13.0", answers={"python_skill": answer}, usage={}
+    )
+    score = validate_jev_primary_response(response, {"python_skill"}, "jev-1.13.0")["python_skill"]
+    assert score.score == Decimal("2")
+    assert score.confidence == Decimal("0.8")
+    assert not hasattr(score, "rationale")
+
+
+def test_jev_primary_response_rejects_missing_required_fields():
+    from app.services.assessment.jev_scoring import validate_jev_primary_response
+    from app.services.jev.provider import JevDecisionResponse
+
+    response = JevDecisionResponse.model_construct(model="jev-1.13.0", answers={
+        "python_skill": {"type": "score", "score": 2, "probabilities": {"0": 0, "1": 0, "2": 1, "3": 0, "4": 0}}
+    }, usage={})
+    with pytest.raises(ValueError, match="JEV_PRIMARY_ANSWER_FIELDS_MISSING"):
+        validate_jev_primary_response(response, {"python_skill"}, "jev-1.13.0")
 
 
 def test_deepseek_explanation_validator_limits_ids_and_citations_to_validated_evidence():
@@ -175,6 +241,13 @@ def test_deepseek_explanation_validator_limits_ids_and_citations_to_validated_ev
     invalid = {**valid, "criteria": [{**valid["criteria"][0], "basis_span_ids": ["spn_" + "e" * 24]}, valid["criteria"][1]]}
     with pytest.raises(ValueError, match="JEV_NARRATIVE_UNSUPPORTED_CITATION"):
         validate_jev_narrative(json.dumps(invalid, ensure_ascii=False), evidence, {"python_skill", "sql_skill"})
+
+
+def test_jev_narrative_error_code_keeps_only_stable_validation_codes():
+    from app.services.assessment.service import _jev_narrative_error_code
+
+    assert _jev_narrative_error_code(ValueError("JEV_NARRATIVE_UNSUPPORTED_CITATION")) == "JEV_NARRATIVE_UNSUPPORTED_CITATION"
+    assert _jev_narrative_error_code(ValueError("provider output with unsafe detail")) == "ValueError"
 
 
 import json
@@ -236,7 +309,7 @@ def test_scorer_snapshot_pins_provider_without_copying_secret():
         "scorer_endpoint": "https://api.typesafe.ai/v1/systemone",
         "scorer_input_rate_per_million_usd": 0.042,
         "scorer_rate_verified_at": date.today().isoformat(),
-        "evidence_agent_prompt_version": "assessment-agent-evidence.v1",
+        "evidence_agent_prompt_version": "assessment-agent-evidence.v5",
     }
     assert "JEV_API_KEY" not in snapshot
     assert "DEEPSEEK_API_KEY" not in snapshot

@@ -1,1 +1,0 @@
-I added owner checks to a document-download endpoint and wrote a test that another account receives 403. The storage implementation and database schema were outside my assignment.

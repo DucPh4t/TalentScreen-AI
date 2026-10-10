@@ -1,1 +1,0 @@
-I built React forms and handled client-side validation. I collaborated with backend engineers but did not write backend code, SQL, or release scripts.

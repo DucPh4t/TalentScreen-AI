@@ -51,6 +51,6 @@ test('unassessed or missing-coverage shortlist never presents evidence as comple
   assert.equal(shortlistEvidenceFallback?.({ tier: 'recommend', coverage: null }), 'Chưa có đánh giá hiện hành');
 });
 test('partial coverage stays explicit even when the missing-criteria array is empty', () => {
-  assert.equal(shortlistEvidenceFallback?.({ tier: 'borderline', coverage: .5 }), 'Bằng chứng còn thiếu');
+  assert.equal(shortlistEvidenceFallback?.({ tier: 'below_threshold', coverage: .5 }), 'Bằng chứng còn thiếu');
   assert.equal(shortlistEvidenceFallback?.({ tier: 'recommend', coverage: 1 }), 'Không có mục cần làm rõ được ghi nhận');
 });

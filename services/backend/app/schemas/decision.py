@@ -189,6 +189,11 @@ class DecisionCreateRequest(BaseModel):
     outcome: DecisionOutcome
     reason: str = Field(min_length=20, max_length=2000)
     override_reason: Optional[str] = Field(default=None, max_length=2000)
+    clarification_resolution: Optional[Literal[
+        "candidate_confirmed_no_experience",
+        "no_response_after_contact",
+        "independent_evidence_based_reason",
+    ]] = None
     attestation_id: uuid.UUID
     expected_previous_decision_id: Optional[uuid.UUID] = None
     expected_rubric_version_id: Optional[uuid.UUID] = None

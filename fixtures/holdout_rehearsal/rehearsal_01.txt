@@ -1,1 +1,0 @@
-Dự án quản lý yêu cầu hỗ trợ nội bộ. Tôi viết API FastAPI nhận yêu cầu, kiểm tra dữ liệu và trả mã 400 khi thiếu trường bắt buộc. Tôi thiết kế bảng yêu cầu và giao dịch khi cập nhật trạng thái; viết pytest cho luồng thành công và lỗi.

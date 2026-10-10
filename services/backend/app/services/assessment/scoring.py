@@ -3,8 +3,9 @@ Invariants:
   1. AI NEVER computes or decides the final score or hiring recommendation.
   2. Pure, deterministic calculations using exact Decimal arithmetic.
   3. No premature rounding before threshold comparison.
-  4. Incomplete profiles have no comparable_score and cannot be ranked.
-  5. Core criteria floor (2) and threshold (70) strictly enforced from approved rubric.
+  4. A comparable score requires evidence for every explicitly required criterion;
+     missing optional criteria remain visible without suppressing the normalized score.
+  5. Floors and threshold come from the approved rubric policy; they are guidance only.
 """
 from __future__ import annotations
 
@@ -32,12 +33,22 @@ def calculate_deterministic_scores(
     core_criteria_ids: Optional[set[str]] = None,
     core_minimum_scores: Optional[dict[str, int]] = None,
     score_overrides: Mapping[str, Decimal] | None = None,
+    required_criterion_ids: Optional[set[str]] = None,
 ) -> tuple[Optional[Decimal], Decimal, Optional[Decimal], Recommendation, list[str]]:
     """Compute observed score, coverage, comparable score, recommendation, and reason codes.
     Returns:
         (observed_score, coverage, comparable_score, recommendation, reason_codes)
     """
     reason_codes: list[str] = []
+    if required_criterion_ids is None:
+        # Preserve the legacy full-coverage contract for rubrics that do not
+        # explicitly state which competencies are required.
+        required_ids = set(rubric_weights)
+    else:
+        required_ids = set(required_criterion_ids)
+        unknown_required = required_ids - set(rubric_weights)
+        if unknown_required:
+            raise ValueError(f"REQUIRED_CRITERION_NOT_IN_RUBRIC:{sorted(unknown_required)}")
     assessed_weights_sum = 0
     weighted_score_accum = Decimal("0")
     has_conflict = False
@@ -79,13 +90,19 @@ def calculate_deterministic_scores(
             (weighted_score_accum / Decimal(assessed_weights_sum)) * Decimal("100")
         ).quantize(Decimal("0.0001"))
 
-    # Comparable Score: valid ONLY when 100% of criteria are assessed without conflicts
+    missing_required = required_ids - set(scores_by_id)
+    if missing_required:
+        reason_codes.extend(f"REQUIRED_EVIDENCE_MISSING:{cid}" for cid in sorted(missing_required))
+
+    # Normalize over criteria with evidence. A rubric may explicitly allow
+    # optional competencies to be absent; their missing weight stays visible
+    # through coverage and needs_clarification, but does not erase this score.
     comparable_score: Optional[Decimal] = None
-    if assessed_weights_sum == 100 and not has_conflict and not has_insufficient:
+    if assessed_weights_sum > 0 and not missing_required and not has_conflict:
         comparable_score = observed_score
 
     # Recommendation determination
-    if has_conflict or has_insufficient or assessed_weights_sum < 100:
+    if has_conflict or has_insufficient or missing_required:
         recommendation = Recommendation.NEEDS_CLARIFICATION
     else:
         assert comparable_score is not None

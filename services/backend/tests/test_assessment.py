@@ -193,6 +193,188 @@ def test_scoring_partial_coverage_needs_clarification():
     assert rec == Recommendation.NEEDS_CLARIFICATION
 
 
+def test_scoring_nice_to_have_gap_keeps_normalized_score_and_threshold_signal():
+    """Missing nice-to-have evidence is visible but does not suppress the score/tier signal."""
+    weights = {
+        "python_backend": 25,
+        "api_design": 25,
+        "sql_data": 20,
+        "testing_debugging": 15,
+        "security_privacy": 10,
+        "delivery_ops": 5,
+    }
+    required = {"python_backend", "api_design", "sql_data"}
+    evaluations = [
+        CriterionAssessmentSchema(
+            criterion_id=cid,
+            status=(CriterionOutcome.INSUFFICIENT_EVIDENCE if cid == "delivery_ops" else CriterionOutcome.ASSESSED),
+            score=None if cid == "delivery_ops" else 2,
+            evidence=[] if cid == "delivery_ops" else [EvidenceItemSchema(span_id="spn_" + f"{i:024x}", quote="Valid quote text")],
+            rationale="CV chưa nêu rõ." if cid == "delivery_ops" else "Có evidence.",
+            missing_information=["Hỏi kinh nghiệm Git/Docker."] if cid == "delivery_ops" else [],
+        )
+        for i, cid in enumerate(weights, start=1)
+    ]
+
+    observed, coverage, comparable, recommendation, reasons = calculate_deterministic_scores(
+        evaluations,
+        weights,
+        threshold=Decimal("50"),
+        core_minimum_scores={"python_backend": 2, "api_design": 2, "sql_data": 2},
+        required_criterion_ids=required,
+    )
+
+    assert observed == Decimal("50.0000")
+    assert coverage == Decimal("0.9500")
+    assert comparable == Decimal("50.0000")
+    assert recommendation == Recommendation.NEEDS_CLARIFICATION
+    assert "INSUFFICIENT_EVIDENCE:delivery_ops" in reasons
+
+
+def test_scoring_missing_must_have_still_blocks_comparable_score_without_rejecting():
+    weights = {
+        "python_backend": 25,
+        "api_design": 25,
+        "sql_data": 20,
+        "testing_debugging": 15,
+        "security_privacy": 10,
+        "delivery_ops": 5,
+    }
+    evaluations = [
+        CriterionAssessmentSchema(
+            criterion_id=cid,
+            status=(CriterionOutcome.INSUFFICIENT_EVIDENCE if cid == "api_design" else CriterionOutcome.ASSESSED),
+            score=None if cid == "api_design" else 3,
+            evidence=[] if cid == "api_design" else [EvidenceItemSchema(span_id="spn_" + f"{i:024x}", quote="Valid quote text")],
+            rationale="CV chưa nêu rõ." if cid == "api_design" else "Có evidence.",
+            missing_information=["HR cần làm rõ API."] if cid == "api_design" else [],
+        )
+        for i, cid in enumerate(weights, start=1)
+    ]
+
+    _, _, comparable, recommendation, _ = calculate_deterministic_scores(
+        evaluations,
+        weights,
+        threshold=Decimal("50"),
+        core_minimum_scores={"python_backend": 2, "api_design": 2, "sql_data": 2},
+        required_criterion_ids={"python_backend", "api_design", "sql_data"},
+    )
+
+    assert comparable is None
+    assert recommendation == Recommendation.NEEDS_CLARIFICATION
+
+
+def test_shortlist_threshold_group_does_not_block_nice_to_have_clarification():
+    from app.services.shortlist import ShortlistTier, classify_shortlist_tier
+
+    tier = classify_shortlist_tier(
+        has_current_assessment=True,
+        comparable_score=50.0,
+        core_failed=False,
+        threshold=50.0,
+        recommendation=Recommendation.NEEDS_CLARIFICATION.value,
+    )
+    assert tier is ShortlistTier.RECOMMEND
+
+
+def test_shortlist_missing_must_have_is_clarification_not_auto_rejection():
+    from app.services.shortlist import ShortlistTier, classify_shortlist_tier
+
+    tier = classify_shortlist_tier(
+        has_current_assessment=True,
+        comparable_score=None,
+        core_failed=True,
+        threshold=50.0,
+        recommendation=Recommendation.NEEDS_CLARIFICATION.value,
+    )
+    assert tier is ShortlistTier.NEEDS_CLARIFICATION
+
+
+def test_missing_must_have_requires_information_request_before_hr_rejection():
+    from app.services.decision import (
+        requires_information_request_before_rejection,
+        resolve_required_criterion_ids,
+    )
+
+    required = {"python_backend", "api_design", "sql_data"}
+    assert requires_information_request_before_rejection(
+        Recommendation.NEEDS_CLARIFICATION.value,
+        {"python_backend": "assessed", "api_design": "insufficient_evidence", "sql_data": "assessed"},
+        required,
+    )
+    assert not requires_information_request_before_rejection(
+        Recommendation.NEEDS_CLARIFICATION.value,
+        {"python_backend": "assessed", "api_design": "assessed", "sql_data": "assessed", "delivery_ops": "conflicting_evidence"},
+        required,
+    )
+    assert resolve_required_criterion_ids(
+        {"require_full_coverage": False, "required_criterion_ids": ["python_backend"]},
+        {"python_backend", "delivery_ops"},
+    ) == {"python_backend"}
+    assert resolve_required_criterion_ids(
+        {"require_full_coverage": True, "core_minimum_scores": {}},
+        {"python_backend", "delivery_ops"},
+    ) == {"python_backend", "delivery_ops"}
+    assert not requires_information_request_before_rejection(
+        Recommendation.NEEDS_CLARIFICATION.value,
+        {"python_backend": "assessed", "api_design": "conflicting_evidence", "sql_data": "assessed"},
+        required,
+    )
+    assert not requires_information_request_before_rejection(
+        Recommendation.NEEDS_CLARIFICATION.value,
+        {"python_backend": "assessed", "api_design": "assessed", "sql_data": "assessed", "delivery_ops": "insufficient_evidence"},
+        required,
+    )
+
+
+def test_rejection_after_clarification_requires_recorded_resolution_or_independent_basis():
+    from app.domain.enums import DecisionOutcome
+    from app.services.decision import clarification_disposition_error, is_matching_information_request
+
+    required = {"python_backend", "api_design", "sql_data"}
+    must_gap = {"python_backend": "assessed", "api_design": "insufficient_evidence", "sql_data": "assessed"}
+    assert clarification_disposition_error(
+        Recommendation.NEEDS_CLARIFICATION.value, DecisionOutcome.NOT_ADVANCE.value,
+        must_gap, required, None, "candidate_confirmed_no_experience",
+    ) == "MUST_HAVE_INFORMATION_REQUEST_REQUIRED"
+    assert clarification_disposition_error(
+        Recommendation.NEEDS_CLARIFICATION.value, DecisionOutcome.NOT_ADVANCE.value,
+        must_gap, required, DecisionOutcome.REQUEST_INFORMATION.value, None,
+    ) == "CLARIFICATION_RESOLUTION_REQUIRED"
+    assert clarification_disposition_error(
+        Recommendation.NEEDS_CLARIFICATION.value, DecisionOutcome.NOT_ADVANCE.value,
+        must_gap, required, DecisionOutcome.REQUEST_INFORMATION.value, "candidate_confirmed_no_experience",
+    ) is None
+    assert clarification_disposition_error(
+        Recommendation.NEEDS_CLARIFICATION.value, DecisionOutcome.NOT_ADVANCE.value,
+        must_gap, required, DecisionOutcome.REQUEST_INFORMATION.value, "no_response_after_contact",
+    ) is None
+
+    optional_gap = {"python_backend": "assessed", "api_design": "assessed", "sql_data": "assessed", "delivery_ops": "insufficient_evidence"}
+    assert clarification_disposition_error(
+        Recommendation.NEEDS_CLARIFICATION.value, DecisionOutcome.NOT_ADVANCE.value,
+        optional_gap, required, None, None,
+    ) == "NICE_TO_HAVE_INDEPENDENT_BASIS_REQUIRED"
+    assert clarification_disposition_error(
+        Recommendation.NEEDS_CLARIFICATION.value, DecisionOutcome.NOT_ADVANCE.value,
+        optional_gap, required, None, "independent_evidence_based_reason",
+    ) is None
+
+    from types import SimpleNamespace
+    app_id = uuid.uuid4()
+    attestation = SimpleNamespace(document_id="doc-1", rubric_version_id="rubric-1", application_generation=3)
+    matching_request = SimpleNamespace(
+        outcome=DecisionOutcome.REQUEST_INFORMATION,
+        application_id=app_id,
+        document_id="doc-1",
+        rubric_version_id="rubric-1",
+        source_snapshot={"application_generation": 3},
+    )
+    assert is_matching_information_request(matching_request, app_id, attestation)
+    matching_request.source_snapshot = {"application_generation": 2}
+    assert not is_matching_information_request(matching_request, app_id, attestation)
+
+
 # ---------------- Unit Tests: Schema & Provenance Validation (B10) ---------------- #
 
 

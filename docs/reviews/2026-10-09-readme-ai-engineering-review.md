@@ -24,11 +24,11 @@ These repositories are references, not upstream implementations or endorsements.
 - **Hybrid retrieval:** E5/pgvector cosine ranking plus PostgreSQL `simple` full-text tokenization and `ts_rank_cd`, fused with RRF (`k=60`). Do not advertise BM25, a cross-encoder, or learned rank fusion.
 - **Jev role:** optional classification of approved criterion–passage relevance. It is not a hiring agent or an applicant score. The legacy secondary scoring shadow is separate and mutually exclusive.
 - **Agent role:** read-only evidence tools, bounded calls, exact citation validation, and one repair allowance. Durable job/run state is stored in PostgreSQL; the transient graph has no checkpointer.
-- **Evaluation:** 480/480 E5 + mock runs measure recorded synthetic execution and evidence coverage. They do not establish live scoring accuracy or HR agreement.
-- **Jev evidence:** real provider calls occurred, but negative evidence losses, a confounded off/enabled comparison, and an unresolved invocation prevent activation. The post-fix implementation has not had a paid rerun.
+- **Evaluation:** Old synthetic result bundles have been removed from the working tree. The new independent human-labeled protocol is in place, but has no real labels or quality results yet.
+- **Jev evidence:** Keep Jev disabled for applicant decisions until its data processing is approved and the new independent evaluation gates pass.
 - **Verification counts:** 506 backend passes/one opt-in skip, 23 frontend passes, and an eight-route production build are dated recorded results, not a fresh suite run for this documentation edit.
 
-Sources: [retrieval](../../services/backend/app/services/retrieval.py), [graph](../../services/backend/app/services/agent/assessment_graph.py), [Jev contracts](../../services/backend/app/services/reranking/contracts.py), [controlled retrieval results](../evaluation/rag-packing-results-2026-10-09.md), [Jev results](../evaluation/jev-reranking-results-2026-10-09.md), and [verification](2026-10-09-jev-reranking-verification.md).
+Sources: [retrieval](../../services/backend/app/services/retrieval.py), [graph](../../services/backend/app/services/agent/assessment_graph.py), [Jev contracts](../../services/backend/app/services/reranking/contracts.py), [human-labeled evaluation design](../evaluation/independent-human-evaluation-design.md), and [verification](../verification.md).
 
 ## Remaining presentation and evidence gaps
 

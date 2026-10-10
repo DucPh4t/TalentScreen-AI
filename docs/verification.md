@@ -7,9 +7,7 @@ This page separates reproducible software checks from model-quality claims. It r
 ```bash
 make test
 
-.venv/bin/python scripts/run_rag_benchmark.py \
-  --dataset fixtures/rag_benchmark/synthetic.jsonl \
-  --output /tmp/talentscreen-rag-benchmark.json
+PYTHONPATH=services/backend .venv/bin/python scripts/evaluate_human_labels.py --help
 ```
 
 `make test` starts a disposable PostgreSQL/pgvector container, migrates an empty schema, runs the backend suite, and builds the frontend. It does not run against the application's configured database. The runner clears primary/secondary API keys, disables Jev, and selects the full-text baseline; targeted hybrid tests use deterministic embedding fixtures. Model/embedding behavior is mocked or deterministic in the suite; no live-provider key is needed.
@@ -19,12 +17,12 @@ make test
 | Backend regression suite | 242 tests passed | Workflow and software contracts. |
 | Alembic from empty database | Passed through `43de8b507ac2` | Forward migration chain to current schema. |
 | Next.js production build | Passed | Compilation and TypeScript checks. |
-| Synthetic benchmark CLI | Passed; four development fixture rows | Schema, manifest and aggregate reporting; no model inference. |
+| New human-labeled evaluator tests | See `services/backend/tests/test_human_labeled_evaluation.py` | Hand-calculated metric formulas, schema checks, split leakage, blind double labels, and hash verification; these are unit tests, not benchmark results. |
 | Browser workflow | Passed on isolated synthetic services | Auth, navigation, queue, JD/rubric, candidate review, retention, legacy redirect. |
 | Responsive checks | 320 / 390 / 820 / 1440 px | Checked layouts had no page-level overflow; comparison tables intentionally scroll internally. |
 | Keyboard dialog checks | Passed | Focus containment, Escape dismissal, focus restoration. |
 
-The synthetic report identifies `data_scope: synthetic_only` and `readiness: NOT_AUTHORIZED_FOR_LIVE_DECISIONS`. Its values exercise evaluator behavior; they are not measured provider quality.
+The new evaluation protocol has not yet run on independent HR/IT labels. Existing synthetic fixtures and the legacy benchmark CLI are retained for software regression only and must not be presented as measured provider quality.
 
 One existing Starlette deprecation warning was emitted for the legacy HTTP 413 constant in an intake test; it did not fail the suite.
 
@@ -39,7 +37,7 @@ One existing Starlette deprecation warning was emitted for the legacy HTTP 413 c
 | Provider failures, spend reservation/settlement, requisition cap | [test_llm_adapter.py](../services/backend/tests/test_llm_adapter.py), [test_admin_observability.py](../services/backend/tests/test_admin_observability.py) |
 | Jev contracts and migration | [test_jev_provider.py](../services/backend/tests/test_jev_provider.py), [test_jev_shadow_migration.py](../services/backend/tests/test_jev_shadow_migration.py) |
 | Auth/CSRF, cross-scope access, decisions, deletion | [test_auth.py](../services/backend/tests/test_auth.py), [test_sec_regression.py](../services/backend/tests/test_sec_regression.py), [test_decisions.py](../services/backend/tests/test_decisions.py), [test_deletion.py](../services/backend/tests/test_deletion.py) |
-| Benchmark schema/privacy, criterion metrics, manifests, aggregate reporting | [test_rag_benchmark_cli.py](../services/backend/tests/test_rag_benchmark_cli.py), [test_evaluation_metrics.py](../services/backend/tests/test_evaluation_metrics.py) |
+| Legacy synthetic evaluator schema; independent human-label metrics | [test_rag_benchmark_cli.py](../services/backend/tests/test_rag_benchmark_cli.py), [test_evaluation_metrics.py](../services/backend/tests/test_evaluation_metrics.py), [test_human_labeled_evaluation.py](../services/backend/tests/test_human_labeled_evaluation.py) |
 
 This is a map of tests, not a code-coverage percentage or security certification.
 
@@ -59,7 +57,7 @@ Browser checks used a disposable synthetic database and mock primary provider; J
 | Live providers | Configured primary/optional shadow workflows, failure behavior, usage/invoice reconciliation. |
 | Operations | Representative load/SLOs, alerts, incident/rollback drills, deletion plus restore-and-repurge verification. |
 
-The [protocol](evaluation/rag-agent-benchmark-protocol.md) and [G1–G7 gates](runbooks/rag-agent-readiness.md) define this work. Mock/synthetic passes do not establish these outcomes.
+The [independent human-labeled protocol](evaluation/independent-human-evaluation-design.md) and [G1–G7 gates](runbooks/rag-agent-readiness.md) define this work. Mock/synthetic passes do not establish these outcomes.
 
 ## README presentation references
 

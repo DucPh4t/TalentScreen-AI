@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from app.db.models import (
     Application,
     AssessmentRun,
+    CriterionAssessment,
     Decision,
     Document,
     HRRevision,
@@ -59,10 +60,84 @@ from app.schemas.decision import (
     HRRevisionUpdateRequest,
     ReviewAttestationResponse,
 )
-from app.services.assessment.scoring import calculate_deterministic_scores
+from app.services.assessment.scoring import DEFAULT_THRESHOLD, calculate_deterministic_scores
 from app.services.audit import record_audit_event
 
 logger = logging.getLogger(__name__)
+
+
+def requires_information_request_before_rejection(
+    recommendation: str | None,
+    criterion_statuses: dict[str, str],
+    required_criterion_ids: set[str],
+) -> bool:
+    """Official v3 flow requires contact first when must-have evidence is absent."""
+    if recommendation != Recommendation.NEEDS_CLARIFICATION.value:
+        return False
+    return any(criterion_statuses.get(criterion_id) == CriterionOutcome.INSUFFICIENT_EVIDENCE.value
+               for criterion_id in required_criterion_ids)
+
+
+def clarification_disposition_error(
+    recommendation: str | None,
+    outcome: str,
+    criterion_statuses: dict[str, str],
+    required_criterion_ids: set[str],
+    previous_outcome: str | None,
+    clarification_resolution: str | None,
+) -> str | None:
+    """Require an auditable HR disposition before rejecting an unclear assessment.
+
+    Missing must-have evidence needs a recorded contact step and candidate
+    confirmation/non-response. Missing nice-to-have evidence alone cannot be
+    the reason for rejection; HR must attest to an independent evidence-based
+    reason. Conflicts retain their separate existing HR-review path.
+    """
+    if recommendation != Recommendation.NEEDS_CLARIFICATION.value or outcome != DecisionOutcome.NOT_ADVANCE.value:
+        return None
+
+    missing_required = any(
+        criterion_statuses.get(criterion_id) == CriterionOutcome.INSUFFICIENT_EVIDENCE.value
+        for criterion_id in required_criterion_ids
+    )
+    if missing_required:
+        if previous_outcome != DecisionOutcome.REQUEST_INFORMATION.value:
+            return "MUST_HAVE_INFORMATION_REQUEST_REQUIRED"
+        if clarification_resolution not in {"candidate_confirmed_no_experience", "no_response_after_contact"}:
+            return "CLARIFICATION_RESOLUTION_REQUIRED"
+
+    missing_optional = any(
+        status_value == CriterionOutcome.INSUFFICIENT_EVIDENCE.value
+        and criterion_id not in required_criterion_ids
+        for criterion_id, status_value in criterion_statuses.items()
+    )
+    if not missing_required and missing_optional and clarification_resolution != "independent_evidence_based_reason":
+        return "NICE_TO_HAVE_INDEPENDENT_BASIS_REQUIRED"
+    return None
+
+
+def is_matching_information_request(previous: Any, application_id: uuid.UUID, attestation: Any) -> bool:
+    """A contact decision only unlocks the same application source and rubric generation."""
+    if not previous or previous.outcome != DecisionOutcome.REQUEST_INFORMATION:
+        return False
+    snapshot = previous.source_snapshot or {}
+    return (
+        previous.application_id == application_id
+        and previous.document_id == attestation.document_id
+        and previous.rubric_version_id == attestation.rubric_version_id
+        and snapshot.get("application_generation") == attestation.application_generation
+    )
+
+
+def resolve_required_criterion_ids(policy: dict[str, Any], rubric_criterion_ids: set[str]) -> set[str]:
+    """Resolve explicit policy, preserving legacy full-coverage rubrics."""
+    explicit = policy.get("required_criterion_ids")
+    if isinstance(explicit, list):
+        return set(explicit)
+    floors = policy.get("core_minimum_scores")
+    if isinstance(floors, dict) and floors:
+        return set(floors)
+    return set(rubric_criterion_ids) if policy.get("require_full_coverage", True) else set()
 
 
 async def _verify_application_and_membership(
@@ -209,14 +284,16 @@ async def create_hr_revision(
 
     # Compute deterministic scores server-side with dynamic rubric policy
     policy = rubric.threshold_config or {}
-    t_val = Decimal(str(policy.get("threshold", "70.0")))
+    t_val = Decimal(str(policy.get("threshold", DEFAULT_THRESHOLD)))
     core_mins = policy.get("core_minimum_scores") if isinstance(policy.get("core_minimum_scores"), dict) else None
+    required_ids = set(policy["required_criterion_ids"]) if isinstance(policy.get("required_criterion_ids"), list) else None
 
     obs, cov, comp, rec, _ = calculate_deterministic_scores(
         payload.criteria,
         weights_by_id,
         threshold=t_val,
         core_minimum_scores=core_mins,
+        required_criterion_ids=required_ids,
     )
 
     # Determine revision sequence number
@@ -378,14 +455,16 @@ async def update_hr_revision(
     stmt_rubric = select(RubricVersion).where(RubricVersion.id == rev.rubric_version_id)
     rubric_obj = (await db.execute(stmt_rubric)).scalar_one_or_none()
     policy = (rubric_obj.threshold_config or {}) if rubric_obj else {}
-    t_val = Decimal(str(policy.get("threshold", "70.0")))
+    t_val = Decimal(str(policy.get("threshold", DEFAULT_THRESHOLD)))
     core_mins = policy.get("core_minimum_scores") if isinstance(policy.get("core_minimum_scores"), dict) else None
+    required_ids = set(policy["required_criterion_ids"]) if isinstance(policy.get("required_criterion_ids"), list) else None
 
     obs, cov, comp, rec, _ = calculate_deterministic_scores(
         payload.criteria,
         weights_by_id,
         threshold=t_val,
         core_minimum_scores=core_mins,
+        required_criterion_ids=required_ids,
     )
 
     rev.criteria_payload = {"criteria": [c.model_dump() for c in payload.criteria]}
@@ -805,6 +884,66 @@ async def create_decision(
 
         rec_val = rec_status.value if hasattr(rec_status, "value") else str(rec_status) if rec_status else None
 
+        clarification_statuses: dict[str, str] = {}
+        if attestation.run_id:
+            stmt_criteria = select(CriterionAssessment).where(CriterionAssessment.run_id == attestation.run_id)
+            for criterion in (await db.execute(stmt_criteria)).scalars().all():
+                clarification_statuses[criterion.criterion_id] = criterion.status.value if hasattr(criterion.status, "value") else str(criterion.status)
+        elif attestation.hr_revision_id:
+            revision = await db.get(HRRevision, attestation.hr_revision_id)
+            revision_criteria = ((revision.criteria_payload or {}).get("criteria") or []) if revision else []
+            clarification_statuses = {
+                item.get("criterion_id"): item.get("status")
+                for item in revision_criteria
+                if item.get("criterion_id") and item.get("status")
+            }
+
+        policy_rubric = await db.get(RubricVersion, attestation.rubric_version_id) if attestation.rubric_version_id else None
+        policy = (policy_rubric.threshold_config or {}) if policy_rubric else {}
+        rubric_ids = set((await db.execute(
+            select(RubricCriterion.criterion_id).where(
+                RubricCriterion.rubric_version_id == attestation.rubric_version_id
+            )
+        )).scalars().all()) if attestation.rubric_version_id else set()
+        required_ids = resolve_required_criterion_ids(policy, rubric_ids)
+        has_conflicting_evidence = any(
+            value == CriterionOutcome.CONFLICTING_EVIDENCE.value
+            for value in clarification_statuses.values()
+        )
+        previous = await db.get(Decision, app_obj.current_decision_id) if (
+            payload.outcome == DecisionOutcome.NOT_ADVANCE
+            and rec_val == Recommendation.NEEDS_CLARIFICATION.value
+            and app_obj.current_decision_id
+        ) else None
+        previous_outcome = (
+            DecisionOutcome.REQUEST_INFORMATION.value
+            if is_matching_information_request(previous, application_id, attestation)
+            else None
+        )
+        disposition_error = clarification_disposition_error(
+            rec_val,
+            payload.outcome.value if hasattr(payload.outcome, "value") else str(payload.outcome),
+            clarification_statuses,
+            required_ids,
+            previous_outcome,
+            payload.clarification_resolution,
+        )
+        if disposition_error == "MUST_HAVE_INFORMATION_REQUEST_REQUIRED":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="MUST_HAVE_CLARIFICATION_REQUIRED: HR phải ghi nhận yêu cầu bổ sung thông tin trước khi cân nhắc từ chối.",
+            )
+        if disposition_error == "CLARIFICATION_RESOLUTION_REQUIRED":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="CLARIFICATION_RESOLUTION_REQUIRED: Ghi nhận ứng viên xác nhận chưa có năng lực hoặc không phản hồi sau khi được liên hệ.",
+            )
+        if disposition_error == "NICE_TO_HAVE_INDEPENDENT_BASIS_REQUIRED":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="NICE_TO_HAVE_INDEPENDENT_BASIS_REQUIRED: Thiếu nice-to-have không phải căn cứ từ chối; HR phải ghi nhận căn cứ độc lập dựa trên evidence khác.",
+            )
+
         diverged = False
         if rec_val == Recommendation.CONSIDER_NEXT_ROUND.value and payload.outcome == DecisionOutcome.NOT_ADVANCE:
             diverged = True
@@ -856,7 +995,10 @@ async def create_decision(
         rubric_version_id=attestation.rubric_version_id,
         outcome=payload.outcome,
         reason=payload.reason,
-        override_reason=payload.override_reason,
+        override_reason=(
+            f"clarification_resolution={payload.clarification_resolution}; {payload.override_reason or payload.reason}"
+            if payload.clarification_resolution else payload.override_reason
+        ),
         attestation_id=attestation.id,
         run_id=attestation.run_id,
         hr_revision_id=attestation.hr_revision_id,

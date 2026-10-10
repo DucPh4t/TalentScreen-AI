@@ -111,7 +111,7 @@ async def test_shortlist_engine_and_ranking(test_session_factory, sample_docx_cv
     headers = {"X-CSRF-Token": ctx["o_csrf"]}
 
     async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies, headers=headers) as client:
-        res = await client.get(f"/api/v1/requisitions/{ctx['req_id']}/shortlist?threshold=70")
+        res = await client.get(f"/api/v1/requisitions/{ctx['req_id']}/shortlist")
         assert res.status_code == 200, res.text
         data = res.json()
         assert data["requisition_id"] == str(ctx["req_id"])

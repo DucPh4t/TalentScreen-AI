@@ -1,0 +1,60 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "human-evaluation-package.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_name": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Source Name",
+      "type": "string"
+    },
+    "source_snapshot": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Source Snapshot",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "permission_ref": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Permission Ref",
+      "type": "string"
+    },
+    "files": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "object"
+    },
+    "source_files": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "minProperties": 1,
+      "title": "Source Files",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source_name",
+    "source_snapshot",
+    "source_sha256",
+    "permission_ref",
+    "files",
+    "source_files"
+  ],
+  "title": "Human evaluation package manifest",
+  "type": "object",
+  "$id": "https://talentscreen.local/schemas/human-evaluation-manifest-v1.schema.json"
+}

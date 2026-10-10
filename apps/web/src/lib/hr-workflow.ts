@@ -1,9 +1,11 @@
 export type ScreeningOutcome = 'advance' | 'request_information' | 'not_advance';
+export type ClarificationResolution = 'candidate_confirmed_no_experience' | 'no_response_after_contact' | 'independent_evidence_based_reason';
 export const outcomeLabels: Record<string, string> = {
   advance: 'Mời phỏng vấn', request_information: 'Chờ bổ sung thông tin', not_advance: 'Không tiếp tục', propose_hire: 'Đề xuất tuyển',
 };
-export function screeningPayload(result: {kind:'assessment_run'|'hr_revision';id:string}, reviewed: string[], outcome: ScreeningOutcome, reason: string, previous: string | null, rubricId: string) {
+export function screeningPayload(result: {kind:'assessment_run'|'hr_revision';id:string}, reviewed: string[], outcome: ScreeningOutcome, reason: string, previous: string | null, rubricId: string, clarificationResolution?: ClarificationResolution | null) {
   return { effective_result: result, reviewed_criterion_ids: reviewed, acknowledged:true, outcome, reason:reason.trim(),
+    clarification_resolution: clarificationResolution || null,
     expected_previous_decision_id:previous, expected_rubric_version_id:rubricId };
 }
 export function workflowTab(stage: string): 'sanitization'|'assessment'|'revision'|'interview' {

@@ -26,7 +26,7 @@ import HRRevisionEditor from "@/components/HRRevisionEditor";
 import RawPdfViewer from "@/components/RawPdfViewer";
 import ScreeningDecision from "@/components/ScreeningDecision";
 import InterviewWorkspace from "@/components/InterviewWorkspace";
-import {screeningPayload, workflowTab, preserveEditBase, refreshInterviewCards} from "@/lib/hr-workflow";
+import {screeningPayload, workflowTab, preserveEditBase, refreshInterviewCards, type ClarificationResolution} from "@/lib/hr-workflow";
 import { evidenceReviewMessage } from "@/lib/reranking-summary";
 import { stageLabels } from "@/lib/workflow";
 import { SkeletonDossier } from "@/components/Skeleton";
@@ -110,6 +110,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
   // Decision Form state
   const [decisionOutcome, setDecisionOutcome] = useState<"advance" | "request_information" | "not_advance">("request_information");
   const [decisionReason, setDecisionReason] = useState("");
+  const [clarificationResolution, setClarificationResolution] = useState<ClarificationResolution|null>(null);
   const [attestCheck1, setAttestCheck1] = useState(false);
 
   const [submittingDecision, setSubmittingDecision] = useState(false);
@@ -136,6 +137,16 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
     && card.rubric_version_id === requisition?.current_rubric_version_id
   ) || null;
   const effectiveRevision = hrRevisions.find(r => r.status === "finalized" && !r.is_stale && r.application_generation === application?.generation && r.document_id === application?.current_document_id && r.sanitized_version_id === application?.current_sanitized_version_id && r.rubric_version_id === requisition?.current_rubric_version_id);
+  const effectiveCriteria = effectiveRevision?.criteria_payload?.criteria || assessmentRun?.criteria || [];
+  const policyRequiredIds = rubric?.threshold_config?.required_criterion_ids;
+  const requiredCriterionIds = new Set<string>(Array.isArray(policyRequiredIds)
+    ? policyRequiredIds
+    : rubric?.threshold_config?.require_full_coverage === false ? [] : (rubric?.criteria || []).map((criterion:any) => criterion.id));
+  const hasMissingRequiredEvidence = effectiveCriteria.some((criterion:any) => requiredCriterionIds.has(criterion.criterion_id) && criterion.status === "insufficient_evidence");
+  const hasMissingOptionalEvidence = effectiveCriteria.some((criterion:any) => !requiredCriterionIds.has(criterion.criterion_id) && criterion.status === "insufficient_evidence");
+  const clarificationResolutionOptions:ClarificationResolution[] = hasMissingRequiredEvidence
+    ? ["candidate_confirmed_no_experience", "no_response_after_contact"]
+    : hasMissingOptionalEvidence ? ["independent_evidence_based_reason"] : [];
 
   function closeRawPreview(expired = false) {
     setRawPreviewBlob(null);
@@ -409,9 +420,9 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
 
       await api.recordScreeningDecision(id,screeningPayload(
         {kind:effectiveKind,id:effectiveId},reviewedIds,decisionOutcome,decisionReason,
-        application.current_decision_id || null,rubric.id));
+        application.current_decision_id || null,rubric.id,clarificationResolution));
       success("Đã ghi kết luận sàng lọc của HR.");
-      setAttestCheck1(false);setDecisionReason("");
+      setAttestCheck1(false);setDecisionReason("");setClarificationResolution(null);
       await loadData();
       try {
         const freshDraft = await api.generateEmailDraft(id);
@@ -908,11 +919,16 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                     )}
                     <div style={{ marginTop: "0.35rem" }}>
                       <span className={`badge ${assessmentRun.recommendation === "consider_next_round" ? "badge-rec-advance" : assessmentRun.recommendation === "needs_clarification" ? "badge-rec-clarify" : "badge-rec-review"}`} style={{ fontSize: "0.875rem", padding: "0.35rem 0.85rem" }}>
-                        {assessmentRun.recommendation === "consider_next_round" && "Cân nhắc vòng tiếp theo"}
-                        {assessmentRun.recommendation === "needs_clarification" && "Cần làm rõ thông tin"}
-                        {assessmentRun.recommendation === "review_required" && "Cần HR đối chiếu trực tiếp"}
+                        {assessmentRun.recommendation === "consider_next_round" && "Đạt ngưỡng tham khảo — HR/IT cân nhắc vòng tiếp theo"}
+                        {assessmentRun.recommendation === "needs_clarification" && "Cần HR làm rõ evidence — chưa phải kết luận loại"}
+                        {assessmentRun.recommendation === "review_required" && "Cần HR/IT xem xét — không tự động loại"}
                       </span>
                     </div>
+                    {assessmentRun.recommendation === "needs_clarification" && (
+                      <p style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "0.5rem", maxWidth: "58rem" }}>
+                        Thiếu nice-to-have chỉ tạo câu hỏi làm rõ; điểm vẫn được tính trên evidence hiện có. Nếu thiếu must-have hoặc có evidence mâu thuẫn, HR cần rà soát và ghi nhận yêu cầu bổ sung trước khi cân nhắc từ chối. Hệ thống không tự loại hồ sơ.
+                      </p>
+                    )}
                   </div>
 
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", alignItems: "center" }}>
@@ -934,10 +950,10 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
                         {assessmentRun.observed_score ?? "N/A"}<span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>/100</span>
                       </div>
                     </div>
-                    <div title="Điểm dùng để xếp hạng ứng viên với nhau. Chỉ xuất hiện khi 100% tiêu chí được đánh giá đầy đủ, không thiếu bằng chứng hoặc mâu thuẫn">
+                    <div title="Điểm chuẩn hóa trên các tiêu chí có evidence. Độ phủ và tiêu chí cần làm rõ luôn hiển thị riêng; thiếu must-have hoặc evidence mâu thuẫn thì không có điểm đối chiếu.">
                       <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                        <span>Điểm Đối Chiếu</span>
-                        <span style={{ cursor: "help", color: "var(--text-muted)", fontSize: "0.75rem" }} title="Điểm dùng để xếp hạng ứng viên với nhau. Chỉ xuất hiện khi 100% tiêu chí được đánh giá đầy đủ, không thiếu bằng chứng hoặc mâu thuẫn">ⓘ</span>
+                        <span>Điểm chuẩn hóa</span>
+                        <span style={{ cursor: "help", color: "var(--text-muted)", fontSize: "0.75rem" }} title="Điểm chuẩn hóa trên các tiêu chí có evidence. Độ phủ và tiêu chí cần làm rõ luôn hiển thị riêng; thiếu must-have hoặc evidence mâu thuẫn thì không có điểm đối chiếu.">ⓘ</span>
                       </div>
                       <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
                         {assessmentRun.comparable_score ?? "N/A"}<span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>/100</span>
@@ -1330,6 +1346,7 @@ export default function ApplicationWorkspacePage({ params }: PageProps) {
           <ScreeningDecision decisions={decisions} canManage={canManage} busy={submittingDecision}
             blocked={!!loadWarnings.length || (!assessmentRun && !effectiveRevision)} reviewed={reviewedIds.length} total={rubric?.criteria?.length || 0}
             outcome={decisionOutcome} setOutcome={setDecisionOutcome} reason={decisionReason} setReason={setDecisionReason}
+            clarificationResolution={clarificationResolution} setClarificationResolution={setClarificationResolution} resolutionOptions={clarificationResolutionOptions}
             acknowledged={attestCheck1} setAcknowledged={setAttestCheck1} onSubmit={handleSubmitDecision}
             onEvidence={()=>setActiveTab("assessment")} recommendation={effectiveRevision?.recommendation || assessmentRun?.recommendation}
             basis={effectiveRevision?`Bản điều chỉnh HR #${effectiveRevision.revision_no}`:"Đánh giá AI và bằng chứng trên CV"}

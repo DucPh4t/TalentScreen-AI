@@ -1,1 +1,0 @@
-Tôi bổ sung kiểm tra vai trò trước khi trả hồ sơ và bỏ email khỏi log. Delivery: configured a Docker health check and rehearsed a rollback after a broken release.

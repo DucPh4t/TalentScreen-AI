@@ -1,5 +1,7 @@
 # Jev Evidence Reranking Implementation Plan
 
+> Archived 10 October 2026. The separate pairwise rerank dataset and benchmark evaluator described below were removed. Reranking code remains; use the active 100-case synthetic Backend Python set for regression-only experiments.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a measured, optional Jev passage-reranking stage before DeepSeek, including scoped agent retrieval, durable provenance, cost control and conservative sandbox gating.
@@ -161,7 +163,7 @@ For DB tests use `bash scripts/test_backend_isolated.sh <test paths>` from the w
 
 ### Task 8: Regression, admitted live synthetic experiment and honest release evidence
 
-**Files:** Update `README.md`, `docs/architecture.md`, `docs/evaluation/ai-benchmark-reproducibility.md`; create `docs/runbooks/jev-reranking.md` and dated review/result artifacts under `docs/reviews/` and `docs/evaluation/`. Raw private journals stay ignored under `reports/`.
+**Files:** Update `README.md`, `docs/architecture.md`, `docs/evaluation/independent-human-evaluation-design.md`; create `docs/runbooks/jev-reranking.md` and dated review/result artifacts under `docs/reviews/` and `docs/evaluation/`. Raw private journals stay ignored under `reports/`.
 
 **Interfaces:** Consume completed Tasks 1–7. Produce a measured report with code/config/data/model/rate provenance, activation recommendation, explicit limitations and rollback instructions; no new runtime API.
 

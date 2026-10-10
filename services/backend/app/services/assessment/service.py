@@ -54,13 +54,13 @@ from app.services.assessment.prompt import (
     HYBRID_ASSESSMENT_PROMPT_VERSION,
     get_assessment_prompt,
 )
-from app.services.assessment.scoring import calculate_deterministic_scores
+from app.services.assessment.scoring import DEFAULT_THRESHOLD, calculate_deterministic_scores
 from app.services.agent.assessment_graph import AgentExecutionError, run_assessment_agent
 from app.services.audit import record_audit_event
 from app.services.llm.orchestrator import PreconditionViolationError, execute_bounded_llm_call
 from app.services.llm.provider import BaseLLMProvider
 from app.services.llm.types import CompletionRequest, StrictReservationPolicy
-from app.services.llm.call_policy import JevReservationPolicy
+from app.services.llm.call_policy import JevReservationPolicy, MAX_JEV_OUTPUT_TOKENS
 from app.services.llm.ledger import get_or_create_active_budget_period
 from app.domain.enums import BudgetScope
 from app.services.jev import JevDecisionResponse, JevQuestion, get_jev_provider
@@ -77,6 +77,47 @@ from app.services.assessment.policy import AssessmentExecutionPolicy, load_execu
 
 logger = logging.getLogger(__name__)
 MAX_ASSESSMENT_EVIDENCE_CHARS = 24_000
+
+_SAFE_JEV_PRIMARY_ERROR_CODES = frozenset({
+    "JEV_PRIMARY_RUBRIC_ANCHORS_INVALID",
+    "JEV_PRIMARY_RUBRIC_INVALID",
+    "JEV_PRIMARY_CRITERION_SET_INVALID",
+    "JEV_PRIMARY_EVIDENCE_PROVENANCE_INVALID",
+    "JEV_PRIMARY_MODEL_MISMATCH",
+    "JEV_PRIMARY_ANSWER_SET_INVALID",
+    "JEV_PRIMARY_ANSWER_FIELDS_MISSING",
+    "JEV_PRIMARY_ANSWER_TYPE_INVALID",
+    "JEV_PRIMARY_ANSWER_VALUES_INVALID",
+    "JEV_PRIMARY_PROBABILITY_LEVELS_INVALID",
+    "JEV_PRIMARY_PROBABILITY_VALUES_INVALID",
+    "JEV_PRIMARY_PROBABILITY_MASS_INVALID",
+    "JEV_PRIMARY_SCORE_DISTRIBUTION_MISMATCH",
+})
+
+_SAFE_JEV_NARRATIVE_ERROR_CODES = frozenset({
+    "JEV_NARRATIVE_INVALID",
+    "JEV_NARRATIVE_CRITERION_SET_INVALID",
+    "JEV_NARRATIVE_UNSUPPORTED_CITATION",
+})
+
+
+def _jev_narrative_error_code(exc: Exception) -> str:
+    if isinstance(exc, PreconditionViolationError):
+        return str(exc).split(":", 1)[0][:64]
+    if isinstance(exc, ValueError) and str(exc) in _SAFE_JEV_NARRATIVE_ERROR_CODES:
+        return str(exc)
+    return type(exc).__name__[:64]
+
+
+
+
+def _jev_primary_error_code(exc: Exception) -> str:
+    if isinstance(exc, PreconditionViolationError):
+        return str(exc).split(":", 1)[0][:64]
+    if isinstance(exc, ValueError) and str(exc) in _SAFE_JEV_PRIMARY_ERROR_CODES:
+        return str(exc)
+    return type(exc).__name__[:64]
+
 
 
 def _assessment_scorer_snapshot(settings) -> dict[str, Any]:
@@ -481,6 +522,7 @@ async def execute_assessment_job(
     strict_reservation_policy: StrictReservationPolicy | None = None,
     rerank_provider_override: BaseLLMProvider | None = None,
     rerank_financial_policy=None,
+    jev_provider_override: BaseLLMProvider | None = None,
 ) -> None:
     """Execute an assessment against the prompt and retrieval strategy frozen at enqueue."""
     now = datetime.now(timezone.utc)
@@ -845,7 +887,7 @@ async def execute_assessment_job(
                         separators=(",", ":"),
                     ),
                     model=run.snapshot["scorer_model"],
-                    max_output_tokens=0,
+                    max_output_tokens=MAX_JEV_OUTPUT_TOKENS,
                     timeout_seconds=float(settings.LLM_READ_TIMEOUT_SECONDS),
                     response_format=None,
                     provider="jev",
@@ -859,7 +901,7 @@ async def execute_assessment_job(
                     logical_step="jev_primary_score",
                     attempt_no=1,
                     sanitized_version_id=run.sanitized_version_id,
-                    provider_override=get_jev_provider(),
+                    provider_override=jev_provider_override if jev_provider_override is not None else get_jev_provider(),
                 )
                 response = JevDecisionResponse.model_validate_json(jev_result.content or "")
                 jev_scores = validate_jev_primary_response(
@@ -868,11 +910,7 @@ async def execute_assessment_job(
         except Exception as exc:
             # No retry and no DeepSeek fallback: evidence remains visible, but
             # score fields stay empty and the run is marked for HR review.
-            jev_error_code = (
-                str(exc).split(":", 1)[0][:64]
-                if isinstance(exc, PreconditionViolationError)
-                else type(exc).__name__[:64]
-            )
+            jev_error_code = _jev_primary_error_code(exc)
             logger.warning("Jev primary scoring failed for run %s (%s).", run.id, jev_error_code)
         if eligible_ids:
             app_check = (await db.execute(stmt_app_check)).first()
@@ -912,10 +950,13 @@ async def execute_assessment_job(
                     ),
                     user_prompt=json.dumps(narrative_payload, ensure_ascii=False, separators=(",", ":")),
                     model=run.snapshot["explanation_model"],
+                    response_format={"type": "json_object"},
                     max_output_tokens=2048,
+                    thinking_mode="disabled",
                     timeout_seconds=float(settings.LLM_READ_TIMEOUT_SECONDS),
                     provider="deepseek",
                     purpose="jev_primary_explanation",
+                    strict_reservation_policy=strict_reservation_policy,
                 )
                 narrative_result = await execute_bounded_llm_call(
                     db=db,
@@ -946,10 +987,11 @@ async def execute_assessment_job(
                     "jev_primary": {**run.execution_trace["jev_primary"], "explanation_outcome": "succeeded"},
                 }
             except Exception as exc:
-                logger.warning("Jev score explanation failed for run %s (%s).", run.id, type(exc).__name__)
+                error_code = _jev_narrative_error_code(exc)
+                logger.warning("Jev score explanation failed for run %s (%s).", run.id, error_code)
                 run.jev_explanation = {
                     "status": "failed",
-                    "error_code": type(exc).__name__[:64],
+                    "error_code": error_code,
                     "criteria": {},
                 }
                 run.execution_trace = {
@@ -957,7 +999,7 @@ async def execute_assessment_job(
                     "jev_primary": {
                         **run.execution_trace["jev_primary"],
                         "explanation_outcome": "failed",
-                        "explanation_error_code": type(exc).__name__[:64],
+                        "explanation_error_code": error_code,
                     },
                 }
             app_check = (await db.execute(stmt_app_check)).first()
@@ -994,7 +1036,7 @@ async def execute_assessment_job(
                     separators=(",", ":"),
                 ),
                 model=settings.JEV_MODEL,
-                max_output_tokens=0,
+                max_output_tokens=MAX_JEV_OUTPUT_TOKENS,
                 timeout_seconds=float(settings.LLM_READ_TIMEOUT_SECONDS),
                 response_format=None,
                 provider="jev",
@@ -1071,14 +1113,17 @@ async def execute_assessment_job(
                 )
 
     # 5. Deterministic scoring remains based only on the primary validated output.
-    threshold_val = Decimal("70.0")
+    threshold_val = DEFAULT_THRESHOLD
     core_mins = None
+    required_criterion_ids = None
     if rubric_ver and rubric_ver.threshold_config:
         cfg = rubric_ver.threshold_config
         if "threshold" in cfg:
             threshold_val = Decimal(str(cfg["threshold"]))
         if "core_minimum_scores" in cfg and isinstance(cfg["core_minimum_scores"], dict):
             core_mins = cfg["core_minimum_scores"]
+        if isinstance(cfg.get("required_criterion_ids"), list):
+            required_criterion_ids = set(cfg["required_criterion_ids"])
 
     with measure_stage(diagnostics, "validation_scoring"):
         obs_score, coverage, comp_score, rec, reasons = calculate_deterministic_scores(
@@ -1087,6 +1132,7 @@ async def execute_assessment_job(
             threshold=threshold_val,
             core_minimum_scores=core_mins,
             score_overrides={criterion_id: score.score for criterion_id, score in jev_scores.items()} if jev_primary else None,
+            required_criterion_ids=required_criterion_ids,
         )
     if jev_primary:
         # No locally calibrated activation gate exists yet. Keep Jev scores

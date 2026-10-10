@@ -22,6 +22,37 @@ class AssessmentValidationError(Exception):
         self.errors = errors or [message]
 
 
+def sanitize_evidence_only_narrative(raw_content: str) -> tuple[str, int]:
+    """Replace forbidden model-written prose without changing criteria, statuses, or evidence."""
+    try:
+        parsed = json.loads(raw_content)
+    except (json.JSONDecodeError, TypeError):
+        return raw_content, 0
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("criteria"), list):
+        return raw_content, 0
+
+    sanitized_fields = 0
+    for criterion in parsed["criteria"]:
+        if not isinstance(criterion, dict):
+            continue
+        rationale = criterion.get("rationale")
+        if isinstance(rationale, str) and scan_forbidden_criteria(rationale):
+            criterion["rationale"] = "Nhận xét chỉ dựa trên bằng chứng công việc đã trích dẫn."
+            sanitized_fields += 1
+        questions = criterion.get("missing_information")
+        if isinstance(questions, list):
+            replacement = (
+                "Bạn có thể làm rõ bối cảnh và phạm vi của các bằng chứng chưa thống nhất cho tiêu chí này không?"
+                if criterion.get("status") == "conflicting_evidence"
+                else "Bạn có thể nêu một ví dụ công việc cụ thể liên quan đến tiêu chí này không?"
+            )
+            for index, question in enumerate(questions):
+                if isinstance(question, str) and scan_forbidden_criteria(question):
+                    questions[index] = replacement
+                    sanitized_fields += 1
+    return json.dumps(parsed, ensure_ascii=False), sanitized_fields
+
+
 def validate_assessment_output(
     raw_content: str,
     span_registry: dict[str, SourceSpan],

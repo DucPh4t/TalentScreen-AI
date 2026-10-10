@@ -1,1 +1,0 @@
-Nhóm thiết kế microservices và pipeline phát hành. I participated in meetings and reviewed documentation. My individual coding, testing, and deployment tasks are not stated.

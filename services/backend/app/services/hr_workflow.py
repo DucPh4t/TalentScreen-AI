@@ -6,13 +6,14 @@ import uuid
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from app.db.models import (Application, AssessmentRun, Decision, HRRevision, InterviewRound, InterviewScorecard,
+from app.db.models import (Application, AssessmentRun, CriterionAssessment, Decision, HRRevision, InterviewRound, InterviewScorecard,
     RequisitionMembership, ReviewProgress, RubricCriterion, RubricVersion, SanitizedVersion, User)
 from app.domain.enums import DecisionBasis, DecisionOutcome, RubricStatus, SanitizedVersionStatus
 from app.domain.rubric_policy import scan_forbidden_criteria
 from app.schemas.decision import AttestationAssessmentReviewRequest, DecisionCreateRequest
 from app.services.audit import record_audit_event
-from app.services.decision import _verify_application_and_membership, create_review_attestation, create_decision
+from app.services.decision import (_verify_application_and_membership, create_review_attestation, create_decision,
+    clarification_disposition_error, is_matching_information_request, resolve_required_criterion_ids)
 
 
 def digest(value):
@@ -97,11 +98,67 @@ async def screening_decision(db, application_id, ctx, payload):
     attestation = await create_review_attestation(db, application_id, AttestationAssessmentReviewRequest(
         effective_result=effective, reviewed_criterion_ids=payload.reviewed_criterion_ids, acknowledged=True), ctx)
     recommendation = result.recommendation.value if hasattr(result.recommendation, "value") else result.recommendation
+    has_clarification_gap = False
+    has_conflicting_evidence = False
+    if recommendation == "needs_clarification":
+        if effective.kind == "assessment_run":
+            criterion_rows = (await db.execute(
+                select(CriterionAssessment).where(CriterionAssessment.run_id == result.id)
+            )).scalars().all()
+            criterion_statuses = {
+                row.criterion_id: row.status.value if hasattr(row.status, "value") else str(row.status)
+                for row in criterion_rows
+            }
+        else:
+            criterion_items = ((result.criteria_payload or {}).get("criteria") or [])
+            criterion_statuses = {
+                item.get("criterion_id"): item.get("status")
+                for item in criterion_items
+                if item.get("criterion_id") and item.get("status")
+            }
+        policy_rubric = await db.get(RubricVersion, result.rubric_version_id)
+        policy = (policy_rubric.threshold_config or {}) if policy_rubric else {}
+        rubric_ids = set((await db.execute(
+            select(RubricCriterion.criterion_id).where(
+                RubricCriterion.rubric_version_id == result.rubric_version_id
+            )
+        )).scalars().all()) if result.rubric_version_id else set()
+        required_ids = resolve_required_criterion_ids(policy, rubric_ids)
+        previous = await db.get(Decision, application.current_decision_id) if (
+            payload.outcome == DecisionOutcome.NOT_ADVANCE and application.current_decision_id
+        ) else None
+        previous_outcome = (
+            DecisionOutcome.REQUEST_INFORMATION.value
+            if is_matching_information_request(previous, application_id, attestation)
+            else None
+        )
+        disposition_error = clarification_disposition_error(
+            recommendation,
+            payload.outcome.value if hasattr(payload.outcome, "value") else str(payload.outcome),
+            criterion_statuses,
+            required_ids,
+            previous_outcome,
+            payload.clarification_resolution,
+        )
+        if disposition_error == "MUST_HAVE_INFORMATION_REQUEST_REQUIRED":
+            raise HTTPException(422, "MUST_HAVE_CLARIFICATION_REQUIRED: HR cần ghi nhận yêu cầu bổ sung trước khi cân nhắc từ chối.")
+        if disposition_error == "CLARIFICATION_RESOLUTION_REQUIRED":
+            raise HTTPException(422, "CLARIFICATION_RESOLUTION_REQUIRED: Ghi nhận xác nhận của ứng viên hoặc việc không phản hồi sau liên hệ.")
+        if disposition_error == "NICE_TO_HAVE_INDEPENDENT_BASIS_REQUIRED":
+            raise HTTPException(422, "NICE_TO_HAVE_INDEPENDENT_BASIS_REQUIRED: HR cần nêu căn cứ độc lập dựa trên evidence khác; thiếu nice-to-have không phải lý do từ chối.")
+        has_clarification_gap = disposition_error is None and any(
+            value == "insufficient_evidence" for value in criterion_statuses.values()
+        )
+        has_conflicting_evidence = any(value == "conflicting_evidence" for value in criterion_statuses.values())
     diverged = ((recommendation == "consider_next_round" and payload.outcome == DecisionOutcome.NOT_ADVANCE)
         or (recommendation == "review_required" and payload.outcome == DecisionOutcome.ADVANCE)
-        or (recommendation == "needs_clarification" and payload.outcome != DecisionOutcome.REQUEST_INFORMATION))
+        or (recommendation == "needs_clarification" and (
+            payload.outcome == DecisionOutcome.ADVANCE
+            or (payload.outcome == DecisionOutcome.NOT_ADVANCE and (has_clarification_gap or has_conflicting_evidence))
+        )))
     return await create_decision(db, application_id, DecisionCreateRequest(decision_basis=DecisionBasis.ASSESSMENT_REVIEW,
-        outcome=payload.outcome, reason=payload.reason.strip(), override_reason=payload.reason.strip() if diverged else None, attestation_id=attestation.id,
+        outcome=payload.outcome, reason=payload.reason.strip(), override_reason=payload.reason.strip() if diverged else None,
+        clarification_resolution=payload.clarification_resolution, attestation_id=attestation.id,
         expected_previous_decision_id=payload.expected_previous_decision_id, expected_rubric_version_id=payload.expected_rubric_version_id), ctx)
 
 async def round_cards(db, application_id, round_no):

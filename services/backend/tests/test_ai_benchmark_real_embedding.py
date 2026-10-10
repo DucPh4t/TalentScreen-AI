@@ -12,7 +12,7 @@ from app.services.evaluation.benchmark.seed import seed_cases
 from app.services.evaluation.benchmark.preflight import embedding_cache_available,resolve_cached_embedding_revision
 from tests.test_ai_benchmark_isolation import owned_context
 
-DATA=Path(__file__).resolve().parents[3]/'fixtures/ai_benchmark/v1'
+DATA=Path(__file__).resolve().parents[3]/'fixtures/ai_benchmark/golden_100'
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.getenv('TALENTSCREEN_REAL_E5_SMOKE')!='1',reason='Real E5 smoke is opt-in; generic CI is offline.')
@@ -36,7 +36,7 @@ async def test_real_e5_smoke_is_explicit_and_uses_actual_device(test_session_fac
     vectors=embed_texts(['Thiết kế API và PostgreSQL','Machine learning inference','Android Kotlin'],prefix='query: ')
     assert len(vectors)==3
     assert all(len(v)==768 and abs(math.sqrt(sum(x*x for x in v))-1)<1e-6 for v in vectors)
-    inputs=load_inputs(DATA);selection=select_runs(inputs,split=None,case_ids=('node-01','ai-01','android-01'),profiles=('dense',),seed=1)
+    inputs=load_inputs(DATA);selection=select_runs(inputs,split=None,case_ids=('backend-008','backend-009','backend-011'),profiles=('dense',),seed=1)
     scopes=[]
     async with test_session_factory() as db:
         seeded=await seed_cases(db,inputs,selection,owned_context)

@@ -52,9 +52,9 @@ A crash after admission but before the ranking journal is committed fails with `
 
 A private run journal stores opaque pair/admission IDs, probabilities, policy digest, status, and durations, without passage text or prompts. It is size-bounded and follows assessment deletion. HR receives only a small evidence-review notice when applicable; probabilities and developer traces are not exposed. LangSmith gets allowlisted aggregate metadata only.
 
-## Synthetic evaluation and activation
+## Evaluation and activation
 
-See [reproduction](../evaluation/ai-benchmark-reproducibility.md) and [measured results](../evaluation/jev-reranking-results-2026-10-09.md). Scripted Jev proves contracts only. Visible synthetic references are not independent HR labels or a protected holdout.
+Use the [independent human-labeled evaluation protocol](../evaluation/independent-human-evaluation-design.md) before making any quality claim or considering activation. Synthetic fixtures and provider contract tests establish software behavior only. No current independent HR/IT quality result is available; keep Jev disabled for real applicant decisions until the approved evaluation and governance gates pass.
 
 Activate reranking only when paired evaluation shows no new annotated limiting/conflicting evidence losses, improved coverage or equivalent coverage with meaningful cost/context reduction, added rerank p95 ≤5 seconds, and no unresolved funds. Passing schema validation alone is insufficient. Hard gating remains synthetic-only even if these conditions pass.
 

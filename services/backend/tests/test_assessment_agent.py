@@ -252,11 +252,12 @@ async def test_jev_mode_agent_returns_evidence_only_and_rejects_score_fields(
     agent_context, test_session_factory
 ):
     from app.schemas.assessment import EvidenceOnlyAssessmentSchema
+    from app.services.assessment.diagnostics import AssessmentDiagnostics
     from app.services.agent.assessment_graph import run_assessment_agent
 
     async with test_session_factory() as session:
         run = (await session.execute(select(AssessmentRun).where(AssessmentRun.id == agent_context["run_id"]))).scalar_one()
-        run.snapshot = {**run.snapshot, "scorer_mode": "jev", "evidence_agent_prompt_version": "assessment-agent-evidence.v1"}
+        run.snapshot = {**run.snapshot, "scorer_mode": "jev", "evidence_agent_prompt_version": "assessment-agent-evidence.v5"}
         criteria = (await session.execute(
             select(RubricCriterion).where(RubricCriterion.rubric_version_id == run.rubric_version_id)
         )).scalars().all()
@@ -267,16 +268,83 @@ async def test_jev_mode_agent_returns_evidence_only_and_rejects_score_fields(
             for cid in ("python_backend", "api_design")
         ]}
         provider = ScriptedProvider([CompletionResult(content=json.dumps(evidence_only, ensure_ascii=False), requested_model="deepseek-flash")])
+        diagnostics = AssessmentDiagnostics({"python_backend", "api_design"})
         result = await run_assessment_agent(
             db=session, run=run, rubric_criteria=criteria, provider_override=provider,
             initial_pack={"strategy": "hybrid", "criteria_retrieval_map": {
                 cid: [{"span_ids": [agent_context["span_id"]]}] for cid in ("python_backend", "api_design")
             }, "source_span_ids": [agent_context["span_id"]]},
+            diagnostics=diagnostics,
         )
 
     assert isinstance(result.output, EvidenceOnlyAssessmentSchema)
     assert "score" not in result.output.model_dump_json()
-    assert "Never emit score" in provider.requests[0].messages[0]["content"]
+    assert "Never emit a score" in provider.requests[0].messages[0]["content"]
+    assert diagnostics.snapshot()["counters"]["schema_failures"] == 0
+
+
+@pytest.mark.asyncio
+async def test_jev_mode_sanitizes_forbidden_generated_narrative_without_changing_evidence(
+    agent_context, test_session_factory
+):
+    from app.services.agent.assessment_graph import run_assessment_agent
+
+    async with test_session_factory() as session:
+        run = (await session.execute(
+            select(AssessmentRun).where(AssessmentRun.id == agent_context["run_id"])
+        )).scalar_one()
+        run.snapshot = {
+            **run.snapshot,
+            "scorer_mode": "jev",
+            "evidence_agent_prompt_version": "assessment-agent-evidence.v5",
+        }
+        criteria = (await session.execute(
+            select(RubricCriterion).where(RubricCriterion.rubric_version_id == run.rubric_version_id)
+        )).scalars().all()
+        agent_output = {"criteria": [
+            {
+                "criterion_id": "python_backend",
+                "status": "assessed",
+                "evidence": [{"span_id": agent_context["span_id"], "quote": SYNTHETIC_CANONICAL_TEXT}],
+                "rationale": "Python work is relevant; age is ignored.",
+                "missing_information": [],
+            },
+            {
+                "criterion_id": "api_design",
+                "status": "insufficient_evidence",
+                "evidence": [],
+                "rationale": "The CV gives no API example.",
+                "missing_information": ["Please clarify age before considering API experience."],
+            },
+        ]}
+        provider = ScriptedProvider([CompletionResult(
+            content=json.dumps(agent_output),
+            requested_model="deepseek-flash",
+        )])
+        result = await run_assessment_agent(
+            db=session,
+            run=run,
+            rubric_criteria=criteria,
+            provider_override=provider,
+            initial_pack={
+                "strategy": "hybrid",
+                "criteria_retrieval_map": {
+                    criterion_id: [{"span_ids": [agent_context["span_id"]]}]
+                    for criterion_id in ("python_backend", "api_design")
+                },
+                "source_span_ids": [agent_context["span_id"]],
+            },
+        )
+
+    outcomes = {item.criterion_id: item for item in result.output.criteria}
+    assert outcomes["python_backend"].rationale == "Nhận xét chỉ dựa trên bằng chứng công việc đã trích dẫn."
+    assert outcomes["python_backend"].evidence[0].quote == SYNTHETIC_CANONICAL_TEXT
+    assert outcomes["api_design"].status == "insufficient_evidence"
+    assert outcomes["api_design"].missing_information == [
+        "Bạn có thể nêu một ví dụ công việc cụ thể liên quan đến tiêu chí này không?"
+    ]
+    assert result.trace["sanitized_narrative_field_count"] == 2
+    assert len(provider.requests) == 1
 
 
 @pytest.mark.asyncio
@@ -285,7 +353,7 @@ async def test_jev_mode_graph_fails_closed_when_agent_emits_score(agent_context,
 
     async with test_session_factory() as session:
         run = (await session.execute(select(AssessmentRun).where(AssessmentRun.id == agent_context["run_id"]))).scalar_one()
-        run.snapshot = {**run.snapshot, "scorer_mode": "jev", "evidence_agent_prompt_version": "assessment-agent-evidence.v1"}
+        run.snapshot = {**run.snapshot, "scorer_mode": "jev", "evidence_agent_prompt_version": "assessment-agent-evidence.v5"}
         criteria = (await session.execute(
             select(RubricCriterion).where(RubricCriterion.rubric_version_id == run.rubric_version_id)
         )).scalars().all()
@@ -298,6 +366,7 @@ async def test_jev_mode_graph_fails_closed_when_agent_emits_score(agent_context,
                     cid: [{"span_ids": [agent_context["span_id"]]}] for cid in ("python_backend", "api_design")
                 }, "source_span_ids": [agent_context["span_id"]]},
             )
+
 
 
 @pytest.mark.asyncio
@@ -706,7 +775,7 @@ async def test_agent_stops_before_second_model_call_if_snapshot_changes(
 
 
 @pytest.mark.asyncio
-async def test_jev_evidence_agent_does_not_spend_reserved_score_call_on_repair(
+async def test_jev_evidence_agent_uses_one_bounded_repair_before_reserved_calls(
     agent_context, test_session_factory, monkeypatch
 ):
     from app.config import get_settings
@@ -745,7 +814,163 @@ async def test_jev_evidence_agent_does_not_spend_reserved_score_call_on_repair(
                 },
                 provider_override=provider,
             )
-    assert provider.requests == 1
+    assert provider.requests == 2
+
+
+@pytest.mark.asyncio
+async def test_jev_evidence_agent_recovers_from_one_invalid_response(
+    agent_context, test_session_factory, monkeypatch
+):
+    from app.config import get_settings
+    from app.services.agent import assessment_graph
+    from app.services.agent.assessment_graph import run_assessment_agent
+
+    settings = get_settings().model_copy(update={"ASSESSMENT_MAX_EXTERNAL_CALLS": 4})
+    monkeypatch.setattr(assessment_graph, "get_settings", lambda: settings)
+
+    class InvalidThenValidEvidenceAgent(BaseLLMProvider):
+        def __init__(self):
+            self.requests = []
+
+        async def complete(self, request):
+            self.requests.append(request)
+            if len(self.requests) == 1:
+                content = '{"criteria": []}'
+            else:
+                content = json.dumps({"criteria": [
+                    {
+                        "criterion_id": criterion_id,
+                        "status": "assessed",
+                        "evidence": [{"span_id": agent_context["span_id"], "quote": SYNTHETIC_CANONICAL_TEXT}],
+                        "rationale": "Mô tả trực tiếp nhiệm vụ kỹ thuật.",
+                        "missing_information": [],
+                    }
+                    for criterion_id in ("python_backend", "api_design")
+                ]}, ensure_ascii=False)
+            return CompletionResult(content=content, requested_model=request.model)
+
+    provider = InvalidThenValidEvidenceAgent()
+    async with test_session_factory() as session:
+        run = await session.get(AssessmentRun, agent_context["run_id"])
+        from app.services.assessment.prompt import EVIDENCE_ONLY_AGENT_PROMPT_VERSION
+        run.snapshot = {
+            **run.snapshot,
+            "scorer_mode": "jev",
+            "evidence_agent_model": "deepseek-flash",
+            "evidence_agent_prompt_version": EVIDENCE_ONLY_AGENT_PROMPT_VERSION,
+        }
+        criteria = (await session.execute(
+            select(RubricCriterion).where(RubricCriterion.rubric_version_id == run.rubric_version_id)
+        )).scalars().all()
+        result = await run_assessment_agent(
+            db=session, run=run, rubric_criteria=criteria,
+            initial_pack={
+                "strategy": "hybrid",
+                "criteria_retrieval_map": {
+                    criterion.criterion_id: [{"span_ids": [agent_context["span_id"]]}]
+                    for criterion in criteria
+                },
+                "source_span_ids": [agent_context["span_id"]],
+            },
+            provider_override=provider,
+        )
+
+    assert len(provider.requests) == 2
+    assert provider.requests[1].response_format == {"type": "json_object"}
+    assert result.trace["repair_count"] == 1
+    assert result.trace["model_round_trips"] == 2
+    assert {item.criterion_id for item in result.output.criteria} == {"python_backend", "api_design"}
+    assert all(not hasattr(item, "score") for item in result.output.criteria)
+
+
+@pytest.mark.asyncio
+async def test_jev_evidence_agent_repairs_after_retrieval_within_call_ceiling(
+    agent_context, test_session_factory, monkeypatch
+):
+    from app.config import get_settings
+    from app.services.agent import assessment_graph
+    from app.services.agent.assessment_graph import AgentExecutionError, run_assessment_agent
+    from app.services.assessment.prompt import EVIDENCE_ONLY_AGENT_PROMPT_VERSION
+
+    settings = get_settings().model_copy(update={"ASSESSMENT_MAX_EXTERNAL_CALLS": 4})
+    monkeypatch.setattr(assessment_graph, "get_settings", lambda: settings)
+
+    async def fake_retrieve(**_kwargs):
+        return [RetrievedChunkScore(
+            chunk_id=uuid.uuid4(),
+            chunk_index=0,
+            text="Synthetic retrieved backend evidence.",
+            span_ids=[agent_context["span_id"]],
+            dense_rank=1,
+            lexical_rank=1,
+            rrf_score=0.03,
+        )]
+
+    monkeypatch.setattr(assessment_graph, "retrieve_more_evidence", fake_retrieve)
+
+    class ToolThenInvalidThenValidProvider(BaseLLMProvider):
+        def __init__(self):
+            self.requests = []
+
+        async def complete(self, request):
+            self.requests.append(request)
+            if len(self.requests) == 1:
+                return CompletionResult(content=None, requested_model=request.model, tool_calls=[ToolCall(
+                    id="call_retrieve1",
+                    name="retrieve_more_evidence",
+                    arguments={"criterion_ids": ["python_backend"], "query_hint": "Python backend implementation"},
+                )])
+            if len(self.requests) == 2:
+                content = '{"criteria": []}'
+            else:
+                content = json.dumps({"criteria": [
+                    {
+                        "criterion_id": criterion_id,
+                        "status": "assessed",
+                        "evidence": [{"span_id": agent_context["span_id"], "quote": SYNTHETIC_CANONICAL_TEXT}],
+                        "rationale": "Mô tả trực tiếp nhiệm vụ kỹ thuật.",
+                        "missing_information": [],
+                    }
+                    for criterion_id in ("python_backend", "api_design")
+                ]}, ensure_ascii=False)
+            return CompletionResult(content=content, requested_model=request.model)
+
+    provider = ToolThenInvalidThenValidProvider()
+    async with test_session_factory() as session:
+        run = await session.get(AssessmentRun, agent_context["run_id"])
+        run.snapshot = {
+            **run.snapshot,
+            "scorer_mode": "jev",
+            "evidence_agent_model": "deepseek-flash",
+            "evidence_agent_prompt_version": EVIDENCE_ONLY_AGENT_PROMPT_VERSION,
+        }
+        run.snapshot_hash = hashlib.sha256(json.dumps(run.snapshot, sort_keys=True).encode()).hexdigest()
+        criteria = (await session.execute(
+            select(RubricCriterion).where(RubricCriterion.rubric_version_id == run.rubric_version_id)
+        )).scalars().all()
+        try:
+            result = await run_assessment_agent(
+                db=session, run=run, rubric_criteria=criteria,
+                initial_pack={
+                    "strategy": "hybrid",
+                    "criteria_retrieval_map": {
+                        criterion.criterion_id: [{"span_ids": [agent_context["span_id"]]}]
+                        for criterion in criteria
+                    },
+                    "source_span_ids": [agent_context["span_id"]],
+                },
+                provider_override=provider,
+            )
+        except AgentExecutionError as exc:
+            pytest.fail(f"{exc.code}; trace={exc.trace}; calls={len(provider.requests)}")
+
+    assert len(provider.requests) == 3
+    assert result.trace["tool_execution_count"] == 1
+    assert result.trace["repair_count"] == 1
+    assert result.trace["model_round_trips"] == 3
+    assert provider.requests[2].response_format == {"type": "json_object"}
+    assert {item.criterion_id for item in result.output.criteria} == {"python_backend", "api_design"}
+
 
 
 @pytest.mark.asyncio
@@ -889,16 +1114,18 @@ async def test_langsmith_business_failure_return_is_marked_failed_without_model_
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("output_tokens", "expected_status"), [(91, "SUCCEEDED"), (1025, "OUTCOME_UNKNOWN")])
 async def test_bounded_jev_primary_invocation_is_single_admitted_and_ledgered(
-    agent_context, test_session_factory, monkeypatch
+    agent_context, test_session_factory, monkeypatch, output_tokens, expected_status
 ):
-    from datetime import date
+    from datetime import date, datetime, timedelta, timezone
     from app.config import Settings
-    from app.db.models import AssessmentRun
+    from app.db.models import AssessmentRun, BudgetPeriod
     from app.domain.enums import BudgetScope
     from app.services.assessment.service import _assessment_scorer_snapshot
     from app.services.llm import orchestrator
-    from app.services.llm.call_policy import JevReservationPolicy
+    from app.services.llm.call_policy import JevReservationPolicy, MAX_JEV_OUTPUT_TOKENS
+    from app.services.llm.exceptions import LLMUsageBoundError
     from app.services.llm.ledger import get_or_create_active_budget_period
     from app.services.llm.orchestrator import execute_bounded_llm_call, PreconditionViolationError
     from app.services.llm.provider import BaseLLMProvider
@@ -918,7 +1145,7 @@ async def test_bounded_jev_primary_invocation_is_single_admitted_and_ledgered(
         async def complete(self, request):
             self.calls += 1
             return CompletionResult(content='{"answers":{}}', requested_model=request.model,
-                reported_model=request.model, input_tokens=100, output_tokens=0)
+                reported_model=request.model, input_tokens=100, output_tokens=output_tokens)
 
     async with test_session_factory() as session:
         run = await session.get(AssessmentRun, agent_context["run_id"])
@@ -941,7 +1168,7 @@ async def test_bounded_jev_primary_invocation_is_single_admitted_and_ledgered(
             task_kind="assessment", system_prompt="", user_prompt=json.dumps({
                 "model": "jev-1.13.0", "state": {"criteria": {}},
                 "questions": {"python_skill": {"type": "score", "criteria": ["0", "1", "2", "3", "4"], "instructions": "synthetic"}},
-            }), model="jev-1.13.0", max_output_tokens=0, response_format=None,
+            }), model="jev-1.13.0", max_output_tokens=MAX_JEV_OUTPUT_TOKENS, response_format=None,
             provider="jev", purpose="jev_primary", jev_reservation_policy=reservation_policy,
         )
         provider = StubJev()
@@ -955,23 +1182,42 @@ async def test_bounded_jev_primary_invocation_is_single_admitted_and_ledgered(
         for invocation in prior_calls:
             await session.delete(invocation)
         await session.flush()
-        result = await execute_bounded_llm_call(
-            db=session, job_id=agent_context["job_id"], request=request,
-            logical_step="jev_primary_score", attempt_no=1,
-            sanitized_version_id=run.sanitized_version_id, provider_override=provider,
-        )
-        assert result.reported_model == "jev-1.13.0"
+        if output_tokens <= MAX_JEV_OUTPUT_TOKENS:
+            result = await execute_bounded_llm_call(
+                db=session, job_id=agent_context["job_id"], request=request,
+                logical_step="jev_primary_score", attempt_no=1,
+                sanitized_version_id=run.sanitized_version_id, provider_override=provider,
+            )
+            assert result.output_tokens == output_tokens
+        else:
+            with pytest.raises(LLMUsageBoundError):
+                await execute_bounded_llm_call(
+                    db=session, job_id=agent_context["job_id"], request=request,
+                    logical_step="jev_primary_score", attempt_no=1,
+                    sanitized_version_id=run.sanitized_version_id, provider_override=provider,
+                )
         with pytest.raises(PreconditionViolationError):
             await execute_bounded_llm_call(
                 db=session, job_id=agent_context["job_id"], request=request,
                 logical_step="jev_primary_score", attempt_no=1,
                 sanitized_version_id=run.sanitized_version_id, provider_override=provider,
             )
-        invocation = await session.scalar(text(
-            "SELECT status::text FROM llm_invocations WHERE job_id=:job AND logical_step='jev_primary_score'"
+        await session.rollback()
+        invocation = await session.execute(text(
+            "SELECT status::text, output_tokens, cost_actual FROM llm_invocations WHERE job_id=:job AND logical_step='jev_primary_score'"
         ), {"job": str(agent_context["job_id"])})
+        invocation_status, persisted_output_tokens, actual_cost = invocation.one()
     assert provider.calls == 1
-    assert invocation == "SUCCEEDED"
+    assert invocation_status == expected_status
+    assert persisted_output_tokens == output_tokens
+    if expected_status == "SUCCEEDED":
+        assert float(actual_cost) == pytest.approx(0.0000042)
+    else:
+        assert actual_cost is None
+        if expected_status == "OUTCOME_UNKNOWN":
+            period = await session.get(BudgetPeriod, reservation_policy.budget_period_id)
+            period.period_end = datetime.now(timezone.utc) - timedelta(seconds=1)
+            await session.commit()
 
 
 @pytest.mark.asyncio
@@ -1022,8 +1268,8 @@ async def test_jev_primary_service_persists_fractional_scores_without_deepseek_f
                     application.generation += 1
                     await concurrent_session.commit()
             return CompletionResult(
-                content=json.dumps({"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 100, "output_tokens": 0}}),
-                requested_model=request.model, reported_model="jev-1.13.0", input_tokens=100, output_tokens=0,
+                content=json.dumps({"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 100, "output_tokens": 91}}),
+                requested_model=request.model, reported_model="jev-1.13.0", input_tokens=100, output_tokens=91,
             )
 
     jev_provider = JevStub()

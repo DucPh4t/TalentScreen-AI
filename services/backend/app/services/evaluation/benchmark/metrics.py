@@ -5,10 +5,14 @@ from itertools import combinations
 import math
 import random
 from .contracts import MetricsReport
-from app.services.evaluation.metrics import criterion_mae,quadratic_weighted_kappa,recall_at_k
+from app.services.evaluation.metrics import quadratic_weighted_kappa,recall_at_k
 
 def mean(values):return sum(values)/len(values) if values else None
 def rate(n,d):return n/d if d else None
+def metric_score(observation,scorer_mode):
+    if scorer_mode=='jev':
+        return float(observation.jev_score) if observation.jev_score is not None else None
+    return observation.score
 def percentile(values,p):
     if not values:return None
     ordered=sorted(values);idx=(len(ordered)-1)*p
@@ -41,6 +45,8 @@ def evaluate_records(inputs,references,manifest,records):
     if set(keys)-planned:raise ValueError('REPORT_UNPLANNED_RECORD')
     cases={c.case_id:c for c in inputs.cases}
     case_rows=[];is_mock=manifest.mode=='contract_only'
+    scorer_mode=manifest.provenance.get('assessment_scorer_mode','deepseek')
+    if scorer_mode not in {'deepseek','jev'}:raise ValueError('REPORT_SCORER_MODE_INVALID')
     for row in records:
         case=cases[row.case_id];refs=references[row.case_id].criteria
         if row.status=='accepted' and set(row.criteria)!=set(refs):raise ValueError('REPORT_CRITERION_SET_MISMATCH')
@@ -51,13 +57,14 @@ def evaluate_records(inputs,references,manifest,records):
         for c,ref in refs.items():
             observation=row.criteria.get(c)
             if observation and ref.annotation_complete and not is_mock:
+                observed_score=metric_score(observation,scorer_mode)
                 status_hits+=observation.status==ref.status
-                if ref.score is not None and observation.score is not None:numeric.append((ref.score,observation.score))
+                if ref.score is not None and observed_score is not None:numeric.append((ref.score,observed_score))
                 if ref.score is None:
-                    null_expected+=1;correct_null+=observation.score is None and observation.status==ref.status
-                    false_zero+=observation.score==0;unsupported+=observation.score is not None
+                    null_expected+=1;correct_null+=observed_score is None and observation.status==ref.status
+                    false_zero+=observed_score==0;unsupported+=observed_score is not None
                 if ref.status=='conflicting_evidence':
-                    conflicts+=1;conflict_hits+=observation.status==ref.status and observation.score is None
+                    conflicts+=1;conflict_hits+=observation.status==ref.status and observed_score is None
             if observation:
                 citation_count+=len(observation.evidence_ids)
                 scope_violations+=sum(e not in set(final[c]) for e in observation.evidence_ids) if final.get(c) is not None else 0
@@ -97,9 +104,10 @@ def evaluate_records(inputs,references,manifest,records):
         expected=[a for a,b in pairs];predicted=[b for a,b in pairs]
         accepted_d=sum(r['criteria_count'] for r in accepted);planned_d=sum(len(references[c].criteria) for c in planned_cases)
         null_d=sum(r['null_expected'] for r in accepted);conflict_d=sum(r['conflicts'] for r in accepted)
+        mae=None if is_mock else mean([abs(a-b) for a,b in pairs])
         quality={'measurement':'unmeasured_mock' if is_mock else 'synthetic_reference_only','numeric_pairs':len(pairs),
-            'mae':criterion_mae(expected,predicted) if not is_mock else None,
-            'quadratic_kappa':quadratic_weighted_kappa(expected,predicted) if not is_mock else None,
+            'mae':mae,
+            'quadratic_kappa':quadratic_weighted_kappa(expected,predicted) if not is_mock and scorer_mode=='deepseek' else None,
             'status_agreement_accepted':rate(sum(r['status_hits'] for r in accepted),accepted_d) if not is_mock else None,
             'status_agreement_all_planned':rate(sum(r['status_hits'] for r in accepted),planned_d) if not is_mock else None,
             'accepted_criterion_denominator':accepted_d,'planned_criterion_denominator':planned_d,
@@ -116,7 +124,12 @@ def evaluate_records(inputs,references,manifest,records):
             'annotated_citation_precision':rate(sum(r['supported_citations'] for r in stats),sum(r['annotated_citations'] for r in stats)),
             'cited_group_denominator':sum(len(r['cited_groups']) for r in stats),
             'cited_group_coverage':mean([v for r in stats for v in r['cited_groups']])}
-        counters={key:sum(r.diagnostics.get('counters',{}).get(key,0) for r in rows) for key in ('rejected_citations','normalized_criteria','schema_failures')}
+        citation_categories=('citation_malformed','citation_unknown_span','citation_out_of_scope','citation_quote_mismatch')
+        counters={key:sum(r.diagnostics.get('counters',{}).get(key,0) for r in rows) for key in
+            ('rejected_citations',*citation_categories,'normalized_criteria','schema_failures')}
+        counters['citation_unclassified']=sum(max(0,
+            r.diagnostics.get('counters',{}).get('rejected_citations',0)
+            -sum(r.diagnostics.get('counters',{}).get(key,0) for key in citation_categories)) for r in rows)
         timings={stage:{'n':len(values),'p50_ms':percentile(values,.5),'p95_ms':percentile(values,.95)}
             for stage in ('indexing','retrieval','graph','validation_scoring','total')
             for values in [[r.diagnostics.get('stage_ms',{}).get(stage) for r in rows if r.diagnostics.get('stage_ms',{}).get(stage) is not None]]}
@@ -137,7 +150,7 @@ def evaluate_records(inputs,references,manifest,records):
         for r in rows:
             if r.status=='accepted' and 'counterfactual' in cases[r.case_id].scenario_tags:clusters[cases[r.case_id].cluster_id].append(r)
         complete=[group for group in clusters.values() if len(group)==2]
-        invariant=sum({c:(o.status,o.score) for c,o in g[0].criteria.items()}=={c:(o.status,o.score) for c,o in g[1].criteria.items()} for g in complete)
+        invariant=sum({c:(o.status,metric_score(o,scorer_mode)) for c,o in g[0].criteria.items()}=={c:(o.status,metric_score(o,scorer_mode)) for c,o in g[1].criteria.items()} for g in complete)
         profiles[profile]['counterfactual']={'complete_pairs':len(complete),'incomplete_pairs':sum(len(g)!=2 for g in clusters.values()),
             'invariance_rate':rate(invariant,len(complete)) if not is_mock else None}
     paired=[]

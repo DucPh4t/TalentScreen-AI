@@ -44,7 +44,7 @@ def test_provider_ceilings_use_frozen_policy():
 @pytest.mark.parametrize('kind', ['rerank_limit','primary_limit','unknown_usage'])
 async def test_rerank_provider_limits_and_unknown_usage(kind,test_session_factory,agent_context,fresh_period,monkeypatch):
     from app.config import get_settings
-    from app.services.llm.call_policy import JevReservationPolicy
+    from app.services.llm.call_policy import JevReservationPolicy, MAX_JEV_OUTPUT_TOKENS
     from app.domain.enums import LLMInvocationStatus
     from app.services.reranking.contracts import canonical
     from app.services.reranking.prompt import build_jev_payload
@@ -56,7 +56,7 @@ async def test_rerank_provider_limits_and_unknown_usage(kind,test_session_factor
         run,p,pairs=await rerank_context(db,agent_context)
         f=JevReservationPolicy(fresh_period,Decimal('5'),65536,Decimal('.042'),date.today().isoformat(),frozenset(p.accepted_models),p.endpoint)
         request=CompletionRequest(task_kind='assessment',system_prompt='',user_prompt=canonical(build_jev_payload(tuple(pairs['api_design']),p)),model=p.requested_model,
-            provider='jev',purpose='jev_rerank',max_output_tokens=0,jev_reservation_policy=f)
+            provider='jev',purpose='jev_rerank',max_output_tokens=MAX_JEV_OUTPUT_TOKENS,jev_reservation_policy=f)
         if kind=='unknown_usage':
             result=CompletionResult(content='{}',requested_model=p.requested_model,reported_model=p.accepted_models[0],output_tokens=0)
             with pytest.raises(LLMUsageUnavailableError):
@@ -64,6 +64,12 @@ async def test_rerank_provider_limits_and_unknown_usage(kind,test_session_factor
             assert (await db.scalar(select(BudgetReservation).where(BudgetReservation.job_id==run.job_id))).status=='outcome_unknown'
             with pytest.raises(PreconditionViolationError,match='OUTCOME_PENDING'):
                 await execute_bounded_llm_call(db,run.job_id,request,'jev_rerank_initial_2',1,provider_override=ChoiceProvider())
+            await db.rollback()
+            from datetime import datetime, timedelta, timezone
+            from app.db.models import BudgetPeriod
+            period = await db.get(BudgetPeriod, fresh_period)
+            period.period_end = datetime.now(timezone.utc) - timedelta(seconds=1)
+            await db.commit()
         else:
             count=9 if kind=='rerank_limit' else 4
             for n in range(count):

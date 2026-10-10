@@ -1,0 +1,2299 @@
+{
+  "senior_ai_engineer": {
+    "title": "Senior AI Engineer (Computer Vision/NLP/LLM)",
+    "jd_text": "Bản nháp mô tả công việc: Thiết kế, phát triển và cải tiến mô hình AI ứng dụng; ứng viên có thể chuyên sâu ở một hoặc nhiều mảng thị giác máy tính (CV), xử lý ngôn ngữ tự nhiên (NLP) hoặc mô hình ngôn ngữ lớn (LLM), không yêu cầu thành thạo đồng thời cả ba. Xây dựng quy trình đánh giá, kiểm soát chất lượng dữ liệu và phân tích lỗi để xác minh hiệu quả trên trường hợp thực tế. Đưa mô hình vào sản phẩm với yêu cầu về độ tin cậy, khả năng mở rộng, bảo mật và giám sát sau triển khai. Thiết kế kiến trúc hệ thống AI phù hợp với ràng buộc dữ liệu, độ trễ, chi phí và vận hành; phối hợp và hướng dẫn nhóm kỹ thuật dựa trên kết quả đo lường.",
+    "criteria": [
+      {
+        "id": "applied_model_development",
+        "label": "Phát triển mô hình AI ứng dụng",
+        "description": "Độ sâu thực hành trong lựa chọn, huấn luyện, tinh chỉnh hoặc tích hợp mô hình cho một hay nhiều miền CV, NLP, LLM; đánh giá bằng kết quả kiểm chứng được.",
+        "weight": 24,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "applied_model_development",
+            "quote": "Thiết kế, phát triển và cải tiến mô hình AI ứng dụng; ứng viên có thể chuyên sâu ở một hoặc nhiều mảng thị giác máy tính (CV), xử lý ngôn ngữ tự nhiên (NLP) hoặc mô hình ngôn ngữ lớn (LLM), không yêu cầu thành thạo đồng thời cả ba."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm phát triển mô hình AI ứng dụng trong CV, NLP hoặc LLM.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng phát triển, tinh chỉnh hoặc tích hợp mô hình AI trong phạm vi CV, NLP hay LLM."
+            ],
+            "not_sufficient": [
+              "Không nhắc đến mô hình AI trong CV mà không có tuyên bố phủ định rõ ràng.",
+              "Chỉ liệt kê tên mô hình hoặc khóa học."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện tác vụ hẹp hoặc có hướng dẫn như tinh chỉnh mô hình có sẵn trong một miền.",
+            "qualifying_evidence": [
+              "Mô tả đóng góp cụ thể vào fine-tuning, tiền xử lý đầu vào hoặc tích hợp một mô hình có sẵn theo quy trình được hướng dẫn."
+            ],
+            "not_sufficient": [
+              "Chỉ sử dụng API/mô hình mà không mô tả phần việc phát triển.",
+              "Chỉ nêu một kết quả không có vai trò cá nhân."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập xây dựng hoặc cải tiến mô hình cho một bài toán thông thường và báo cáo kết quả đo được.",
+            "qualifying_evidence": [
+              "Nêu bài toán, lựa chọn hoặc điều chỉnh mô hình, cùng chỉ số đánh giá trước/sau hoặc kết quả kiểm thử cụ thể."
+            ],
+            "not_sufficient": [
+              "Chỉ mô tả thử nghiệm không có chỉ số hay xác minh.",
+              "Chỉ nêu mô hình đã triển khai mà không nêu phần phát triển."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Tự xử lý trường hợp khó và đánh đổi mô hình có kiểm chứng, chẳng hạn lệch miền, chất lượng dự đoán hoặc chi phí suy luận.",
+            "qualifying_evidence": [
+              "Mô tả phân tích lỗi hoặc điều kiện dữ liệu khó, nêu đánh đổi giữa các phương án và xác minh cải thiện trên tập kiểm thử phù hợp."
+            ],
+            "not_sufficient": [
+              "Chỉ báo cáo chỉ số tổng thể mà không xử lý failure mode.",
+              "Khẳng định mô hình tốt hơn nhưng không nêu cách kiểm chứng."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hướng chiến lược mô hình ở cấp hệ thống hoặc nhóm, lựa chọn đường hướng theo ràng buộc và xác minh bằng đánh giá thực tế.",
+            "qualifying_evidence": [
+              "Nêu quyết định thiết kế/roadmap mô hình áp dụng cho nhiều thành phần hoặc nhóm, căn cứ trade-off rõ ràng và kết quả xác minh sau triển khai."
+            ],
+            "not_sufficient": [
+              "Chỉ có chức danh senior hoặc tuyên bố dẫn dắt.",
+              "Chỉ đề xuất kiến trúc mà không có kết quả đánh giá hoặc xác minh."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "evaluation_data_quality",
+        "label": "Đánh giá mô hình và chất lượng dữ liệu",
+        "description": "Năng lực thiết kế đánh giá đáng tin cậy, kiểm soát dữ liệu và dùng phân tích lỗi để xác định giới hạn mô hình.",
+        "weight": 18,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "evaluation_data_quality",
+            "quote": "Xây dựng quy trình đánh giá, kiểm soát chất lượng dữ liệu và phân tích lỗi để xác minh hiệu quả trên trường hợp thực tế."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm đánh giá mô hình AI hoặc kiểm soát chất lượng dữ liệu phục vụ mô hình.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng đánh giá mô hình AI hoặc kiểm soát chất lượng dữ liệu cho AI."
+            ],
+            "not_sufficient": [
+              "Không đề cập đánh giá hay dữ liệu.",
+              "Nêu thiếu một chỉ số cụ thể nhưng không phủ định kinh nghiệm trong phạm vi."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện một bước đánh giá hoặc rà soát dữ liệu hẹp theo hướng dẫn.",
+            "qualifying_evidence": [
+              "Mô tả tác vụ như gán nhãn, kiểm tra mẫu dữ liệu hoặc chạy metric có sẵn trong quy trình được hướng dẫn."
+            ],
+            "not_sufficient": [
+              "Chỉ liệt kê công cụ đánh giá.",
+              "Chỉ nói dữ liệu được làm sạch mà không nêu phần việc."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập xây dựng đánh giá thường quy và kiểm tra chất lượng dữ liệu, có kết quả xác minh.",
+            "qualifying_evidence": [
+              "Nêu cách tạo/chọn tập đánh giá hoặc metric và ít nhất một kiểm tra chất lượng dữ liệu, kèm kết quả quan sát được."
+            ],
+            "not_sufficient": [
+              "Chỉ báo cáo metric mà không nói cách đánh giá.",
+              "Chỉ nêu quy mô dữ liệu."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Phát hiện và xử lý vấn đề như rò rỉ dữ liệu, lệch phân phối hoặc nhãn nhiễu, rồi xác minh ảnh hưởng lên kết quả.",
+            "qualifying_evidence": [
+              "Mô tả failure mode dữ liệu/đánh giá, biện pháp khắc phục và so sánh được xác minh bằng đánh giá phù hợp."
+            ],
+            "not_sufficient": [
+              "Chỉ tuyên bố dữ liệu sạch hoặc không thiên lệch.",
+              "Chỉ thay dữ liệu mà không đánh giá lại."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết kế cơ chế đánh giá và quản trị chất lượng dữ liệu dùng xuyên nhóm/sản phẩm, có kiểm toán định kỳ và xác minh tác động.",
+            "qualifying_evidence": [
+              "Nêu quy trình hoặc chuẩn đánh giá/dữ liệu được áp dụng ở cấp hệ thống, có chủ sở hữu, kiểm tra lặp lại và kết quả đo được."
+            ],
+            "not_sufficient": [
+              "Chỉ viết hướng dẫn chưa được áp dụng.",
+              "Chỉ có dashboard không mô tả xác minh hay hành động."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "production_reliability",
+        "label": "Triển khai và độ tin cậy sản phẩm AI",
+        "description": "Khả năng đưa mô hình AI vào vận hành, đảm bảo hiệu năng, giám sát và xử lý sự cố với xác minh sau thay đổi.",
+        "weight": 18,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "production_reliability",
+            "quote": "Đưa mô hình vào sản phẩm với yêu cầu về độ tin cậy, khả năng mở rộng, bảo mật và giám sát sau triển khai."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm triển khai hoặc vận hành mô hình AI trong sản phẩm.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng triển khai hay vận hành mô hình AI trong sản phẩm."
+            ],
+            "not_sufficient": [
+              "Không đề cập production.",
+              "Chỉ mô tả mô hình chạy trên máy cá nhân nhưng không phủ định kinh nghiệm triển khai."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Đóng góp có hướng dẫn vào đóng gói, tích hợp hoặc theo dõi một triển khai mô hình.",
+            "qualifying_evidence": [
+              "Mô tả một nhiệm vụ cụ thể như đóng gói endpoint, tích hợp inference hoặc xem dashboard dưới quy trình có hướng dẫn."
+            ],
+            "not_sufficient": [
+              "Chỉ liệt kê Docker/cloud.",
+              "Chỉ nêu mô hình đã được deploy nhưng không rõ đóng góp."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập triển khai và theo dõi một dịch vụ suy luận thông thường, xác minh hành vi bằng kiểm thử hoặc chỉ số vận hành.",
+            "qualifying_evidence": [
+              "Nêu triển khai thực tế, ít nhất một chỉ số như latency/error rate và phương thức xác minh hoặc giám sát."
+            ],
+            "not_sufficient": [
+              "Chỉ nói dịch vụ hoạt động mà không có kiểm thử/giám sát.",
+              "Chỉ báo cáo offline metric."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý sự cố hoặc trade-off production như tải tăng, latency, drift hay rollback và xác minh độ tin cậy sau khắc phục.",
+            "qualifying_evidence": [
+              "Mô tả sự cố/giới hạn thực tế, thay đổi vận hành và xác minh qua load test, alert, rollback hoặc số liệu sau triển khai."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu đã xử lý sự cố mà không cho biết cách xác minh.",
+              "Chỉ tăng tài nguyên mà không đánh giá trade-off."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết kế và dẫn dắt nền tảng/chuẩn vận hành mô hình có khả năng mở rộng, khả năng phục hồi và kiểm chứng qua vận hành thực tế.",
+            "qualifying_evidence": [
+              "Nêu quyết định vận hành ở cấp hệ thống, cách thử nghiệm độ tin cậy/phục hồi và kết quả production được theo dõi."
+            ],
+            "not_sufficient": [
+              "Chỉ đề xuất nền tảng chưa vận hành.",
+              "Chỉ tuyên bố uptime mà không có cách đo hoặc vai trò cụ thể."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "ai_security_safety",
+        "label": "Bảo mật và an toàn hệ thống AI",
+        "description": "Thực hành giảm thiểu rủi ro dữ liệu và mô hình, đặc biệt với quyền truy cập, dữ liệu nhạy cảm và đầu vào đối kháng.",
+        "weight": 12,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "ai_security_safety",
+            "quote": "bảo mật"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm bảo mật hệ thống AI hoặc dữ liệu AI.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng xử lý bảo mật hệ thống AI hay dữ liệu dùng trong AI."
+            ],
+            "not_sufficient": [
+              "Không đề cập bảo mật.",
+              "Chỉ nêu không có chứng chỉ bảo mật."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện một biện pháp bảo mật AI cơ bản theo hướng dẫn.",
+            "qualifying_evidence": [
+              "Mô tả áp dụng kiểm soát được chỉ định như ẩn dữ liệu nhạy cảm hoặc giới hạn quyền truy cập vào dữ liệu/model."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu hoàn thành khóa học.",
+              "Chỉ nói tuân thủ chính sách chung mà không có hành động."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập áp dụng kiểm soát bảo mật phù hợp cho một thành phần AI và xác minh bằng kiểm thử hoặc rà soát.",
+            "qualifying_evidence": [
+              "Nêu nguy cơ cụ thể, biện pháp kiểm soát ở dữ liệu/inference và cách kiểm tra hiệu lực."
+            ],
+            "not_sufficient": [
+              "Chỉ tuyên bố hệ thống an toàn.",
+              "Chỉ nêu dùng mã hóa mà không nói phạm vi hoặc xác minh."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý một rủi ro hoặc sự cố bảo mật AI, cân bằng hữu dụng và bảo vệ, rồi xác minh giảm thiểu.",
+            "qualifying_evidence": [
+              "Nêu threat như prompt injection, rò rỉ dữ liệu hoặc truy cập trái phép, sửa thiết kế và xác minh bằng kiểm thử đối kháng/rà soát."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu nhận biết rủi ro mà không có biện pháp.",
+              "Chỉ chặn mọi đầu vào mà không đánh giá ảnh hưởng chức năng."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hướng quản trị rủi ro bảo mật AI ở cấp hệ thống/nhóm, gắn threat modeling và kiểm soát liên tục với xác minh.",
+            "qualifying_evidence": [
+              "Mô tả khung threat modeling/kiểm soát xuyên hệ thống, trách nhiệm triển khai và kiểm chứng định kỳ hoặc qua sự cố."
+            ],
+            "not_sufficient": [
+              "Chỉ viết chính sách chưa triển khai.",
+              "Chỉ dựa vào một biện pháp đơn lẻ mà không có xác minh vận hành."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "ai_system_design",
+        "label": "Thiết kế hệ thống AI",
+        "description": "Khả năng thiết kế kiến trúc AI end-to-end, lựa chọn thành phần theo ràng buộc dữ liệu, độ trễ, chi phí và vận hành; xác minh trade-off.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "ai_system_design",
+            "quote": "Thiết kế kiến trúc hệ thống AI phù hợp với ràng buộc dữ liệu, độ trễ, chi phí và vận hành"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm thiết kế kiến trúc hệ thống AI.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng thiết kế kiến trúc hệ thống AI."
+            ],
+            "not_sufficient": [
+              "Không đề cập kiến trúc.",
+              "Chỉ không có kinh nghiệm ở một framework hoặc cloud cụ thể."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Đóng góp vào một thành phần kiến trúc AI hẹp theo thiết kế có sẵn.",
+            "qualifying_evidence": [
+              "Mô tả một thành phần cụ thể đã triển khai theo kiến trúc được hướng dẫn, như pipeline inference hoặc lưu trữ embedding."
+            ],
+            "not_sufficient": [
+              "Chỉ liệt kê dịch vụ cloud.",
+              "Chỉ vẽ sơ đồ không có đóng góp triển khai."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập thiết kế kiến trúc cho một dịch vụ AI thông thường và xác minh các ràng buộc chính.",
+            "qualifying_evidence": [
+              "Nêu thành phần và luồng dữ liệu, lựa chọn có lý do theo ràng buộc cụ thể, cùng kiểm thử hoặc số đo xác minh."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu stack công nghệ.",
+              "Chỉ thiết kế mà không xác minh độ trễ, chi phí hay hành vi."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Giải quyết trade-off hoặc ngoại lệ kiến trúc AI qua so sánh phương án và xác minh trên tải/dữ liệu thực tế.",
+            "qualifying_evidence": [
+              "Mô tả ít nhất hai phương án hoặc ràng buộc xung đột, quyết định được biện minh và xác minh định lượng."
+            ],
+            "not_sufficient": [
+              "Chỉ chọn công nghệ quen thuộc mà không nêu trade-off.",
+              "Chỉ có benchmark không gắn với quyết định kiến trúc."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hướng kiến trúc nhiều thành phần hoặc nhiều nhóm, đặt nguyên tắc thiết kế và xác minh hiệu quả hệ thống sau khi áp dụng.",
+            "qualifying_evidence": [
+              "Nêu thiết kế/tiêu chuẩn dùng chung, cách điều phối các thành phần hoặc nhóm và đo lường xác minh tác động end-to-end."
+            ],
+            "not_sufficient": [
+              "Chỉ đưa ra sơ đồ cấp cao chưa áp dụng.",
+              "Chỉ mô tả dẫn dắt nhóm mà không có quyết định thiết kế và kết quả xác minh."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "technical_leadership",
+        "label": "Lãnh đạo kỹ thuật và phối hợp",
+        "description": "Khả năng nâng cao năng lực nhóm AI qua hướng dẫn, quyết định kỹ thuật và phối hợp dựa trên bằng chứng, đồng thời xác minh kết quả.",
+        "weight": 12,
+        "core": false,
+        "source_requirements": [
+          {
+            "requirement_id": "technical_leadership",
+            "quote": "phối hợp và hướng dẫn nhóm kỹ thuật dựa trên kết quả đo lường."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm hướng dẫn hoặc phối hợp kỹ thuật trong công việc AI.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng hướng dẫn hoặc phối hợp kỹ thuật cho công việc AI."
+            ],
+            "not_sufficient": [
+              "Không nhắc vai trò lãnh đạo.",
+              "Chỉ thiếu chức danh quản lý."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Hỗ trợ một đồng nghiệp hoặc phối hợp một nhiệm vụ hẹp với hướng dẫn.",
+            "qualifying_evidence": [
+              "Nêu hỗ trợ cụ thể như review thay đổi mô hình hoặc giải thích quy trình đánh giá cho một thành viên."
+            ],
+            "not_sufficient": [
+              "Chỉ tham gia họp.",
+              "Chỉ nêu làm việc nhóm mà không rõ hành động."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập điều phối một sáng kiến AI nhỏ hoặc hướng dẫn đồng nghiệp, theo dõi hoàn thành bằng kết quả cụ thể.",
+            "qualifying_evidence": [
+              "Mô tả phạm vi phối hợp/hướng dẫn, trách nhiệm cá nhân và kết quả có thể xác minh."
+            ],
+            "not_sufficient": [
+              "Chỉ phân công việc mà không theo dõi kết quả.",
+              "Chỉ nêu mentoring không có ví dụ."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Giải quyết bất đồng hoặc rủi ro kỹ thuật liên chức năng bằng trade-off có bằng chứng và xác minh kết quả sau phối hợp.",
+            "qualifying_evidence": [
+              "Nêu các bên/quan điểm khác nhau, bằng chứng hoặc thử nghiệm hỗ trợ quyết định và kết quả đã xác minh."
+            ],
+            "not_sufficient": [
+              "Chỉ nói đạt đồng thuận mà không có căn cứ.",
+              "Chỉ nêu làm việc với nhiều nhóm."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Dẫn dắt hướng kỹ thuật AI xuyên nhóm, phát triển người khác và xác minh cải thiện bền vững qua chỉ số hoặc thực hành được áp dụng.",
+            "qualifying_evidence": [
+              "Mô tả ảnh hưởng kỹ thuật trên nhiều nhóm, cơ chế nâng năng lực/chuẩn chung và kết quả được theo dõi qua thời gian."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu vai trò lead hoặc quản lý.",
+              "Chỉ có quy trình mới mà không có áp dụng hoặc xác minh kết quả."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      }
+    ],
+    "policy": {
+      "draft_status": "draft_unapproved",
+      "threshold": 70,
+      "core_minimum_scores": {},
+      "require_full_coverage": true,
+      "validation_status": "unvalidated_synthetic"
+    }
+  },
+  "software_development_manager": {
+    "title": "Software Development Manager",
+    "jd_text": "Quản lý phát triển phần mềm chịu trách nhiệm xây dựng đội ngũ và nâng cao năng lực từng thành viên thông qua coaching, phản hồi cụ thể và kế hoạch phát triển phù hợp. Lập kế hoạch giao hàng cùng nhóm, làm rõ phạm vi và phụ thuộc, theo dõi tiến độ, nhận diện rủi ro sớm và điều chỉnh có cân nhắc. Đưa ra hoặc điều phối các quyết định kỹ thuật dựa trên yêu cầu, lựa chọn thay thế và hệ quả dài hạn; phối hợp với nhóm để duy trì chất lượng và độ tin cậy của dịch vụ. Giao tiếp minh bạch với các bên liên quan về trạng thái, đánh đổi và thay đổi kế hoạch. Cải tiến quy trình làm việc dựa trên phản hồi và kết quả đo được, đồng thời tạo môi trường để nhóm học hỏi và làm việc bền vững.",
+    "criteria": [
+      {
+        "id": "people_coaching",
+        "label": "Coaching và phát triển đội ngũ",
+        "description": "Phát triển năng lực và hiệu quả của các thành viên thông qua coaching, phản hồi cụ thể và hỗ trợ tăng trưởng phù hợp.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "people_coaching",
+            "quote": "xây dựng đội ngũ và nâng cao năng lực từng thành viên thông qua coaching, phản hồi cụ thể và kế hoạch phát triển phù hợp"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm coaching hoặc phát triển thành viên trong phạm vi quản lý đội ngũ phần mềm.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng coaching hoặc lập kế hoạch phát triển cho thành viên của đội ngũ phần mềm."
+            ],
+            "not_sufficient": [
+              "Không đề cập hoạt động coaching trong CV.",
+              "Chỉ nêu chức danh quản lý mà không mô tả phát triển nhân viên."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Hỗ trợ có hướng dẫn trong hoạt động coaching hoặc phản hồi cho một thành viên; chưa tự duy trì cách tiếp cận.",
+            "qualifying_evidence": [
+              "Đã hỗ trợ quản lý chuẩn bị phản hồi cụ thể cho một thành viên kỹ thuật.",
+              "Nêu hoạt động hướng dẫn có mục tiêu nhưng cần quản lý cấp trên định hướng."
+            ],
+            "not_sufficient": [
+              "Chỉ tham gia đào tạo kỹ thuật mà không hỗ trợ phát triển cá nhân.",
+              "Chỉ nêu thiện chí giúp đỡ đồng nghiệp."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập coaching thành viên về mục tiêu công việc hoặc phát triển, theo dõi tiến triển trong tình huống thông thường.",
+            "qualifying_evidence": [
+              "Thiết lập mục tiêu phát triển với một thành viên và định kỳ rà soát tiến triển.",
+              "Đưa phản hồi cụ thể dựa trên công việc và hỗ trợ thành viên cải thiện kỹ năng."
+            ],
+            "not_sufficient": [
+              "Chỉ giao việc và đánh giá kết quả giao việc.",
+              "Nêu coaching nhưng không cho biết mục tiêu hoặc theo dõi."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý tình huống phát triển khó hoặc khác biệt về hiệu suất, cân bằng hỗ trợ, phản hồi và yêu cầu công việc; xác minh kết quả.",
+            "qualifying_evidence": [
+              "Điều chỉnh kế hoạch coaching sau khi thành viên không đạt mục tiêu ban đầu và ghi nhận tiến triển sau điều chỉnh.",
+              "Xử lý vấn đề hiệu suất bằng phản hồi có dẫn chứng, thống nhất hành động và rà soát kết quả."
+            ],
+            "not_sufficient": [
+              "Chỉ mô tả một cuộc trao đổi phản hồi thông thường.",
+              "Tuyên bố cải thiện hiệu suất mà không nêu cách kiểm chứng."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết kế và dẫn dắt cách phát triển năng lực ở cấp đội ngũ, xác minh tác động và duy trì môi trường phản hồi bền vững.",
+            "qualifying_evidence": [
+              "Thiết lập nhịp coaching và kế hoạch phát triển cho nhóm, rồi đánh giá tác động qua mục tiêu năng lực đã thống nhất.",
+              "Dẫn dắt cơ chế phản hồi trong nhóm và xác minh bằng tiến triển phát triển được rà soát định kỳ."
+            ],
+            "not_sufficient": [
+              "Chỉ tổ chức một buổi đào tạo chung.",
+              "Chỉ nêu quy mô nhóm hoặc trách nhiệm quản lý mà không có kết quả xác minh."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "delivery_planning_risk",
+        "label": "Lập kế hoạch giao hàng và quản lý rủi ro",
+        "description": "Làm rõ phạm vi, phụ thuộc và kế hoạch giao hàng; theo dõi rủi ro và điều chỉnh dựa trên thông tin thực tế.",
+        "weight": 18,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "delivery_planning_risk",
+            "quote": "Lập kế hoạch giao hàng cùng nhóm, làm rõ phạm vi và phụ thuộc, theo dõi tiến độ, nhận diện rủi ro sớm và điều chỉnh có cân nhắc"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm lập kế hoạch hoặc quản lý rủi ro giao hàng trong phạm vi phát triển phần mềm.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng lập kế hoạch giao hàng hoặc theo dõi rủi ro cho công việc phát triển phần mềm."
+            ],
+            "not_sufficient": [
+              "Không liệt kê kế hoạch trong CV.",
+              "Chỉ nêu đã làm trong nhóm dự án."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Đóng góp đầu việc hoặc cập nhật trạng thái cho kế hoạch do người khác sở hữu.",
+            "qualifying_evidence": [
+              "Cập nhật tiến độ và phụ thuộc của một đầu việc theo kế hoạch do quản lý lập.",
+              "Hỗ trợ nhận diện một rủi ro và chuyển thông tin cho người phụ trách."
+            ],
+            "not_sufficient": [
+              "Chỉ hoàn thành tác vụ được giao.",
+              "Chỉ nêu sử dụng công cụ quản lý dự án."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Lập và theo dõi độc lập kế hoạch giao hàng thông thường, làm rõ phạm vi và phụ thuộc với nhóm.",
+            "qualifying_evidence": [
+              "Lập kế hoạch phát hành với phạm vi và phụ thuộc rõ ràng, rồi cập nhật khi tiến độ thay đổi.",
+              "Theo dõi rủi ro giao hàng thường gặp và phối hợp hành động giảm thiểu với nhóm."
+            ],
+            "not_sufficient": [
+              "Chỉ đưa ra ngày giao hàng mà không làm rõ phạm vi hay phụ thuộc.",
+              "Chỉ báo cáo trạng thái mà không điều phối kế hoạch."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý bất định hoặc thay đổi đáng kể bằng cách đánh giá rủi ro và đánh đổi, điều chỉnh kế hoạch và xác minh kết quả giao hàng.",
+            "qualifying_evidence": [
+              "Khi phụ thuộc bên ngoài bị trễ, đánh giá ảnh hưởng, đề xuất các lựa chọn phạm vi và xác nhận kết quả với nhóm.",
+              "Điều chỉnh mốc giao hàng sau khi rủi ro được hiện thực hóa và đối chiếu kết quả với kế hoạch cập nhật."
+            ],
+            "not_sufficient": [
+              "Chỉ dời thời hạn mà không nêu đánh giá rủi ro hoặc lựa chọn.",
+              "Tuyên bố giao đúng hạn mà không mô tả cách xử lý bất định."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết kế và dẫn dắt hệ thống lập kế hoạch, quản trị phụ thuộc và rủi ro ở cấp nhóm hoặc nhiều nhóm, xác minh độ tin cậy giao hàng.",
+            "qualifying_evidence": [
+              "Thiết lập nhịp lập kế hoạch và rà soát phụ thuộc cho nhiều nhóm, sau đó đánh giá độ tin cậy dự báo qua các chu kỳ.",
+              "Dẫn dắt cơ chế theo dõi rủi ro giao hàng có chủ sở hữu và hành động giảm thiểu, rồi rà soát kết quả thực tế."
+            ],
+            "not_sufficient": [
+              "Chỉ quản lý một lịch phát hành.",
+              "Chỉ nêu cải thiện tốc độ mà không kiểm chứng độ tin cậy hoặc xử lý rủi ro."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "technical_decisions",
+        "label": "Chất lượng quyết định kỹ thuật",
+        "description": "Điều phối quyết định kỹ thuật dựa trên yêu cầu, phương án thay thế và hệ quả dài hạn, phù hợp với năng lực và mục tiêu sản phẩm.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "technical_decisions",
+            "quote": "Đưa ra hoặc điều phối các quyết định kỹ thuật dựa trên yêu cầu, lựa chọn thay thế và hệ quả dài hạn"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm tham gia hoặc điều phối quyết định kỹ thuật trong phạm vi phát triển phần mềm.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng tham gia hoặc điều phối quyết định kỹ thuật cho sản phẩm phần mềm."
+            ],
+            "not_sufficient": [
+              "Không nêu kiến trúc hay công nghệ trong CV.",
+              "Chỉ ghi đã làm việc cùng kỹ sư."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Đóng góp thông tin hoặc thực hiện một quyết định kỹ thuật do người khác định hướng.",
+            "qualifying_evidence": [
+              "Thu thập yêu cầu kỹ thuật và phương án thay thế để người phụ trách quyết định.",
+              "Thực hiện lựa chọn công nghệ đã được nhóm cấp cao quyết định."
+            ],
+            "not_sufficient": [
+              "Chỉ liệt kê ngôn ngữ hoặc framework đã sử dụng.",
+              "Chỉ nêu tham dự buổi thảo luận kỹ thuật."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập đưa ra quyết định kỹ thuật thường lệ cho một thành phần, nêu yêu cầu liên quan và lý do lựa chọn.",
+            "qualifying_evidence": [
+              "Chọn cách triển khai cho một thành phần sau khi đối chiếu yêu cầu và lựa chọn khả thi.",
+              "Ghi lại lý do một quyết định kỹ thuật thông thường và chia sẻ với nhóm."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu quyết định đã được áp dụng mà không nói cơ sở lựa chọn.",
+              "Chỉ chọn theo sở thích cá nhân hoặc công nghệ quen thuộc."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Đánh giá các đánh đổi kỹ thuật có hệ quả đáng kể, xử lý ý kiến khác biệt hoặc ràng buộc, và kiểm chứng quyết định sau triển khai.",
+            "qualifying_evidence": [
+              "So sánh các phương án theo độ phức tạp vận hành và khả năng mở rộng, sau đó xác minh kết quả bằng dữ liệu sau triển khai.",
+              "Giải quyết bất đồng về quyết định kỹ thuật bằng yêu cầu và bằng chứng, rồi rà soát giả định khi hệ thống đi vào sử dụng."
+            ],
+            "not_sufficient": [
+              "Chỉ chọn phương án phổ biến mà không xem xét đánh đổi.",
+              "Nêu thiết kế nhưng không có kiểm chứng sau triển khai."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Dẫn dắt nguyên tắc hoặc quyết định kiến trúc liên nhóm, cân bằng hệ quả dài hạn và xác minh bằng kết quả vận hành hoặc sản phẩm.",
+            "qualifying_evidence": [
+              "Dẫn dắt quyết định kiến trúc dùng chung qua nhiều nhóm, ghi nhận đánh đổi và xác minh tác động sau khi triển khai.",
+              "Thiết lập cách rà soát quyết định kỹ thuật quan trọng, rồi đánh giá liệu giả định dài hạn có đúng qua vận hành thực tế."
+            ],
+            "not_sufficient": [
+              "Chỉ phê duyệt thiết kế của một thành phần.",
+              "Chỉ công bố tiêu chuẩn kỹ thuật mà không có đánh giá kết quả."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "quality_reliability",
+        "label": "Chất lượng phần mềm và độ tin cậy",
+        "description": "Tạo điều kiện để nhóm duy trì chất lượng và độ tin cậy thông qua kiểm soát phù hợp, xử lý sự cố và học hỏi có kiểm chứng.",
+        "weight": 17,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "quality_reliability",
+            "quote": "phối hợp với nhóm để duy trì chất lượng và độ tin cậy của dịch vụ"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm quản lý chất lượng hoặc độ tin cậy trong phạm vi dịch vụ phần mềm.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng chịu trách nhiệm hoặc tham gia cải thiện chất lượng hay độ tin cậy của dịch vụ phần mềm."
+            ],
+            "not_sufficient": [
+              "Không nêu kiểm thử hay sự cố trong CV.",
+              "Chỉ khẳng định nhóm giao hàng thành công."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Hỗ trợ một hoạt động chất lượng hoặc độ tin cậy có hướng dẫn, chưa chịu trách nhiệm cho kết quả.",
+            "qualifying_evidence": [
+              "Theo dõi lỗi hoặc hỗ trợ kiểm thử theo quy trình do nhóm khác xác định.",
+              "Hỗ trợ thu thập thông tin sau sự cố theo hướng dẫn."
+            ],
+            "not_sufficient": [
+              "Chỉ sử dụng quy trình kiểm thử có sẵn.",
+              "Chỉ nêu sửa lỗi cá nhân mà không liên hệ chất lượng dịch vụ."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập điều phối thực hành chất lượng hoặc độ tin cậy thường lệ của nhóm và theo dõi kết quả.",
+            "qualifying_evidence": [
+              "Phối hợp tiêu chí kiểm thử trước phát hành và theo dõi lỗi phát sinh sau khi phát hành.",
+              "Điều phối xử lý sự cố thông thường và theo dõi hành động khắc phục đã thống nhất."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu có quy trình QA mà không mô tả vai trò.",
+              "Chỉ nêu số lượng lỗi được sửa mà không theo dõi chất lượng dịch vụ."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý sự cố hoặc suy giảm chất lượng đáng kể, điều phối khắc phục và xác minh hiệu quả của biện pháp phòng ngừa.",
+            "qualifying_evidence": [
+              "Điều phối phản ứng trước sự cố ảnh hưởng dịch vụ, theo dõi nguyên nhân và xác nhận biện pháp giảm tái diễn.",
+              "Sau khi phát hiện lỗi nghiêm trọng, điều chỉnh cổng phát hành và xác minh qua kết quả các lần phát hành tiếp theo."
+            ],
+            "not_sufficient": [
+              "Chỉ tham gia xử lý mà không điều phối hoặc theo dõi hành động.",
+              "Chỉ nêu thời gian khôi phục mà không kiểm tra khả năng tái diễn."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết kế và dẫn dắt hệ thống chất lượng, độ tin cậy hoặc ứng phó sự cố ở cấp nhóm hay liên nhóm, xác minh bằng kết quả vận hành bền vững.",
+            "qualifying_evidence": [
+              "Thiết lập cơ chế học hỏi sau sự cố và theo dõi các biện pháp phòng ngừa đến khi xác minh hiệu quả qua nhiều chu kỳ vận hành.",
+              "Dẫn dắt mục tiêu độ tin cậy và quy trình phản ứng liên nhóm, rồi đánh giá xu hướng sự cố sau cải tiến."
+            ],
+            "not_sufficient": [
+              "Chỉ áp dụng một công cụ giám sát.",
+              "Chỉ công bố mục tiêu độ tin cậy mà không xác minh xu hướng vận hành."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "stakeholder_communication",
+        "label": "Giao tiếp với các bên liên quan",
+        "description": "Truyền đạt trạng thái, rủi ro, đánh đổi và thay đổi kế hoạch minh bạch, phù hợp với nhu cầu của từng bên liên quan.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "stakeholder_communication",
+            "quote": "Giao tiếp minh bạch với các bên liên quan về trạng thái, đánh đổi và thay đổi kế hoạch"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm giao tiếp về trạng thái hoặc thay đổi giao hàng với các bên liên quan của sản phẩm phần mềm.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng trao đổi trạng thái, rủi ro hoặc thay đổi kế hoạch phần mềm với các bên liên quan."
+            ],
+            "not_sufficient": [
+              "Không đề cập giao tiếp trong CV.",
+              "Chỉ nêu giao tiếp tốt mà không mô tả tình huống."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Chuẩn bị hoặc chuyển tiếp cập nhật trạng thái theo nội dung và hướng dẫn của người khác.",
+            "qualifying_evidence": [
+              "Tổng hợp cập nhật tiến độ cho quản lý để chia sẻ với bên liên quan.",
+              "Ghi lại quyết định cuộc họp và chuyển tiếp cho người phụ trách."
+            ],
+            "not_sufficient": [
+              "Chỉ tham dự cuộc họp.",
+              "Chỉ viết tài liệu nội bộ không liên quan đến trạng thái hay quyết định."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập cập nhật trạng thái và thay đổi thông thường, điều chỉnh mức chi tiết cho đối tượng nhận.",
+            "qualifying_evidence": [
+              "Thông báo thay đổi mốc giao hàng cho các bên liên quan cùng lý do và ảnh hưởng dự kiến.",
+              "Cung cấp cập nhật tiến độ định kỳ theo định dạng phù hợp cho nhóm sản phẩm và kỹ thuật."
+            ],
+            "not_sufficient": [
+              "Chỉ gửi trạng thái xanh/đỏ mà không giải thích ảnh hưởng.",
+              "Chỉ trao đổi trong phạm vi nhóm trực tiếp."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Truyền đạt tin xấu hoặc đánh đổi có ảnh hưởng đáng kể, trả lời quan ngại bằng dữ kiện và xác nhận các bên hiểu quyết định.",
+            "qualifying_evidence": [
+              "Giải thích rủi ro trễ và các lựa chọn phạm vi cho đối tác, sau đó xác nhận quyết định và mốc đã thống nhất.",
+              "Điều phối bất đồng giữa nhóm kỹ thuật và sản phẩm bằng dữ kiện, ghi nhận đánh đổi và xác nhận các bên đồng thuận."
+            ],
+            "not_sufficient": [
+              "Chỉ báo tin trễ mà không nêu lựa chọn hoặc ảnh hưởng.",
+              "Chỉ nêu đã đạt đồng thuận mà không có căn cứ hay xác nhận."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết lập cơ chế giao tiếp liên nhóm cho thay đổi và rủủi ro quan trọng, xác minh tính nhất quán và mức độ hiểu biết của các bên.",
+            "qualifying_evidence": [
+              "Thiết lập nhịp cập nhật liên nhóm về trạng thái và rủi ro, rồi xác minh rằng quyết định và chủ sở hữu được các bên ghi nhận nhất quán.",
+              "Dẫn dắt giao tiếp khi có thay đổi sản phẩm ảnh hưởng nhiều bên, theo dõi phản hồi và xác nhận các hệ quả đã được hiểu."
+            ],
+            "not_sufficient": [
+              "Chỉ gửi bản tin tiến độ định kỳ.",
+              "Chỉ nêu số lượng bên liên quan mà không kiểm tra tính nhất quán hoặc hiểu biết."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "team_process_improvement",
+        "label": "Cải tiến đội ngũ và quy trình",
+        "description": "Cải thiện cách làm việc của nhóm dựa trên phản hồi hoặc bằng chứng, đánh giá tác động và duy trì các thay đổi hữu ích.",
+        "weight": 17,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "team_process_improvement",
+            "quote": "Cải tiến quy trình làm việc dựa trên phản hồi và kết quả đo được, đồng thời tạo môi trường để nhóm học hỏi và làm việc bền vững"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm cải tiến quy trình hoặc cách làm việc trong phạm vi đội ngũ phát triển phần mềm.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng đề xuất hoặc thực hiện cải tiến quy trình làm việc của đội ngũ phần mềm."
+            ],
+            "not_sufficient": [
+              "Không kể ví dụ cải tiến trong CV.",
+              "Chỉ nêu làm theo quy trình hiện có."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Tham gia hoặc hỗ trợ thử nghiệm một cải tiến do người khác khởi xướng.",
+            "qualifying_evidence": [
+              "Thu thập phản hồi nhóm cho một thay đổi quy trình do quản lý đề xuất.",
+              "Thử một bước làm việc mới theo hướng dẫn và báo lại kết quả."
+            ],
+            "not_sufficient": [
+              "Chỉ tham dự họp hồi cứu.",
+              "Chỉ dùng công cụ mới mà không liên hệ cải tiến cách làm việc."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập triển khai cải tiến nhỏ trong nhóm, dựa trên phản hồi hoặc quan sát và theo dõi kết quả trực tiếp.",
+            "qualifying_evidence": [
+              "Thay đổi cách phân loại công việc sau phản hồi của nhóm và rà soát ảnh hưởng trong các chu kỳ tiếp theo.",
+              "Thử quy trình bàn giao mới để giảm vướng mắc và theo dõi kết quả với nhóm."
+            ],
+            "not_sufficient": [
+              "Chỉ đề xuất cải tiến mà không triển khai.",
+              "Chỉ nêu nhóm làm việc hiệu quả hơn mà không nói cách theo dõi."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Giải quyết vấn đề quy trình lặp lại bằng cách thử nghiệm có chủ đích, đánh giá đánh đổi và xác minh kết quả trước khi duy trì thay đổi.",
+            "qualifying_evidence": [
+              "Thử thay đổi quy trình xử lý công việc tồn đọng, so sánh kết quả trước và sau, rồi điều chỉnh dựa trên phản hồi nhóm.",
+              "Xử lý bất đồng về một quy trình mới bằng thử nghiệm giới hạn và quyết định duy trì dựa trên kết quả quan sát."
+            ],
+            "not_sufficient": [
+              "Chỉ thay đổi quy trình một lần mà không đánh giá tác động.",
+              "Chỉ báo cáo chỉ số cải thiện mà không nêu cách kiểm chứng hoặc phản hồi nhóm."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Dẫn dắt cải tiến bền vững ở cấp đội ngũ hoặc nhiều nhóm, xây dựng cơ chế học hỏi và xác minh tác động theo thời gian.",
+            "qualifying_evidence": [
+              "Thiết lập nhịp hồi cứu và theo dõi hành động cải tiến qua nhiều chu kỳ, xác minh tác động bằng chỉ số và phản hồi của nhóm.",
+              "Dẫn dắt thay đổi quy trình liên nhóm dựa trên bằng chứng, rồi rà soát kết quả và điều chỉnh để duy trì hiệu quả."
+            ],
+            "not_sufficient": [
+              "Chỉ tổ chức một buổi hồi cứu hoặc workshop.",
+              "Chỉ chuẩn hóa quy trình mà không theo dõi tác động hoặc khả năng duy trì."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      }
+    ],
+    "policy": {
+      "draft_status": "draft_unapproved",
+      "threshold": 70,
+      "core_minimum_scores": {},
+      "require_full_coverage": true,
+      "validation_status": "unvalidated_synthetic"
+    }
+  },
+  "java_backend_developer": {
+    "title": "Java Backend Developer",
+    "jd_text": "Phát triển và vận hành dịch vụ backend bằng Java trên JVM; thiết kế HTTP/API contract rõ ràng, tương thích và có kiểm soát lỗi. Làm việc với cơ sở dữ liệu quan hệ, schema, giao dịch và truy vấn hiệu quả. Viết kiểm thử tự động, gỡ lỗi từ log/trace và xử lý lỗi production có phương pháp. Áp dụng bảo mật cho xác thực, phân quyền, dữ liệu và dependency. Đưa dịch vụ qua CI/CD, quan sát sức khỏe hệ thống và cải thiện độ tin cậy, hiệu năng với các đánh đổi được kiểm chứng.",
+    "criteria": [
+      {
+        "id": "java_jvm",
+        "label": "Triển khai Java/JVM backend",
+        "description": "Viết, cải tiến và vận hành mã backend Java/JVM; xử lý hành vi runtime, cấu trúc mã và hiệu năng bằng bằng chứng.",
+        "weight": 22,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "java_jvm",
+            "quote": "Phát triển và vận hành dịch vụ backend bằng Java trên JVM"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm thực tế về triển khai backend bằng Java trên JVM.",
+            "qualifying_evidence": [
+              "Ứng viên nêu rõ chưa từng triển khai backend bằng Java trên JVM."
+            ],
+            "not_sufficient": [
+              "Không thấy Java được nhắc đến trong CV.",
+              "Chỉ liệt kê khóa học Java mà không xác nhận phạm vi kinh nghiệm."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện phần việc Java/JVM giới hạn theo hướng dẫn hoặc trong phạm vi nhỏ.",
+            "qualifying_evidence": [
+              "Nêu một nhiệm vụ Java backend cụ thể, giới hạn và có hướng dẫn hoặc mẫu sẵn.",
+              "Mô tả thay đổi nhỏ trong mã Java và cách xác nhận kết quả cơ bản."
+            ],
+            "not_sufficient": [
+              "Chỉ liệt kê Java hoặc framework trong phần kỹ năng.",
+              "Chỉ nêu tham gia dự án mà không mô tả phần việc Java."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Tự triển khai thường lệ một thành phần backend Java/JVM và xác nhận hành vi của nó.",
+            "qualifying_evidence": [
+              "Mô tả độc lập xây dựng một endpoint hoặc thành phần Java và kiểm tra hành vi chính.",
+              "Nêu cách quản lý lỗi hoặc cấu hình runtime cho một dịch vụ Java đã triển khai."
+            ],
+            "not_sufficient": [
+              "Chỉ sửa mã theo từng chỉ dẫn mà không chịu trách nhiệm chức năng.",
+              "Chỉ nêu đã deploy ứng dụng, không có bằng chứng triển khai Java."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý ngoại lệ runtime hoặc hiệu năng, cân nhắc đánh đổi và xác minh tác động bằng phép đo hay kiểm thử phù hợp.",
+            "qualifying_evidence": [
+              "Mô tả điều tra một vấn đề JVM cụ thể, lựa chọn giải pháp và xác nhận trước/sau bằng phép đo.",
+              "Nêu đánh đổi trong thiết kế Java backend cùng kiểm thử hoặc quan sát chứng minh kết quả."
+            ],
+            "not_sufficient": [
+              "Chỉ tuyên bố tối ưu hiệu năng mà không nêu số liệu hoặc cách xác minh.",
+              "Chỉ xử lý lỗi compile thông thường mà không mô tả điều tra nguyên nhân."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hình kiến trúc hoặc quy ước Java/JVM ở cấp hệ thống, dẫn dắt xử lý rủ ಸಂಕింపವಾದ runtime và xác minh cải thiện.",
+            "qualifying_evidence": [
+              "Mô tả thiết kế hoặc chuẩn hóa cấu trúc Java/JVM dùng bởi nhiều thành phần, kèm đánh giá kết quả.",
+              "Nêu dẫn dắt giải quyết vấn đề JVM liên dịch vụ, phối hợp rollout và xác minh độ tin cậy hoặc hiệu năng."
+            ],
+            "not_sufficient": [
+              "Chỉ sở hữu một thành phần đơn lẻ mà không có ảnh hưởng thiết kế rộng hơn.",
+              "Chỉ nêu vai trò lead hoặc kiến trúc sư nhưng không có quyết định và kết quả được xác minh."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "http_api",
+        "label": "HTTP/API contracts",
+        "description": "Thiết kế và duy trì hợp đồng HTTP/API rõ ràng, có tương thích, xác thực đầu vào và ngữ nghĩa lỗi phù hợp.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "http_api",
+            "quote": "thiết kế HTTP/API contract rõ ràng, tương thích và có kiểm soát lỗi"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm thiết kế hoặc triển khai hợp đồng HTTP/API.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng thiết kế hoặc triển khai HTTP/API contract."
+            ],
+            "not_sufficient": [
+              "Không đề cập API trong CV.",
+              "Chỉ liệt kê REST mà không nói mức kinh nghiệm."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện thay đổi nhỏ trên endpoint theo hợp đồng và quy ước đã có.",
+            "qualifying_evidence": [
+              "Mô tả triển khai một endpoint hoặc trường response nhỏ theo đặc tả có sẵn.",
+              "Nêu kiểm tra status code hoặc validation cơ bản cho thay đổi API."
+            ],
+            "not_sufficient": [
+              "Chỉ sử dụng API từ phía client.",
+              "Chỉ nêu tên framework web."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Tự chịu trách nhiệm hợp đồng endpoint thông thường, gồm request/response, validation và lỗi dự kiến.",
+            "qualifying_evidence": [
+              "Mô tả thiết kế endpoint với schema request/response, validation và mã lỗi phù hợp.",
+              "Nêu cách duy trì tính nhất quán của một API khi triển khai và kiểm thử."
+            ],
+            "not_sufficient": [
+              "Chỉ mô tả endpoint hoạt động mà không đề cập contract hoặc lỗi.",
+              "Chỉ tạo tài liệu API mà không triển khai hay kiểm chứng."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý thay đổi tương thích hoặc hành vi lỗi phức tạp, cân nhắc client và xác minh bằng kiểm thử contract hoặc tích hợp.",
+            "qualifying_evidence": [
+              "Nêu xử lý thay đổi API có nguy cơ phá vỡ client, đánh đổi được chọn và kiểm thử tương thích.",
+              "Mô tả điều tra lỗi HTTP qua nhiều thành phần và xác nhận bằng kiểm thử tích hợp."
+            ],
+            "not_sufficient": [
+              "Chỉ đổi phiên bản endpoint mà không nêu migration hoặc tương thích.",
+              "Chỉ tuyên bố API ổn định mà không có kiểm chứng."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hình chiến lược contract API giữa nhiều dịch vụ/nhóm, dẫn dắt thay đổi an toàn và xác minh mức độ áp dụng.",
+            "qualifying_evidence": [
+              "Mô tả thiết lập quy ước contract liên dịch vụ, quy trình thay đổi và xác minh qua consumer/provider checks.",
+              "Nêu dẫn dắt rollout API tương thích trên nhiều client và bằng chứng theo dõi lỗi sau rollout."
+            ],
+            "not_sufficient": [
+              "Chỉ thiết kế một API đơn lẻ không có tác động liên nhóm.",
+              "Chỉ viết guideline mà không có triển khai hoặc xác minh áp dụng."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "relational_data",
+        "label": "Dữ liệu quan hệ",
+        "description": "Thiết kế schema và truy vấn quan hệ, quản lý giao dịch và đảm bảo tính toàn vẹn, hiệu quả dữ liệu.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "relational_data",
+            "quote": "cơ sở dữ liệu quan hệ, schema, giao dịch và truy vấn hiệu quả"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm làm việc thực tế với dữ liệu quan hệ trong backend.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng làm việc với cơ sở dữ liệu quan hệ trong backend."
+            ],
+            "not_sufficient": [
+              "Không nêu database trong CV.",
+              "Chỉ nói có biết SQL mà không xác định kinh nghiệm."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện truy vấn hoặc thay đổi schema đơn giản theo hướng dẫn và quy trình sẵn có.",
+            "qualifying_evidence": [
+              "Nêu truy vấn SQL hoặc migration nhỏ thực hiện theo mẫu/hướng dẫn.",
+              "Mô tả đọc hoặc ghi dữ liệu đơn giản qua một backend Java."
+            ],
+            "not_sufficient": [
+              "Chỉ liệt kê tên hệ quản trị cơ sở dữ liệu.",
+              "Chỉ dùng giao diện truy vấn mà không có thay đổi hoặc thao tác cụ thể."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Tự triển khai tác vụ dữ liệu thông thường, transaction/schema/query và kiểm tra tính đúng đắn.",
+            "qualifying_evidence": [
+              "Mô tả tạo hoặc cập nhật schema bằng migration và kiểm thử dữ liệu liên quan.",
+              "Nêu thiết kế transaction cho một luồng nghiệp vụ cùng xác nhận tính toàn vẹn."
+            ],
+            "not_sufficient": [
+              "Chỉ mô tả CRUD không có trách nhiệm về dữ liệu hoặc truy vấn.",
+              "Chỉ thêm index mà không nêu truy vấn hay mục tiêu."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Điều tra vấn đề truy vấn, đồng thời hoặc migration; cân nhắc nhất quán và hiệu năng, xác minh tác động.",
+            "qualifying_evidence": [
+              "Mô tả phân tích query plan, thay đổi truy vấn/index và đo xác nhận hiệu năng.",
+              "Nêu xử lý cạnh tranh hoặc rollback migration với kiểm chứng tính toàn vẹn dữ liệu."
+            ],
+            "not_sufficient": [
+              "Chỉ tuyên bố truy vấn nhanh hơn mà không nêu phép đo.",
+              "Chỉ thêm retry cho lỗi database mà không xác định vấn đề nhất quán."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết kế chiến lược dữ liệu hoặc migration ở cấp hệ thống, dẫn dắt đánh đổi vận hành và xác minh an toàn khi chuyển đổi.",
+            "qualifying_evidence": [
+              "Mô tả kế hoạch migration dữ liệu nhiều dịch vụ với rollout, rollback và xác minh dữ liệu.",
+              "Nêu quyết định kiến trúc lưu trữ/transaction liên thành phần và bằng chứng hiệu năng, tính toàn vẹn sau triển khai."
+            ],
+            "not_sufficient": [
+              "Chỉ thiết kế schema cho một tính năng nhỏ.",
+              "Chỉ đề xuất công nghệ database mà không có kế hoạch chuyển đổi và kết quả kiểm chứng."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "testing_debugging",
+        "label": "Kiểm thử và gỡ lỗi",
+        "description": "Xây dựng kiểm thử tự động phù hợp và điều tra lỗi bằng log, trace, dữ liệu tái hiện; xác minh nguyên nhân và sửa lỗi.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "testing_debugging",
+            "quote": "Viết kiểm thử tự động, gỡ lỗi từ log/trace và xử lý lỗi production có phương pháp"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm viết kiểm thử tự động hoặc gỡ lỗi backend.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng viết kiểm thử tự động hoặc gỡ lỗi backend."
+            ],
+            "not_sufficient": [
+              "CV không đề cập kiểm thử.",
+              "Chỉ liệt kê công cụ test hoặc logging."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Viết hoặc chạy kiểm thử đơn giản, hay tái hiện lỗi với hướng dẫn và phạm vi giới hạn.",
+            "qualifying_evidence": [
+              "Mô tả thêm một unit test nhỏ theo pattern có sẵn.",
+              "Nêu tái hiện lỗi đơn giản bằng log hoặc bước tái hiện được cung cấp."
+            ],
+            "not_sufficient": [
+              "Chỉ nói chạy test suite.",
+              "Chỉ nêu phát hiện bug mà không có cách điều tra hoặc xác nhận."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập tạo kiểm thử cho luồng thường lệ và lần theo lỗi backend tới nguyên nhân có thể sửa.",
+            "qualifying_evidence": [
+              "Mô tả viết kiểm thử unit/integration bao phủ luồng và trường hợp lỗi dự kiến.",
+              "Nêu dùng log/trace hoặc debugger để xác định và xác nhận bản sửa lỗi."
+            ],
+            "not_sufficient": [
+              "Chỉ thêm assertion không liên quan hành vi nghiệp vụ.",
+              "Chỉ sửa lỗi theo chỉ dẫn mà không mô tả tái hiện hay xác minh."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Điều tra lỗi liên thành phần hoặc khó tái hiện, cân nhắc phương án sửa và xác minh tái phát bằng kiểm thử/quan sát.",
+            "qualifying_evidence": [
+              "Nêu dựng tái hiện hoặc kiểm thử hồi quy cho lỗi không ổn định, xác nhận nguyên nhân và kết quả sau sửa.",
+              "Mô tả phân tích trace/log qua các thành phần, đánh đổi bản sửa và theo dõi xác minh sau phát hành."
+            ],
+            "not_sufficient": [
+              "Chỉ quy lỗi cho một dịch vụ mà không có bằng chứng.",
+              "Chỉ thêm logging mà không tìm nguyên nhân hoặc kiểm thử lại."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết kế năng lực kiểm thử và điều tra sự cố dùng chung, dẫn dắt khắc phục sự cố phức tạp và xác minh giảm tái diễn.",
+            "qualifying_evidence": [
+              "Mô tả thiết lập chiến lược kiểm thử/observability dùng bởi nhiều dịch vụ và đo xác nhận hiệu quả.",
+              "Nêu dẫn dắt phân tích sự cố liên dịch vụ, chuyển phát hiện thành kiểm soát tự động và xác nhận qua các lần phát hành sau."
+            ],
+            "not_sufficient": [
+              "Chỉ sở hữu bộ test của một thành phần không có ảnh hưởng rộng.",
+              "Chỉ tham gia postmortem mà không đưa ra biện pháp kiểm chứng."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "security",
+        "label": "Bảo mật backend",
+        "description": "Bảo vệ luồng backend qua xác thực, phân quyền, xử lý dữ liệu nhạy cảm và quản lý rủi ro dependency.",
+        "weight": 14,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "security",
+            "quote": "Áp dụng bảo mật cho xác thực, phân quyền, dữ liệu và dependency"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm áp dụng bảo mật trong triển khai backend.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng áp dụng bảo mật trong backend."
+            ],
+            "not_sufficient": [
+              "Không đề cập bảo mật trong CV.",
+              "Chỉ liệt kê thư viện bảo mật."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện biện pháp bảo mật nhỏ theo hướng dẫn hoặc cấu hình có sẵn.",
+            "qualifying_evidence": [
+              "Mô tả dùng cơ chế xác thực/phân quyền đã có cho một endpoint theo hướng dẫn.",
+              "Nêu khắc phục một cảnh báo dependency cụ thể theo quy trình hiện hành."
+            ],
+            "not_sufficient": [
+              "Chỉ tuyên bố tuân thủ bảo mật.",
+              "Chỉ cài thư viện mà không có biện pháp được triển khai."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Tự triển khai kiểm soát bảo mật thường lệ và kiểm thử quyền truy cập hoặc xử lý dữ liệu.",
+            "qualifying_evidence": [
+              "Mô tả kiểm tra quyền theo vai trò/tài nguyên và kiểm thử trường hợp bị từ chối.",
+              "Nêu bảo vệ dữ liệu nhạy cảm trong luồng backend cùng kiểm tra cấu hình hoặc logging."
+            ],
+            "not_sufficient": [
+              "Chỉ xác thực người dùng mà không kiểm tra quyền trên tài nguyên.",
+              "Chỉ mô tả mã hóa chung chung, không nêu luồng hoặc kiểm tra."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý rủi ro bảo mật hoặc lỗ hổng có đánh đổi, phối hợp khắc phục và xác minh bằng kiểm thử/phân tích phù hợp.",
+            "qualifying_evidence": [
+              "Nêu phân tích lỗ hổng dependency, đánh giá tác động, triển khai cập nhật và xác minh không hồi quy.",
+              "Mô tả khắc phục lỗi phân quyền hoặc lộ dữ liệu bằng test âm tính và kiểm tra log sau phát hành."
+            ],
+            "not_sufficient": [
+              "Chỉ cập nhật dependency theo định kỳ mà không nêu rủi ro hay xác minh.",
+              "Chỉ nhận định ứng dụng an toàn mà không có bằng chứng kiểm tra."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hình kiểm soát bảo mật backend liên dịch vụ, dẫn dắt phản hồi rủi ro và xác minh mức bao phủ sau rollout.",
+            "qualifying_evidence": [
+              "Mô tả thiết kế mô hình phân quyền/secret/dependency dùng chung, triển khai theo giai đoạn và xác minh bằng kiểm tra tự động.",
+              "Nêu dẫn dắt ứng phó lỗ hổng ảnh hưởng nhiều dịch vụ, phối hợp rollout và xác nhận các điểm phơi nhiễm đã được xử lý."
+            ],
+            "not_sufficient": [
+              "Chỉ sở hữu kiểm soát trong một endpoint.",
+              "Chỉ đề xuất chính sách bảo mật không có triển khai hoặc kiểm tra kết quả."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "delivery_reliability",
+        "label": "Giao hàng và độ tin cậy",
+        "description": "Đưa backend qua CI/CD, theo dõi sức khỏe dịch vụ và cải thiện độ tin cậy/hiệu năng với đánh đổi được đo lường.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "delivery_reliability",
+            "quote": "Đưa dịch vụ qua CI/CD, quan sát sức khỏe hệ thống và cải thiện độ tin cậy, hiệu năng với các đánh đổi được kiểm chứng"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm giao hàng hoặc vận hành dịch vụ backend.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng đưa hoặc vận hành dịch vụ backend."
+            ],
+            "not_sufficient": [
+              "Không nhắc CI/CD trong CV.",
+              "Chỉ nêu đã dùng cloud hoặc container."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện một bước CI/deploy hoặc theo dõi chỉ số cơ bản theo quy trình có sẵn.",
+            "qualifying_evidence": [
+              "Mô tả sửa cấu hình pipeline nhỏ hoặc triển khai theo runbook.",
+              "Nêu theo dõi dashboard/health check cơ bản trong một lần phát hành."
+            ],
+            "not_sufficient": [
+              "Chỉ liệt kê CI/CD hoặc nền tảng cloud.",
+              "Chỉ nói tham gia phát hành mà không mô tả hành động."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập chịu trách nhiệm giao hàng thường lệ và kiểm tra sức khỏe dịch vụ sau triển khai.",
+            "qualifying_evidence": [
+              "Mô tả tự triển khai backend qua pipeline và xác nhận health check hoặc chỉ số vận hành.",
+              "Nêu xử lý lỗi phát hành thông thường theo quy trình rollback/roll-forward."
+            ],
+            "not_sufficient": [
+              "Chỉ viết mã nhưng không có bằng chứng delivery hoặc vận hành.",
+              "Chỉ theo dõi chỉ số mà không có hành động xác nhận dịch vụ."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Giải quyết vấn đề tin cậy/hiệu năng trong vận hành, cân nhắc rủi ro rollout và xác minh bằng SLI, tải hoặc quan sát sau phát hành.",
+            "qualifying_evidence": [
+              "Mô tả giảm lỗi/độ trễ qua điều chỉnh có đánh đổi, xác nhận bằng metric trước/sau.",
+              "Nêu rollout canary/rollback cho thay đổi rủi ro và quyết định dựa trên health signal."
+            ],
+            "not_sufficient": [
+              "Chỉ tuyên bố uptime cao mà không có bằng chứng hoặc cách đo.",
+              "Chỉ tăng tài nguyên mà không đánh giá hiệu năng hay chi phí."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hình cơ chế delivery/reliability liên dịch vụ, dẫn dắt quyết định mức hệ thống và xác minh qua chỉ số hoặc diễn tập.",
+            "qualifying_evidence": [
+              "Mô tả thiết kế quy trình rollout/rollback và SLI dùng chung nhiều dịch vụ, kèm kết quả đo được.",
+              "Nêu dẫn dắt cải thiện độ tin cậy liên thành phần, diễn tập phục hồi và xác nhận mục tiêu phục hồi."
+            ],
+            "not_sufficient": [
+              "Chỉ quản lý pipeline một dịch vụ mà không ảnh hưởng hệ thống rộng hơn.",
+              "Chỉ đặt mục tiêu uptime hoặc quy trình giấy tờ mà không có diễn tập/xác minh."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      }
+    ],
+    "policy": {
+      "draft_status": "draft_unapproved",
+      "threshold": 70,
+      "core_minimum_scores": {},
+      "require_full_coverage": true,
+      "validation_status": "unvalidated_synthetic"
+    }
+  },
+  "mobile_web_qa": {
+    "title": "Mobile/Web Tester (QA/QC)",
+    "jd_text": "Thiết kế kiểm thử theo yêu cầu, rủi ro và luồng người dùng; kiểm thử chức năng trên web và thiết bị di động, bao gồm trạng thái, khả năng tương thích và trải nghiệm sử dụng. Kiểm tra API và dữ liệu bằng cách đối chiếu yêu cầu, phản hồi, quy tắc nghiệp vụ và tính nhất quán dữ liệu. Xây dựng và duy trì tự động hóa kiểm thử phù hợp, đồng thời xác định phần cần kiểm thử thủ công. Điều tra lỗi, tái hiện vấn đề, xác minh bản sửa và thực hiện kiểm thử hồi quy. Truyền đạt rõ ràng chất lượng, rủi ro còn lại và khuyến nghị phát hành tới các bên liên quan để hỗ trợ quyết định phát hành.",
+    "criteria": [
+      {
+        "id": "test_design",
+        "label": "Thiết kế kiểm thử",
+        "description": "Chuyển yêu cầu và rủi ro thành phạm vi, trường hợp và dữ liệu kiểm thử có thể truy vết; ưu tiên theo tác động.",
+        "weight": 18,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "test_design",
+            "quote": "Thiết kế kiểm thử theo yêu cầu, rủi ro và luồng người dùng"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm thiết kế kiểm thử trong phạm vi này.",
+            "qualifying_evidence": [
+              "Ứng viên nói rõ chưa có kinh nghiệm thiết kế trường hợp kiểm thử theo yêu cầu, rủi ro hoặc luồng người dùng."
+            ],
+            "not_sufficient": [
+              "Không nhắc đến thiết kế kiểm thử.",
+              "Chỉ mô tả đã chạy các bước kiểm thử do người khác soạn."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Hỗ trợ tạo hoặc cập nhật trường hợp kiểm thử đơn giản theo hướng dẫn có sẵn.",
+            "qualifying_evidence": [
+              "Tạo hoặc cập nhật trường hợp kiểm thử dựa trên yêu cầu và mẫu do người khác cung cấp.",
+              "Mô tả kiểm thử các luồng chính với danh sách bước có sẵn."
+            ],
+            "not_sufficient": [
+              "Chỉ thực thi kiểm thử mà không tạo hay cập nhật trường hợp.",
+              "Khẳng định lập kế hoạch độc lập nhưng không nêu ví dụ."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập thiết kế trường hợp kiểm thử thông thường từ yêu cầu, bao gồm luồng chính và điều kiện biên cơ bản.",
+            "qualifying_evidence": [
+              "Chuyển một yêu cầu thành các trường hợp bao phủ luồng chính, đầu vào hợp lệ và điều kiện biên.",
+              "Liên kết các trường hợp kiểm thử với yêu cầu để theo dõi phạm vi."
+            ],
+            "not_sufficient": [
+              "Chỉ liệt kê bước kiểm thử mẫu mà không gắn với yêu cầu.",
+              "Chỉ nêu kiểm thử theo cảm nhận, không có trường hợp cụ thể."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Thiết kế kiểm thử dựa trên rủi ro, xử lý tình huống lỗi và đánh đổi phạm vi; xác minh độ bao phủ với nhóm liên quan.",
+            "qualifying_evidence": [
+              "Ưu tiên kiểm thử theo khả năng và tác động của lỗi, đồng thời bổ sung tình huống âm hoặc lỗi.",
+              "Xem xét yêu cầu chưa rõ với nhóm sản phẩm/kỹ thuật và xác minh các lỗ hổng bao phủ trước khi kết thúc kiểm thử."
+            ],
+            "not_sufficient": [
+              "Nêu rủi ro chung mà không thay đổi phạm vi hay thứ tự kiểm thử.",
+              "Đếm số trường hợp kiểm thử mà không xem xét mức độ bao phủ."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hình cách thiết kế kiểm thử xuyên nhóm hoặc toàn sản phẩm, thiết lập truy vết/ưu tiên nhất quán và xác minh hiệu quả qua kết quả.",
+            "qualifying_evidence": [
+              "Thiết lập cách tiếp cận thiết kế kiểm thử dựa trên rủi ro cho nhiều luồng hoặc nhóm và kiểm tra tính bao phủ qua các lần phát hành.",
+              "Dẫn dắt rà soát phạm vi kiểm thử, giải quyết xung đột ưu tiên và dùng kết quả lỗi để xác minh, điều chỉnh chiến lược."
+            ],
+            "not_sufficient": [
+              "Chỉ thiết kế tốt cho một tính năng đơn lẻ.",
+              "Chỉ đề xuất quy trình mà không cho thấy đã triển khai hoặc kiểm tra hiệu quả."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "web_mobile_functional",
+        "label": "Kiểm thử chức năng web và di động",
+        "description": "Xác minh chức năng và luồng người dùng trên web, thiết bị di động, trạng thái và điều kiện tương thích thực tế.",
+        "weight": 18,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "web_mobile_functional",
+            "quote": "kiểm thử chức năng trên web và thiết bị di động"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm kiểm thử chức năng web hoặc di động.",
+            "qualifying_evidence": [
+              "Ứng viên nói rõ chưa có kinh nghiệm kiểm thử chức năng web hoặc ứng dụng di động."
+            ],
+            "not_sufficient": [
+              "Không nhắc đến kiểm thử web/di động.",
+              "Chỉ nói đã sử dụng một ứng dụng như người dùng."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện các bước kiểm thử chức năng web hoặc di động đã được hướng dẫn trên một phạm vi hẹp.",
+            "qualifying_evidence": [
+              "Chạy checklist chức năng có sẵn cho một màn hình hoặc luồng đơn giản.",
+              "Báo kết quả pass/fail của luồng đã được giao."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu đã kiểm thử mà không có hành động hoặc luồng cụ thể.",
+              "Chỉ kiểm tra giao diện tĩnh mà không thực hiện chức năng."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập kiểm thử các luồng chức năng thông thường trên web và thiết bị di động, gồm trạng thái giao diện và khả năng tương thích cơ bản.",
+            "qualifying_evidence": [
+              "Kiểm tra luồng người dùng trên web và di động với trạng thái tải, rỗng, lỗi hoặc thành công.",
+              "Kiểm tra hành vi trên các cấu hình thiết bị/trình duyệt liên quan và ghi nhận sai khác."
+            ],
+            "not_sufficient": [
+              "Chỉ kiểm thử một nền tảng dù tiêu chí yêu cầu cả web và di động.",
+              "Chỉ kiểm tra một luồng thành công, không xem trạng thái khác."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Kiểm thử các biến thể thiết bị, trạng thái mạng hoặc vòng đời ứng dụng; phân tích đánh đổi phạm vi và xác minh hành vi không nhất quán.",
+            "qualifying_evidence": [
+              "Tái hiện và xác minh lỗi phụ thuộc thiết bị, kích thước màn hình, trạng thái mạng hoặc chuyển nền/tiền cảnh.",
+              "Điều chỉnh phạm vi kiểm thử theo rủi ro tương thích và xác nhận hành vi nhất quán trên các môi trường mục tiêu."
+            ],
+            "not_sufficient": [
+              "Nêu danh sách thiết bị đã dùng mà không mô tả điều gì được xác minh.",
+              "Kiểm tra nhiều cấu hình nhưng bỏ qua các sai khác phát hiện được."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hình cách xác minh trải nghiệm chức năng xuyên nền tảng, cân bằng ma trận thiết bị/rủi ro và kiểm chứng hiệu quả bằng kết quả phát hành.",
+            "qualifying_evidence": [
+              "Xây dựng ma trận nền tảng và ưu tiên kiểm thử dựa trên mức sử dụng/rủi ro, sau đó xác minh lỗi tương thích giảm hoặc được phát hiện trước phát hành.",
+              "Điều phối xác minh xuyên web/di động cho luồng quan trọng và xác nhận các khác biệt hành vi được giải quyết."
+            ],
+            "not_sufficient": [
+              "Chỉ kiểm thử nhiều thiết bị cho một tính năng.",
+              "Đưa ra đề xuất ma trận nhưng không áp dụng hoặc kiểm tra kết quả."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "api_data_testing",
+        "label": "Kiểm thử API và dữ liệu",
+        "description": "Kiểm tra giao tiếp API và đối chiếu dữ liệu với hợp đồng, quy tắc nghiệp vụ và tính nhất quán.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "api_data_testing",
+            "quote": "Kiểm tra API và dữ liệu bằng cách đối chiếu yêu cầu, phản hồi, quy tắc nghiệp vụ và tính nhất quán dữ liệu."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm kiểm thử API hoặc dữ liệu.",
+            "qualifying_evidence": [
+              "Ứng viên nói rõ chưa có kinh nghiệm kiểm thử API hoặc xác minh dữ liệu."
+            ],
+            "not_sufficient": [
+              "Không nhắc đến API/dữ liệu.",
+              "Chỉ nói đã xem phản hồi trên giao diện người dùng."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Hỗ trợ kiểm tra phản hồi hoặc dữ liệu theo kịch bản và kỳ vọng có sẵn.",
+            "qualifying_evidence": [
+              "Gửi yêu cầu API theo hướng dẫn và so sánh phản hồi với kỳ vọng được cung cấp.",
+              "Kiểm tra một số giá trị dữ liệu bằng truy vấn hoặc bảng đối chiếu có sẵn."
+            ],
+            "not_sufficient": [
+              "Chỉ gọi API mà không kiểm tra phản hồi.",
+              "Chỉ mô tả thao tác dữ liệu không liên quan xác minh."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập xác minh yêu cầu/phản hồi API và quy tắc dữ liệu thông thường, bao gồm trường bắt buộc và trường hợp biên.",
+            "qualifying_evidence": [
+              "Kiểm tra mã phản hồi, cấu trúc/trường dữ liệu và hành vi với đầu vào hợp lệ hoặc không hợp lệ.",
+              "Đối chiếu dữ liệu hiển thị với bản ghi hoặc kết quả API cho luồng nghiệp vụ thông thường."
+            ],
+            "not_sufficient": [
+              "Chỉ kiểm tra mã thành công mà không xác minh nội dung.",
+              "Chỉ kiểm tra dữ liệu bằng một mẫu chuẩn, không xét quy tắc nghiệp vụ."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Điều tra lỗi tích hợp hoặc bất nhất dữ liệu, kiểm thử lỗi/biên và xác minh nguyên nhân cùng tác động xuyên thành phần.",
+            "qualifying_evidence": [
+              "Lần theo chênh lệch giữa yêu cầu, phản hồi API và dữ liệu lưu để khoanh vùng thành phần gây lỗi.",
+              "Kiểm tra xử lý lỗi, tính lặp lại hoặc tính nhất quán sau thao tác và xác minh kết quả với nhóm kỹ thuật."
+            ],
+            "not_sufficient": [
+              "Báo lỗi API nhưng không cung cấp bằng chứng đối chiếu.",
+              "Nêu kiểm thử dữ liệu nhưng không xem xét tính nhất quán hoặc đường lỗi."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết kế phương pháp xác minh API/dữ liệu liên thành phần, xác định quy tắc và rủi ro dữ liệu, rồi kiểm chứng hiệu quả ở cấp hệ thống.",
+            "qualifying_evidence": [
+              "Định hình bộ kiểm tra tính nhất quán API/dữ liệu cho các luồng quan trọng và chứng minh nó phát hiện lỗi liên thành phần trước phát hành.",
+              "Điều phối xác minh quy tắc dữ liệu và lỗi tích hợp xuyên dịch vụ, theo dõi kết quả để điều chỉnh phạm vi kiểm thử."
+            ],
+            "not_sufficient": [
+              "Chỉ viết truy vấn kiểm tra cho một lỗi riêng lẻ.",
+              "Chỉ đề xuất quy tắc xác minh mà không áp dụng hoặc chứng minh hiệu quả."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "test_automation",
+        "label": "Tự động hóa kiểm thử",
+        "description": "Tạo và duy trì kiểm thử tự động phù hợp để tăng khả năng phản hồi, đồng thời giữ đánh giá phù hợp về phần cần kiểm thử thủ công.",
+        "weight": 18,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "test_automation",
+            "quote": "Xây dựng và duy trì tự động hóa kiểm thử phù hợp"
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm xây dựng hoặc duy trì tự động hóa kiểm thử.",
+            "qualifying_evidence": [
+              "Ứng viên nói rõ chưa có kinh nghiệm tự động hóa kiểm thử."
+            ],
+            "not_sufficient": [
+              "Không đề cập tự động hóa.",
+              "Chỉ dùng công cụ hoặc chạy bộ kiểm thử do người khác xây dựng."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Hỗ trợ chạy, chỉnh sửa nhỏ hoặc thêm bước đơn giản vào kiểm thử tự động có sẵn.",
+            "qualifying_evidence": [
+              "Chạy bộ kiểm thử tự động và đọc kết quả theo hướng dẫn.",
+              "Cập nhật một kiểm tra đơn giản trong cấu trúc có sẵn, có người khác rà soát."
+            ],
+            "not_sufficient": [
+              "Chỉ nói đã dùng kiểm thử tự động mà không có đóng góp cụ thể.",
+              "Tạo script tạm thời không có kỳ vọng hay kiểm tra kết quả."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập tạo và duy trì tự động hóa cho các luồng ổn định, xác minh kết quả và chọn thủ công khi phù hợp.",
+            "qualifying_evidence": [
+              "Tự viết kiểm tra tự động cho luồng chức năng thông thường và xác minh kết quả với hành vi thực tế.",
+              "Duy trì kiểm tra sau thay đổi và giải thích vì sao một số tình huống vẫn cần kiểm thử thủ công."
+            ],
+            "not_sufficient": [
+              "Chỉ viết kiểm tra một lần mà không duy trì hoặc xác minh.",
+              "Tự động hóa mọi trường hợp mà không cân nhắc độ phù hợp."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý độ không ổn định, chi phí bảo trì hoặc rủi ro hồi quy; cải thiện độ tin cậy và xác minh bằng kết quả thực thi.",
+            "qualifying_evidence": [
+              "Điều tra nguyên nhân kiểm tra chập chờn, sửa vấn đề đồng bộ hoặc dữ liệu kiểm thử và xác nhận độ ổn định tăng qua các lần chạy.",
+              "Ưu tiên tự động hóa luồng hồi quy rủi ro cao và theo dõi kết quả để giảm kiểm tra lặp lại."
+            ],
+            "not_sufficient": [
+              "Chỉ tăng số lượng kiểm tra tự động.",
+              "Tắt hoặc bỏ qua kiểm tra lỗi mà không điều tra nguyên nhân."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hình chiến lược tự động hóa xuyên nhóm/sản phẩm, quản lý ranh giới tự động/thủ công và xác minh độ tin cậy, giá trị qua thời gian.",
+            "qualifying_evidence": [
+              "Thiết lập chiến lược tự động hóa dựa trên rủi ro cho nhiều luồng, tiêu chí bảo trì và cơ chế kiểm tra độ tin cậy qua các đợt phát hành.",
+              "Dẫn dắt ưu tiên đầu tư tự động hóa so với kiểm thử thủ công, chứng minh tác động đến thời gian phản hồi hoặc khả năng phát hiện lỗi."
+            ],
+            "not_sufficient": [
+              "Chỉ xây dựng bộ kiểm thử cho một tính năng.",
+              "Tuyên bố tăng tốc kiểm thử mà không có cách xác minh hoặc bằng chứng kết quả."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "defect_regression",
+        "label": "Điều tra lỗi và hồi quy",
+        "description": "Tạo bằng chứng tái hiện rõ, hỗ trợ khoanh vùng nguyên nhân, xác minh bản sửa và hồi quy có trọng tâm.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "defect_regression",
+            "quote": "Điều tra lỗi, tái hiện vấn đề, xác minh bản sửa và thực hiện kiểm thử hồi quy."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm điều tra, tái hiện hoặc xác minh lỗi trong phạm vi này.",
+            "qualifying_evidence": [
+              "Ứng viên nói rõ chưa có kinh nghiệm điều tra lỗi, tái hiện vấn đề hoặc kiểm thử hồi quy."
+            ],
+            "not_sufficient": [
+              "Không đề cập lỗi.",
+              "Chỉ nói đã gửi báo cáo lỗi mà không thể hiện điều tra hoặc xác minh."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Báo lỗi đã quan sát được với thông tin cơ bản hoặc chạy lại một kiểm tra sau khi sửa theo hướng dẫn.",
+            "qualifying_evidence": [
+              "Ghi nhận bước tái hiện và kết quả quan sát được cho lỗi đơn giản.",
+              "Chạy lại trường hợp kiểm thử được chỉ định sau khi có bản sửa."
+            ],
+            "not_sufficient": [
+              "Báo cáo mơ hồ không có hành động tái hiện.",
+              "Đánh dấu lỗi đã sửa mà không kiểm tra lại."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập tái hiện lỗi, cung cấp bằng chứng hữu ích, xác minh bản sửa và kiểm thử hồi quy luồng liên quan.",
+            "qualifying_evidence": [
+              "Tạo báo cáo lỗi có bước tái hiện, kết quả mong đợi/thực tế và thông tin môi trường liên quan.",
+              "Xác minh bản sửa rồi chạy hồi quy cho luồng bị ảnh hưởng và các nhánh gần kề."
+            ],
+            "not_sufficient": [
+              "Chỉ chuyển tiếp lỗi do người khác phát hiện.",
+              "Chỉ kiểm tra lại đúng bước đã lỗi mà không xác minh hồi quy liên quan."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Khoanh vùng lỗi khó tái hiện hoặc liên thành phần, cân nhắc phạm vi ảnh hưởng và xác minh bản sửa qua điều kiện gây lỗi.",
+            "qualifying_evidence": [
+              "Thu hẹp lỗi phụ thuộc trạng thái/thời điểm bằng thay đổi có kiểm soát và phối hợp xác định nguyên nhân.",
+              "Xác định hồi quy dựa trên phạm vi ảnh hưởng, tái tạo điều kiện lỗi và xác minh hành vi sau sửa."
+            ],
+            "not_sufficient": [
+              "Nêu lỗi khó tái hiện nhưng không mô tả cách thu thập bằng chứng.",
+              "Chạy toàn bộ hồi quy mà không xác định phạm vi ảnh hưởng hoặc xem xét kết quả."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Cải tiến cách quản lý điều tra và hồi quy ở cấp nhóm/sản phẩm; xác minh xu hướng lặp lại và hiệu quả giảm lỗi tái phát.",
+            "qualifying_evidence": [
+              "Thiết lập quy trình phân loại và theo dõi lỗi tái phát với hồi quy liên kết, sau đó xác minh các nguyên nhân lặp lại được phát hiện sớm hơn.",
+              "Điều phối phân tích lỗi nghiêm trọng xuyên nhóm và dùng bằng chứng kết quả để cải tiến tập hồi quy."
+            ],
+            "not_sufficient": [
+              "Chỉ xử lý một lỗi nghiêm trọng đơn lẻ.",
+              "Đề xuất quy trình điều tra nhưng không triển khai hoặc đánh giá kết quả."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "release_quality_comms",
+        "label": "Chất lượng phát hành và truyền đạt",
+        "description": "Tổng hợp chất lượng, rủi ro còn lại và khuyến nghị rõ ràng để hỗ trợ quyết định phát hành.",
+        "weight": 14,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "release_quality_comms",
+            "quote": "Truyền đạt rõ ràng chất lượng, rủi ro còn lại và khuyến nghị phát hành tới các bên liên quan để hỗ trợ quyết định phát hành."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm truyền đạt chất lượng hoặc rủi ro kiểm thử để hỗ trợ quyết định phát hành.",
+            "qualifying_evidence": [
+              "Ứng viên nói rõ chưa có kinh nghiệm báo cáo chất lượng, rủi ro còn lại hoặc khuyến nghị phát hành."
+            ],
+            "not_sufficient": [
+              "Không đề cập truyền đạt chất lượng.",
+              "Chỉ nêu tham dự cuộc họp phát hành."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Chia sẻ trạng thái kiểm thử cơ bản hoặc số lỗi theo yêu cầu, không phân tích rủi ro.",
+            "qualifying_evidence": [
+              "Gửi trạng thái hoàn thành/đang chờ và lỗi mở theo định dạng có sẵn.",
+              "Báo kết quả pass/fail cho một tính năng được giao."
+            ],
+            "not_sufficient": [
+              "Chỉ nói đã gửi báo cáo mà không nêu nội dung.",
+              "Đưa ra khuyến nghị không dựa trên bằng chứng kiểm thử."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Độc lập tổng hợp kết quả, lỗi mở và phạm vi đã kiểm thử thành cập nhật dễ hiểu cho quyết định phát hành thông thường.",
+            "qualifying_evidence": [
+              "Báo cáo phạm vi đã kiểm thử, kết quả và lỗi mở kèm tác động tới luồng liên quan.",
+              "Chuyển kết quả kỹ thuật thành cập nhật rõ ràng cho bên liên quan và nêu khuyến nghị dựa trên bằng chứng."
+            ],
+            "not_sufficient": [
+              "Chỉ báo số lượng lỗi mà không chỉ ra ảnh hưởng hoặc phạm vi kiểm thử.",
+              "Nêu 'sẵn sàng phát hành' mà không có kết quả hay rủi ro cụ thể."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Phân tích rủi ro còn lại và đánh đổi phát hành, diễn đạt độ chắc chắn/giới hạn bằng chứng và cập nhật khuyến nghị khi có dữ liệu mới.",
+            "qualifying_evidence": [
+              "Mô tả rủi ro chưa giải quyết, khả năng/tác động và biện pháp giảm nhẹ để hỗ trợ lựa chọn phát hành.",
+              "Cập nhật khuyến nghị khi kiểm thử bổ sung hoặc bản sửa thay đổi mức độ rủi ro, đồng thời xác minh thông tin với nhóm liên quan."
+            ],
+            "not_sufficient": [
+              "Liệt kê lỗi mở mà không xếp mức độ ảnh hưởng hoặc làm rõ giới hạn kiểm thử.",
+              "Đưa ra quyết định thay nhóm phát hành mà không trình bày bằng chứng."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hình cơ chế truyền đạt và ra quyết định chất lượng xuyên nhóm/phát hành, bảo đảm thông tin rủi ro được xác minh và quyết định có căn cứ.",
+            "qualifying_evidence": [
+              "Thiết lập tiêu chí và nhịp cập nhật chất lượng cho nhiều nhóm, xác minh rủi ro quan trọng có chủ sở hữu và quyết định được ghi nhận.",
+              "Điều phối đánh giá phát hành liên chức năng, trình bày phương án đánh đổi và theo dõi rủi ro sau quyết định để kiểm chứng hiệu quả."
+            ],
+            "not_sufficient": [
+              "Chỉ phát biểu trong một cuộc họp phát hành.",
+              "Đưa ra khuôn mẫu báo cáo nhưng không triển khai hoặc xác minh nó hỗ trợ quyết định."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      }
+    ],
+    "policy": {
+      "draft_status": "draft_unapproved",
+      "threshold": 70,
+      "core_minimum_scores": {},
+      "require_full_coverage": true,
+      "validation_status": "unvalidated_synthetic"
+    }
+  },
+  "agentic_engineer": {
+    "title": "Agentic Engineer",
+    "jd_text": "Thiết kế và triển khai agent cùng workflow nhiều bước, xác định ranh giới tự chủ, điều phối và tiêu chí chuyển giao cho con người. Định nghĩa hợp đồng công cụ, quản lý trạng thái, timeout, retry, tính lặp an toàn và phục hồi lỗi để workflow có thể tiếp tục hoặc dừng an toàn. Xây dựng retrieval và cơ chế grounding có trích dẫn, xử lý dữ liệu thiếu hoặc mâu thuẫn. Thiết kế đánh giá theo tập tình huống, theo dõi chất lượng và quan sát được hành vi agent trong vận hành. Áp dụng quyền tối thiểu, kiểm soát đầu vào/đầu ra và chống lạm dụng công cụ, dữ liệu. Triển khai có kiểm soát phiên bản, ngân sách chi phí, độ trễ và độ tin cậy; xác minh thay đổi bằng kiểm thử và theo dõi sau phát hành.",
+    "criteria": [
+      {
+        "id": "agent_workflow_design",
+        "label": "Thiết kế agent và workflow",
+        "description": "Thiết kế phạm vi tự chủ, phân rã nhiệm vụ, phối hợp bước hoặc agent, điều kiện dừng và chuyển giao cho người dùng.",
+        "weight": 18,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "agent_workflow_design",
+            "quote": "Thiết kế và triển khai agent cùng workflow nhiều bước, xác định ranh giới tự chủ, điều phối và tiêu chí chuyển giao cho con người."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm thiết kế hoặc triển khai agent/workflow trong phạm vi này.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng thiết kế hoặc triển khai agent hay workflow nhiều bước.",
+              "Khẳng định chưa có kinh nghiệm xác định phạm vi tự chủ hoặc điều kiện chuyển giao cho con người."
+            ],
+            "not_sufficient": [
+              "Không đề cập agent/workflow trong CV.",
+              "Chỉ nêu sử dụng chatbot hoặc gọi một API đơn lẻ."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Tham gia hoặc triển khai một luồng hẹp theo phân rã và quy tắc đã có sẵn.",
+            "qualifying_evidence": [
+              "Mô tả một bước agent được thêm theo thiết kế có sẵn và có kiểm tra đầu ra cơ bản.",
+              "Nêu rõ làm theo hướng dẫn để cấu hình một điểm chuyển giao sang người vận hành."
+            ],
+            "not_sufficient": [
+              "Chỉ liệt kê framework agent đã dùng.",
+              "Chỉ mô tả prompt đơn lẻ mà không có luồng nhiệm vụ."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Tự xây dựng workflow thường lệ với bước, điều kiện dừng và chuyển giao rõ ràng.",
+            "qualifying_evidence": [
+              "Nêu workflow nhiều bước do cá nhân triển khai, có điều kiện dừng xác định.",
+              "Mô tả quyết định khi nào agent tự xử lý và khi nào chuyển nhiệm vụ cho người."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu prototype không có luồng hoặc điều kiện hoàn tất.",
+              "Nêu nhiều agent mà không giải thích trách nhiệm hay luồng phối hợp."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý ngoại lệ và đánh đổi trong điều phối, rồi xác minh hành vi qua tình huống kiểm thử.",
+            "qualifying_evidence": [
+              "Mô tả cách xử lý vòng lặp, tác vụ không chắc chắn hoặc agent bất đồng và kiểm thử các nhánh đó.",
+              "Giải thích đánh đổi giữa mức tự chủ và chuyển giao, kèm kết quả kiểm chứng trên tình huống thực tế tổng hợp."
+            ],
+            "not_sufficient": [
+              "Nêu workflow phức tạp nhưng không có xử lý ngoại lệ hoặc bằng chứng xác minh.",
+              "Chỉ tăng số bước hoặc agent mà không đề cập điều kiện dừng."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hình kiến trúc và nguyên tắc điều phối ở cấp hệ thống, dẫn dắt quyết định và xác minh hiệu quả.",
+            "qualifying_evidence": [
+              "Nêu thiết kế kiến trúc workflow dùng lại được, ranh giới tự chủ và cơ chế chuyển giao nhất quán qua nhiều luồng.",
+              "Mô tả dẫn dắt đánh giá hoặc rà soát thay đổi điều phối ở cấp hệ thống, với kết quả được đo."
+            ],
+            "not_sufficient": [
+              "Chỉ sở hữu một workflow riêng lẻ dù có nhiều bước.",
+              "Chỉ nêu vai trò dẫn dắt mà không có bằng chứng kiến trúc và xác minh."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "tool_state_recovery",
+        "label": "Hợp đồng công cụ, trạng thái và phục hồi",
+        "description": "Định nghĩa giao diện công cụ rõ ràng và quản lý trạng thái workflow qua lỗi, retry, timeout và tiếp tục thực thi.",
+        "weight": 18,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "tool_state_recovery",
+            "quote": "Định nghĩa hợp đồng công cụ, quản lý trạng thái, timeout, retry, tính lặp an toàn và phục hồi lỗi để workflow có thể tiếp tục hoặc dừng an toàn."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm về hợp đồng công cụ hoặc trạng thái/phục hồi workflow agent.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng định nghĩa hợp đồng công cụ hoặc quản lý trạng thái workflow agent.",
+              "Khẳng định chưa xử lý timeout, retry hay phục hồi lỗi trong workflow agent."
+            ],
+            "not_sufficient": [
+              "Bỏ trống mô tả về trạng thái hay công cụ.",
+              "Chỉ nêu gọi hàm thông thường ngoài bối cảnh workflow agent."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện cấu hình hoặc xử lý đơn giản theo hợp đồng và cơ chế phục hồi đã có.",
+            "qualifying_evidence": [
+              "Mô tả triển khai một schema đầu vào/đầu ra công cụ theo đặc tả hiện có.",
+              "Nêu cấu hình timeout hoặc retry đơn giản theo hướng dẫn."
+            ],
+            "not_sufficient": [
+              "Chỉ liệt kê công cụ tích hợp.",
+              "Chỉ nêu retry mà không nói tác vụ hoặc lỗi nào được xử lý."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Tự định nghĩa hợp đồng công cụ thường lệ và xử lý trạng thái hoặc lỗi phổ biến.",
+            "qualifying_evidence": [
+              "Mô tả schema và kiểm tra lỗi cho công cụ do cá nhân tích hợp.",
+              "Nêu cách lưu hoặc truyền trạng thái để tiếp tục workflow sau lỗi thông thường."
+            ],
+            "not_sufficient": [
+              "Chỉ mô tả đầu vào công cụ mà không có phản hồi/lỗi xác định.",
+              "Chỉ nêu lưu trạng thái mà không liên hệ với phục hồi luồng."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Thiết kế xử lý lỗi và tính lặp an toàn cho trường hợp ngoại lệ, xác minh bằng kiểm thử.",
+            "qualifying_evidence": [
+              "Mô tả timeout, retry có giới hạn hoặc idempotency để tránh thao tác trùng, cùng kết quả kiểm thử.",
+              "Nêu khôi phục từ trạng thái checkpoint sau lỗi phụ thuộc hoặc lỗi một phần."
+            ],
+            "not_sufficient": [
+              "Retry vô hạn hoặc không có giới hạn được trình bày như giải pháp.",
+              "Nêu xử lý lỗi mà không xác minh phục hồi hoặc tác động phụ."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Đặt chuẩn hệ thống cho hợp đồng và phục hồi, dẫn dắt xác minh tính đúng đắn qua các tình huống lỗi.",
+            "qualifying_evidence": [
+              "Mô tả chuẩn hợp đồng công cụ và mô hình trạng thái/phục hồi áp dụng qua nhiều workflow.",
+              "Nêu thiết kế kiểm thử lỗi cấp hệ thống, rà soát triển khai và kết quả xác minh tính lặp an toàn."
+            ],
+            "not_sufficient": [
+              "Chỉ thiết kế cơ chế phục hồi cho một tích hợp hẹp.",
+              "Chỉ mô tả tiêu chuẩn hoặc tài liệu mà không có áp dụng và xác minh."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "retrieval_grounding",
+        "label": "Retrieval và grounding",
+        "description": "Xây dựng truy xuất ngữ cảnh phù hợp và ràng buộc câu trả lời với nguồn, đồng thời xử lý thông tin thiếu hoặc mâu thuẫn.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "retrieval_grounding",
+            "quote": "Xây dựng retrieval và cơ chế grounding có trích dẫn, xử lý dữ liệu thiếu hoặc mâu thuẫn."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm retrieval hoặc grounding trong ứng dụng agent.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng xây dựng retrieval hay cơ chế grounding cho agent.",
+              "Khẳng định chưa xử lý trích dẫn nguồn hoặc dữ liệu thiếu/mâu thuẫn trong đầu ra agent."
+            ],
+            "not_sufficient": [
+              "Không nhắc tới retrieval trong CV.",
+              "Chỉ dùng công cụ tìm kiếm mà không có kết nối nội dung với câu trả lời."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Thực hiện retrieval hoặc trích dẫn trong phạm vi hẹp theo cấu hình có sẵn.",
+            "qualifying_evidence": [
+              "Mô tả điều chỉnh truy vấn hoặc ngưỡng retrieval theo pipeline được cung cấp.",
+              "Nêu bổ sung liên kết nguồn vào đầu ra theo định dạng có sẵn."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu sử dụng cơ sở dữ liệu vector.",
+              "Chỉ gắn nguồn nhưng không có liên hệ với nội dung được trả lời."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Tự triển khai truy xuất và grounding cho luồng thông thường, với kiểm tra nguồn cơ bản.",
+            "qualifying_evidence": [
+              "Mô tả pipeline retrieval do cá nhân xây dựng và cách đưa đoạn trích vào ngữ cảnh agent.",
+              "Nêu kiểm tra câu trả lời dựa trên nguồn hoặc trả lời không có kết quả khi thiếu bằng chứng."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu RAG như một từ khóa.",
+              "Không nêu cách nguồn được dùng để hỗ trợ hoặc giới hạn câu trả lời."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý trường hợp thiếu, lỗi thời hoặc mâu thuẫn và xác minh độ trung thành nguồn.",
+            "qualifying_evidence": [
+              "Mô tả xử lý nguồn mâu thuẫn/lỗi thời và lựa chọn từ chối hoặc yêu cầu làm rõ, được kiểm thử.",
+              "Nêu đánh giá tính chính xác của trích dẫn hoặc mức độ hỗ trợ của nguồn trong tình huống lỗi."
+            ],
+            "not_sufficient": [
+              "Chỉ thêm nhiều nguồn hơn mà không xử lý xung đột.",
+              "Chỉ báo cáo chất lượng câu trả lời chung mà không kiểm tra grounding."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết kế chiến lược grounding ở cấp hệ thống, thiết lập tiêu chuẩn nguồn và xác minh trên các luồng.",
+            "qualifying_evidence": [
+              "Mô tả kiến trúc retrieval/grounding dùng chung có quy tắc về nguồn, trích dẫn và thiếu bằng chứng.",
+              "Nêu dẫn dắt đánh giá có hệ thống cho nguồn mâu thuẫn hoặc không đủ và cải thiện được đo."
+            ],
+            "not_sufficient": [
+              "Chỉ tối ưu một truy vấn retrieval.",
+              "Nêu chính sách nguồn nhưng không có áp dụng hoặc xác minh trên luồng."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "evaluation_observability",
+        "label": "Đánh giá và khả năng quan sát",
+        "description": "Đo chất lượng và hành vi của agent bằng tình huống đánh giá, trace và chỉ số vận hành có thể hành động.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "evaluation_observability",
+            "quote": "Thiết kế đánh giá theo tập tình huống, theo dõi chất lượng và quan sát được hành vi agent trong vận hành."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm đánh giá hoặc quan sát hệ thống agent.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng đánh giá chất lượng hay quan sát hành vi agent.",
+              "Khẳng định chưa tạo tình huống kiểm thử hoặc theo dõi vận hành cho agent."
+            ],
+            "not_sufficient": [
+              "Không nhắc tới đánh giá/quan sát.",
+              "Chỉ nêu kiểm thử phần mềm chung không gắn với hành vi agent."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Chạy tập tình huống hoặc xem log theo quy trình có sẵn.",
+            "qualifying_evidence": [
+              "Mô tả chạy bộ prompt/tình huống hiện có và ghi nhận kết quả.",
+              "Nêu kiểm tra trace/log thủ công cho một luồng agent."
+            ],
+            "not_sufficient": [
+              "Chỉ nói đã thử agent bằng tay mà không nêu tiêu chí.",
+              "Chỉ nêu có log nhưng không kiểm tra hay dùng chúng."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Tự xây dựng đánh giá thường lệ và theo dõi chỉ số chất lượng hoặc vận hành.",
+            "qualifying_evidence": [
+              "Mô tả tập tình huống do cá nhân tạo hoặc duy trì với tiêu chí kết quả rõ.",
+              "Nêu thiết lập trace/chỉ số để xem lỗi, thời gian hoặc chất lượng workflow agent."
+            ],
+            "not_sufficient": [
+              "Chỉ báo cáo một điểm số tổng hợp không có tiêu chí.",
+              "Chỉ ghi log văn bản mà không thể liên hệ hành vi với kết quả."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Phân tích trường hợp lỗi/thoái hóa, cân bằng chỉ số và xác minh cải tiến qua đánh giá lặp lại.",
+            "qualifying_evidence": [
+              "Mô tả phát hiện lỗi qua trace, phân loại nguyên nhân và xác nhận sửa lỗi bằng tập đánh giá.",
+              "Nêu đánh đổi giữa chất lượng, độ trễ hoặc chi phí với kết quả được so sánh."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu tăng điểm mà không có phương pháp so sánh.",
+              "Chỉ theo dõi chỉ số nhưng không dùng để điều tra hoặc xác minh thay đổi."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết lập hệ thống đánh giá và quan sát có thể tái sử dụng, dẫn dắt quy trình cải tiến được xác minh.",
+            "qualifying_evidence": [
+              "Mô tả chuẩn/khung đánh giá và trace dùng chung qua nhiều workflow agent.",
+              "Nêu dẫn dắt chu trình phát hiện, ưu tiên, xác minh và theo dõi lỗi ở cấp hệ thống."
+            ],
+            "not_sufficient": [
+              "Chỉ xây dashboard cho một luồng mà không có quy trình đánh giá.",
+              "Chỉ đề xuất chỉ số mà không có sử dụng hoặc kết quả xác minh."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "security_permissions",
+        "label": "Bảo mật và quyền hạn",
+        "description": "Giới hạn quyền công cụ và dữ liệu, kiểm tra các đầu vào/đầu ra không tin cậy, và giảm rủi ro lạm dụng agent.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "security_permissions",
+            "quote": "Áp dụng quyền tối thiểu, kiểm soát đầu vào/đầu ra và chống lạm dụng công cụ, dữ liệu."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm bảo mật hoặc kiểm soát quyền cho agent/tool agent.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng áp dụng quyền tối thiểu hoặc kiểm soát bảo mật cho agent.",
+              "Khẳng định chưa xử lý lạm dụng công cụ/dữ liệu hay đầu vào không tin cậy trong hệ thống agent."
+            ],
+            "not_sufficient": [
+              "Không nhắc tới bảo mật.",
+              "Chỉ nêu đào tạo bảo mật chung ngoài phạm vi agent."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Áp dụng một biện pháp bảo vệ hẹp theo chính sách hoặc thiết kế có sẵn.",
+            "qualifying_evidence": [
+              "Mô tả cấu hình quyền đọc hoặc giới hạn công cụ theo danh sách được cung cấp.",
+              "Nêu thêm kiểm tra đầu vào/đầu ra đơn giản theo quy tắc có sẵn."
+            ],
+            "not_sufficient": [
+              "Chỉ nhắc đến bảo mật như yêu cầu chung.",
+              "Chỉ che dữ liệu sau khi công cụ đã có quyền quá rộng."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Tự giới hạn quyền và kiểm tra dữ liệu/công cụ trong luồng agent thường lệ.",
+            "qualifying_evidence": [
+              "Mô tả phân quyền công cụ theo tác vụ hoặc người dùng và kiểm tra quyền trước khi thực thi.",
+              "Nêu xử lý đầu vào không tin cậy hoặc lọc đầu ra trong luồng agent do cá nhân triển khai."
+            ],
+            "not_sufficient": [
+              "Chỉ dựa vào prompt để ngăn hành động trái phép.",
+              "Chỉ nêu xác thực người dùng mà không giới hạn quyền của agent."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý kịch bản lạm dụng hoặc vượt quyền và xác minh kiểm soát bằng kiểm thử đối kháng.",
+            "qualifying_evidence": [
+              "Mô tả kiểm thử prompt injection/đầu vào độc hại và biện pháp ngăn đọc hoặc hành động vượt quyền.",
+              "Nêu thiết kế phê duyệt cho hành động rủi ro cùng xác minh các đường từ chối/chặn."
+            ],
+            "not_sufficient": [
+              "Chỉ thêm từ chối trong prompt mà không kiểm soát quyền ở công cụ.",
+              "Chỉ nêu rà soát bảo mật không có kịch bản kiểm thử hoặc kết quả."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Định hình mô hình quyền và kiểm soát rủi ro xuyên hệ thống, dẫn dắt xác minh theo kịch bản đe dọa.",
+            "qualifying_evidence": [
+              "Mô tả mô hình quyền tối thiểu, ranh giới dữ liệu và phê duyệt nhất quán qua nhiều agent/công cụ.",
+              "Nêu dẫn dắt threat modeling hoặc kiểm thử đối kháng có kết quả và kiểm soát được triển khai."
+            ],
+            "not_sufficient": [
+              "Chỉ phụ trách một bộ lọc riêng lẻ.",
+              "Chỉ viết chính sách bảo mật mà không có kiểm soát thực thi và xác minh."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      },
+      {
+        "id": "deployment_cost_reliability",
+        "label": "Triển khai, chi phí và độ tin cậy",
+        "description": "Vận hành thay đổi agent có kiểm soát, theo dõi ngân sách, độ trễ và độ tin cậy, rồi xác minh sau phát hành.",
+        "weight": 16,
+        "core": true,
+        "source_requirements": [
+          {
+            "requirement_id": "deployment_cost_reliability",
+            "quote": "Triển khai có kiểm soát phiên bản, ngân sách chi phí, độ trễ và độ tin cậy; xác minh thay đổi bằng kiểm thử và theo dõi sau phát hành."
+          }
+        ],
+        "scoring_anchors": [
+          {
+            "score": 0,
+            "description": "Không có kinh nghiệm triển khai hoặc quản lý chi phí/độ tin cậy cho agent.",
+            "qualifying_evidence": [
+              "Nêu rõ chưa từng triển khai agent hoặc theo dõi chi phí, độ trễ hay độ tin cậy.",
+              "Khẳng định chưa xác minh thay đổi agent bằng kiểm thử hoặc theo dõi sau phát hành."
+            ],
+            "not_sufficient": [
+              "Không đề cập triển khai.",
+              "Chỉ mô tả chạy thử cục bộ mà không nói rõ thiếu kinh nghiệm vận hành."
+            ]
+          },
+          {
+            "score": 1,
+            "description": "Hỗ trợ phát hành hoặc theo dõi một chỉ số dưới quy trình có sẵn.",
+            "qualifying_evidence": [
+              "Mô tả cập nhật cấu hình/prompt trong quy trình phát hành hiện có và kiểm tra thủ công.",
+              "Nêu theo dõi một chỉ số chi phí hoặc độ trễ bằng dashboard có sẵn."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu triển khai thành công mà không có kiểm tra.",
+              "Chỉ nhắc chi phí hoặc độ trễ mà không đo lường."
+            ]
+          },
+          {
+            "score": 2,
+            "description": "Tự triển khai luồng agent thường lệ có phiên bản và theo dõi ngân sách/chất lượng cơ bản.",
+            "qualifying_evidence": [
+              "Mô tả phát hành có thể quay lại phiên bản trước và xác minh bằng kiểm thử.",
+              "Nêu theo dõi token/chi phí hoặc độ trễ cùng ngưỡng cảnh báo cho một dịch vụ agent."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu tối ưu prompt hoặc model mà không đo chi phí/độ tin cậy.",
+              "Chỉ phát hành mà không có kiểm thử hoặc theo dõi."
+            ]
+          },
+          {
+            "score": 3,
+            "description": "Xử lý sự cố/thoái hóa và đánh đổi chi phí-latency-reliability, xác minh biện pháp sau phát hành.",
+            "qualifying_evidence": [
+              "Mô tả phản ứng với tăng chi phí, độ trễ hoặc lỗi phụ thuộc bằng biện pháp giới hạn và đo kết quả.",
+              "Nêu phát hành canary/rollback hoặc kiểm tra sau phát hành để xác minh thay đổi không gây thoái hóa."
+            ],
+            "not_sufficient": [
+              "Chỉ nêu giảm chi phí mà không có chất lượng hoặc độ tin cậy được kiểm tra.",
+              "Chỉ có quy trình rollback nhưng không nêu sự cố hay xác minh."
+            ]
+          },
+          {
+            "score": 4,
+            "description": "Thiết kế vận hành và ngân sách ở cấp hệ thống, dẫn dắt độ tin cậy và cải tiến được xác minh.",
+            "qualifying_evidence": [
+              "Mô tả tiêu chuẩn phát hành, ngân sách chi phí/độ trễ và mục tiêu độ tin cậy dùng chung nhiều workflow.",
+              "Nêu dẫn dắt đánh giá sự cố hoặc tối ưu cấp hệ thống, đo tác động và theo dõi sau phát hành."
+            ],
+            "not_sufficient": [
+              "Chỉ tối ưu một endpoint hoặc một prompt.",
+              "Chỉ thiết lập dashboard mà không có quy trình vận hành và xác minh thay đổi."
+            ]
+          }
+        ],
+        "bilingual_terms": null
+      }
+    ],
+    "policy": {
+      "draft_status": "draft_unapproved",
+      "threshold": 70,
+      "core_minimum_scores": {},
+      "require_full_coverage": true,
+      "validation_status": "unvalidated_synthetic"
+    }
+  }
+}

@@ -12,8 +12,9 @@ try {
 test('screening payload binds decision replacement and rubric to the selected evidence result', () => {
   assert.deepEqual(workflow.screeningPayload?.({ kind:'hr_revision',id:'hr-2' }, ['react','testing'], 'advance', '  Đã đối chiếu đầy đủ bằng chứng về năng lực.  ', 'decision-1', 'rubric-2'), {
     effective_result:{kind:'hr_revision',id:'hr-2'}, reviewed_criterion_ids:['react','testing'], acknowledged:true,
-    outcome:'advance',reason:'Đã đối chiếu đầy đủ bằng chứng về năng lực.',expected_previous_decision_id:'decision-1',expected_rubric_version_id:'rubric-2'
+    outcome:'advance',reason:'Đã đối chiếu đầy đủ bằng chứng về năng lực.',clarification_resolution:null,expected_previous_decision_id:'decision-1',expected_rubric_version_id:'rubric-2'
   });
+  assert.equal(workflow.screeningPayload?.({ kind:'assessment_run',id:'run-1' }, ['python_backend'], 'not_advance', 'Đã xác minh với ứng viên và lưu kết luận rõ ràng.', 'decision-2', 'rubric-3', 'candidate_confirmed_no_experience')?.clarification_resolution, 'candidate_confirmed_no_experience');
 });
 test('waiting information and rejection route to HR follow-up instead of interview', () => {
   assert.equal(workflow.workflowTab?.('waiting_information'), 'revision');

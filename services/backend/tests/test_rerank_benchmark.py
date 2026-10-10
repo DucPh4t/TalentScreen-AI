@@ -10,8 +10,8 @@ ROOT=Path(__file__).resolve().parents[3]
 
 
 def test_extended_cli_plan_preserves_off_and_bounds_cost(capsys):
-    args=['plan','--dataset',str(ROOT/'fixtures/ai_benchmark/v2'),'--provider','mock','--profiles','hybrid,hybrid_agent',
-        '--cases','v2-node-01','--embedding-mode','scripted','--retrieval-version','v2','--max-cost-usd','1']
+    args=['plan','--dataset',str(ROOT/'fixtures/ai_benchmark/golden_100'),'--provider','mock','--profiles','hybrid,hybrid_agent',
+        '--cases','backend-003','--embedding-mode','scripted','--retrieval-version','v2','--max-cost-usd','1']
     assert main(args+['--rerank-mode','rerank','--reranker-provider','scripted'])==0
     import json
     result=json.loads(capsys.readouterr().out)
@@ -23,8 +23,8 @@ def test_extended_cli_plan_preserves_off_and_bounds_cost(capsys):
 
 def test_combined_preflight_rejects_budget_and_uncertainty():
     from app.services.evaluation.benchmark.reranking import plan_rerank_budget
-    inputs=load_inputs(ROOT/'fixtures/ai_benchmark/v2')
-    selection=select_runs(inputs,split=None,case_ids=('v2-node-01',),profiles=('hybrid',),seed=1)
+    inputs=load_inputs(ROOT/'fixtures/ai_benchmark/golden_100')
+    selection=select_runs(inputs,split=None,case_ids=('backend-003',),profiles=('hybrid',),seed=1)
     primary=plan_budget(inputs,selection,{'hybrid':benchmark_policy('hybrid',retrieval_version='v2')},model='mock',cap_usd=Decimal('1'),bound=context_bound('mock'))
     assert plan_rerank_budget(primary,selection,policy=policy(),reranker_provider='scripted',cap_usd=Decimal('1')).total_upper_usd==0
     with pytest.raises(ValueError):plan_rerank_budget(primary,selection,policy=policy(),reranker_provider='jev',cap_usd=Decimal('.001'))

@@ -57,6 +57,7 @@ def validate_canonical_rubric(rubric_data: dict[str, Any]) -> None:
         raise RubricValidationError(f"Rubric cần từ 2 đến 12 tiêu chí năng lực (hiện có {len(criteria)}).")
 
     seen_ids = set()
+    classified_must_ids: set[str] = set()
     total_weight = 0
 
     for crit in criteria:
@@ -70,6 +71,16 @@ def validate_canonical_rubric(rubric_data: dict[str, Any]) -> None:
         if cid in seen_ids:
             raise RubricValidationError(f"Trùng lặp tiêu chí '{cid}' trong rubric.")
         seen_ids.add(cid)
+
+        classification = crit.get("classification")
+        if classification is not None:
+            if classification not in {"must_have", "nice_to_have"}:
+                raise RubricValidationError(f"Phân loại tiêu chí '{cid}' phải là must_have hoặc nice_to_have.")
+            is_must = classification == "must_have"
+            if bool(crit.get("core", False)) != is_must:
+                raise RubricValidationError(f"Phân loại/core flag không khớp ở tiêu chí '{cid}'.")
+            if is_must:
+                classified_must_ids.add(cid)
 
         # Weight validation
         weight = crit.get("weight")
@@ -132,3 +143,20 @@ def validate_canonical_rubric(rubric_data: dict[str, Any]) -> None:
             raise RubricValidationError(f"Core minimum tham chiếu tiêu chí không có trong rubric: {sorted(unknown_core_ids)}")
         if any(not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 4 for value in core_minimum_scores.values()):
             raise RubricValidationError("Mức sàn mỗi tiêu chí core phải là số nguyên từ 0 đến 4.")
+        required_ids = policy.get("required_criterion_ids")
+        if required_ids is not None:
+            if not isinstance(required_ids, list) or any(not isinstance(value, str) for value in required_ids):
+                raise RubricValidationError("required_criterion_ids phải là danh sách ID tiêu chí.")
+            if len(required_ids) != len(set(required_ids)):
+                raise RubricValidationError("required_criterion_ids không được chứa ID trùng lặp.")
+            unknown_required_ids = set(required_ids) - seen_ids
+            if unknown_required_ids:
+                raise RubricValidationError(f"required_criterion_ids tham chiếu tiêu chí không có trong rubric: {sorted(unknown_required_ids)}")
+            if not required_ids and policy.get("require_full_coverage") is False:
+                raise RubricValidationError("Rubric cho phép thiếu evidence nhưng không thể để toàn bộ tiêu chí là optional.")
+            if classified_must_ids and set(required_ids) != classified_must_ids:
+                raise RubricValidationError("required_criterion_ids phải khớp chính xác các criterion được phân loại must_have.")
+            if set(core_minimum_scores) - set(required_ids):
+                raise RubricValidationError("Core floor chỉ được gán cho criterion thuộc required_criterion_ids.")
+        elif policy.get("require_full_coverage") is False:
+            raise RubricValidationError("Rubric cho phép thiếu evidence phải khai báo required_criterion_ids.")

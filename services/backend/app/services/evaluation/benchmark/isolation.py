@@ -138,9 +138,14 @@ def run_in_isolation(command: list[str]) -> int:
         _docker(['exec',container_id,'psql','-U','postgres','-d','talentscreen_benchmark','-v','ON_ERROR_STOP=1','-c',
                  "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"; "
                  "COMMENT ON DATABASE talentscreen_benchmark IS 'benchmark:"+nonce+"';"])
+        reranker_index = command.index('--reranker-provider') if '--reranker-provider' in command else -1
+        jev_key_required = (
+            os.environ.get('ASSESSMENT_SCORER_MODE', '').strip().casefold() == 'jev'
+            or (0 <= reranker_index < len(command) - 1 and command[reranker_index + 1].casefold() == 'jev')
+        )
         env={**os.environ,**context.private_environment(),'PYTHONPATH':'services/backend','APP_ENV':'sandbox',
              'PILOT_STAGE':'','JEV_MODE':'off','JEV_RERANK_MODE':'off',
-             'JEV_API_KEY':os.environ.get('JEV_API_KEY','') if '--reranker-provider' in command and command[command.index('--reranker-provider')+1]=='jev' else '',
+             'JEV_API_KEY':os.environ.get('JEV_API_KEY','') if jev_key_required else '',
              'HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1'}
         subprocess.run([sys.executable,'-m','alembic','upgrade','head'],env=env,check=True)
         child=subprocess.Popen(command,env=env)

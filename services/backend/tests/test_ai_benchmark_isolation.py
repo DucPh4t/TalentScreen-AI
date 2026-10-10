@@ -12,7 +12,7 @@ from app.services.evaluation.benchmark.dataset import load_inputs, select_runs, 
 from app.services.evaluation.benchmark.isolation import IsolationContext, assert_isolated_database, cleanup_owned_container
 from app.services.evaluation.benchmark.seed import seed_cases
 
-DATA = Path(__file__).resolve().parents[3] / 'fixtures/ai_benchmark/v1'
+DATA = Path(__file__).resolve().parents[3] / 'fixtures/ai_benchmark/golden_100'
 
 @pytest.fixture
 async def owned_context(test_session_factory, tmp_path, monkeypatch):
@@ -53,7 +53,7 @@ async def test_fake_isolation_flag_cannot_authorize_writes(test_session_factory,
         before = await db.scalar(select(func.count()).select_from(Application))
         inputs = load_inputs(DATA)
         with pytest.raises(ValueError, match='ISOLATION'):
-            await seed_cases(db, inputs, select_runs(inputs,split=None,case_ids=('node-01',), profiles=PROFILES,seed=1),
+            await seed_cases(db, inputs, select_runs(inputs,split=None,case_ids=('backend-008',), profiles=PROFILES,seed=1),
                              replace(owned_context,nonce='f'*32))
         assert await db.scalar(select(func.count()).select_from(Application)) == before
 
@@ -75,7 +75,7 @@ def test_cleanup_only_stops_owned_container(monkeypatch):
 @pytest.mark.asyncio
 async def test_seed_is_synthetic_approved_and_snapshot_consistent(test_session_factory, owned_context):
     inputs=load_inputs(DATA)
-    selection=select_runs(inputs,split=None,case_ids=('node-01','ai-01','android-01'),profiles=PROFILES,seed=1)
+    selection=select_runs(inputs,split=None,case_ids=('backend-008','backend-009','backend-011'),profiles=PROFILES,seed=1)
     async with test_session_factory() as db:
         seeded=await seed_cases(db,inputs,selection,owned_context)
         assert set(seeded)==set(selection.case_ids)
@@ -151,6 +151,8 @@ def test_wrapper_forwards_term_and_waits_before_cleanup(monkeypatch,tmp_path):
 def test_wrapper_sets_offline_flags_before_child_imports(monkeypatch,tmp_path):
     import app.services.evaluation.benchmark.isolation as isolation
     monkeypatch.delenv('HF_HUB_OFFLINE',raising=False);monkeypatch.delenv('TRANSFORMERS_OFFLINE',raising=False)
+    monkeypatch.setenv('ASSESSMENT_SCORER_MODE','deepseek')
+    monkeypatch.setenv('JEV_API_KEY','synthetic-jev-key')
     root=tmp_path/'offline-owned';root.mkdir();owner=None
     def fake(args):
         nonlocal owner
@@ -163,9 +165,35 @@ def test_wrapper_sets_offline_flags_before_child_imports(monkeypatch,tmp_path):
     def child(*args,**kwargs):
         assert kwargs['env']['HF_HUB_OFFLINE']=='1'
         assert kwargs['env']['TRANSFORMERS_OFFLINE']=='1'
+        assert kwargs['env']['JEV_API_KEY']==''
         return Child()
     monkeypatch.setattr(isolation.tempfile,'mkdtemp',lambda **kw:str(root))
     monkeypatch.setattr(isolation,'_docker',fake)
     monkeypatch.setattr(isolation.subprocess,'run',lambda *a,**k:None)
+    monkeypatch.setattr(isolation.subprocess,'Popen',child)
+    assert isolation.run_in_isolation(['python','child'])==0
+
+def test_wrapper_forwards_jev_key_for_primary_scoring(monkeypatch,tmp_path):
+    import app.services.evaluation.benchmark.isolation as isolation
+    monkeypatch.setenv('ASSESSMENT_SCORER_MODE','jev')
+    monkeypatch.setenv('JEV_API_KEY','synthetic-jev-key')
+    root=tmp_path/'jev-owned';root.mkdir();owner=None
+    def fake(args):
+        nonlocal owner
+        if args[0]=='run':owner=args[args.index('--label')+1].split('=',1)[1];return 'owned-id'
+        if args[0]=='port':return '127.0.0.1:54321'
+        if args[0]=='inspect':return owner
+        return ''
+    class Child:
+        def wait(self):return 0
+    def migration(*args,**kwargs):
+        assert kwargs['env']['JEV_API_KEY']=='synthetic-jev-key'
+        return type('Result',(),{'returncode':0})()
+    def child(*args,**kwargs):
+        assert kwargs['env']['JEV_API_KEY']=='synthetic-jev-key'
+        return Child()
+    monkeypatch.setattr(isolation.tempfile,'mkdtemp',lambda **kw:str(root))
+    monkeypatch.setattr(isolation,'_docker',fake)
+    monkeypatch.setattr(isolation.subprocess,'run',migration)
     monkeypatch.setattr(isolation.subprocess,'Popen',child)
     assert isolation.run_in_isolation(['python','child'])==0

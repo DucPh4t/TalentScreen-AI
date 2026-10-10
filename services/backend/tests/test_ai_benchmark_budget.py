@@ -22,7 +22,7 @@ from app.services.llm.types import CompletionRequest,CompletionResult,StrictRese
 from tests.test_llm_adapter import setup_llm_test_context
 from tests.test_assessment_agent import agent_context
 
-DATA=Path(__file__).resolve().parents[3]/'fixtures/ai_benchmark/v1'
+DATA=Path(__file__).resolve().parents[3]/'fixtures/ai_benchmark/golden_100'
 
 def byte_bound():
     return InputBound(strategy='verified_utf8',max_input_tokens=69632,max_serialized_bytes=65536,
@@ -31,7 +31,7 @@ def byte_bound():
 
 def test_plan_includes_unicode_tool_history_and_repairs():
     inputs=load_inputs(DATA)
-    selection=select_runs(inputs,split=None,case_ids=('node-01','ai-01','android-01'),profiles=PROFILES,seed=20261008)
+    selection=select_runs(inputs,split=None,case_ids=('backend-008','backend-009','backend-011'),profiles=PROFILES,seed=20261010)
     plan=plan_budget(inputs,selection,{p:benchmark_policy(p) for p in PROFILES},model='deepseek-flash',cap_usd=Decimal('5'),bound=byte_bound())
     assert plan.admitted and len(plan.combinations)==12
     assert all(c.max_calls==4 and c.max_output_tokens==4096 for c in plan.combinations)
@@ -43,18 +43,23 @@ def test_plan_includes_unicode_tool_history_and_repairs():
         policy.input_reservation_tokens(request)
     request.messages[1]['content']='é'*100
     assert policy.input_reservation_tokens(request)==69632
+    request.max_output_tokens=2048
+    assert policy.input_reservation_tokens(request)==69632
+    request.max_output_tokens=4097
+    with pytest.raises(PreconditionViolationError,match='BENCHMARK_REQUEST_POLICY_MISMATCH'):
+        policy.input_reservation_tokens(request)
 
 
 def test_over_budget_plan_makes_no_provider_calls():
     inputs=load_inputs(DATA)
     selection=select_runs(inputs,split='all',case_ids=(),profiles=PROFILES,seed=1)
     plan=plan_budget(inputs,selection,{p:benchmark_policy(p) for p in PROFILES},model='deepseek-flash',cap_usd=Decimal('5'),bound=byte_bound())
-    assert not plan.admitted and len(plan.combinations)==240
+    assert not plan.admitted and len(plan.combinations)==400
     with pytest.raises(ValueError,match='BUDGET'):
         validate_live_preflight(plan,provider_host='api.deepseek.com',pricing_verified_at='2026-10-08',model_available_locally=True)
     fallback=byte_bound().model_copy(update={'strategy':'model_context','max_input_tokens':1048576,
         'max_serialized_bytes':None,'framing_allowance':None,'tokenizer_artifact_sha256':None})
-    subset=select_runs(inputs,split=None,case_ids=('node-01','ai-01','android-01'),profiles=PROFILES,seed=1)
+    subset=select_runs(inputs,split=None,case_ids=('backend-008','backend-009','backend-011'),profiles=PROFILES,seed=1)
     assert not plan_budget(inputs,subset,{p:benchmark_policy(p) for p in PROFILES},model='deepseek-flash',cap_usd=Decimal('5'),bound=fallback).admitted
 
 @pytest.fixture

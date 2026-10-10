@@ -33,7 +33,7 @@ class StrictReservationPolicy:
     def input_reservation_tokens(self,request: CompletionRequest) -> int:
         from app.services.llm.orchestrator import PreconditionViolationError,_serialized_request_payload
         import json
-        if request.model!=self.requested_model or request.max_output_tokens!=4096 or request.temperature!=0 or request.provider!='deepseek':
+        if request.model!=self.requested_model or type(request.max_output_tokens) is not int or not 1<=request.max_output_tokens<=4096 or request.temperature!=0 or request.provider!='deepseek':
             raise PreconditionViolationError("BENCHMARK_REQUEST_POLICY_MISMATCH")
         serialized=_serialized_request_payload(request)
         if self.bound.max_serialized_bytes is not None:

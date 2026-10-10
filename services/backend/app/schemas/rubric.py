@@ -36,6 +36,7 @@ class RecommendationPolicyDTO(BaseModel):
     threshold: int = Field(default=70, ge=1, le=100)
     core_minimum_scores: dict[str, int] = Field(default_factory=dict)
     require_full_coverage: bool = True
+    required_criterion_ids: Optional[list[str]] = None
 
 
 class RubricCreateRequest(BaseModel):

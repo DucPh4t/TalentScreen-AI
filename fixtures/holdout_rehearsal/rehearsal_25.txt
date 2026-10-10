@@ -1,1 +1,0 @@
-Tôi thiết kế bảng lịch hẹn, thêm unique constraint và kiểm tra giao dịch đồng thời. Backend: wrote a Python validation helper used by another engineer's API; no endpoint ownership claimed.

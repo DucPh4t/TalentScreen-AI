@@ -117,7 +117,7 @@ Sources: [orchestrator](../services/backend/app/services/llm/orchestrator.py), [
 
 The benchmark accepts schema-limited rows and version manifests. It reports criterion-scoped retrieval/citation metrics, per-role/provider agreement, counterfactual checks, candidate-cluster bootstrap intervals, timing, and cost. Public fixtures are synthetic and visible; the CLI holdout flag is procedural friction, not access control.
 
-Dockerfiles and Compose configurations are present. Local software verification, independent hiring-quality validation, and public deployment readiness are separate checks. See [verification evidence](verification.md), [evaluation protocol](evaluation/rag-agent-benchmark-protocol.md), and [readiness gates](runbooks/rag-agent-readiness.md).
+Dockerfiles and Compose configurations are present. Local software verification, independent hiring-quality validation, and public deployment readiness are separate checks. See [verification evidence](verification.md), [independent human-labeled evaluation protocol](evaluation/independent-human-evaluation-design.md), and [readiness gates](runbooks/rag-agent-readiness.md).
 
 ## Optional passage reranking
 

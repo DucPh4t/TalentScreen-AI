@@ -45,26 +45,17 @@ Before moving from Sandbox $\rightarrow$ Real Shadow $\rightarrow$ Assisted Pilo
 | Gate | Category | Required Evidence | Disallowed Shortcuts | Status |
 |---|---|---|---|---|
 | **G1** | Permissions & Config | DeepSeek permission, valid key, live capability probe, current rate card and budget cap | Merely having API key | **PARTIAL: SYNTHETIC API PROBE PASS; ACCOUNT, BUDGET AND APP INTEGRATION PENDING** |
-| **G2** | Business Policy | Dated HR Owner & IT approval of JD, six rubric criteria, weights and thresholds | Seed rubric or one AI acting in both roles | **PENDING_HR_IT**; delegated AI review approved sandbox rehearsal only (see `docs/reviews/simulated-hr-it-roleplay-2026-09-27.md`) |
+| **G2** | Business Policy | Dated HR Owner & IT approval of the JD, rubric criteria, weights and thresholds | Seed rubric or one AI acting in both roles | **PENDING_HR_IT** |
 | **G3** | Privacy & Data | Sanitization review on representative vi/en/mixed CVs, raw grant and egress audit | Unit tests alone | **PENDING_EVIDENCE** |
 | **G4** | Technical Invariants | Clean-checkout CI and local test reports, including concurrency and recovery | Commit message claiming tests pass | **PARTIAL: 131 ISOLATED BACKEND TESTS + BRANCH CI + INTEGRATED NEXT.JS BUILD PASS; 3/30 INITIAL SYNTHETIC CONTRACT FAILURES PASSED KNOWN-CASE RERUN; SCORING AND REAL-CV FLOW PENDING** |
-| **G5** | Evaluation Quality | Independent HR labels, recorded AI predictions, frozen holdout of 30 families and real-shadow report. Draft targets for HR/IT approval: conditional MAE ≤0.75/4, human-assessable coverage ≥85%, linear weighted kappa ≥0.60, with error audit | Synthetic scenario expectations or self-comparison | **PENDING_DATA** |
+| **G5** | Evaluation Quality | Independent JD-derived retrieval judgments and HR/IT blind rubric labels, adjudication, candidate/JD-disjoint holdout, separated retrieval and assessment metrics, and error audit | Synthetic scenario expectations, same-CV query/evidence, or self-comparison | **PENDING_DATA** — follow the [independent human-labeled evaluation protocol](../evaluation/independent-human-evaluation-design.md) |
 | **G6** | Operations | Measured load/SLO and cost report, dated restore/delete/rollback drill artifacts | Runbook text alone | **PARTIAL: SYNTHETIC BACKUP/RESTORE DRILL PASS; DELETE/ROLLBACK/LOAD PENDING** |
 | **G7** | User Training | Backend-recorded sandbox completion and HR UAT sign-off | Offline local state | **PENDING_HR** |
 
 ---
 
-## 5. Shadow Evaluation Report Template
+## 5. Evaluation package and report
 
-After HR reviewers label cases before viewing AI outputs, export only pseudonymous IDs, rubric scores, recommendations and run metadata to private JSONL files described in `docs/evaluation-data-contract.md`. Never commit real candidate labels or predictions. Run:
-```bash
-.venv/bin/python scripts/eval_harness.py \
-  --predictions private_storage/eval/ai_predictions.jsonl \
-  --labels private_storage/eval/hr_blind_labels.jsonl \
-  --split real_shadow \
-  --output private_storage/eval/shadow_report.json
-```
+Use the package and CLI in the [independent human-labeled evaluation design](../evaluation/independent-human-evaluation-design.md), not the legacy `scripts/eval_harness.py` format. The package is local-only and hash-pinned; individual blind labels and the adjudicated reference are retained separately. The CLI emits only aggregate metrics. Do not commit any real CV, evidence quote, PII, candidate/JD key, annotation, prediction, or private output to Git.
 
-The report records matched and missing counts, conditional MAE, human-assessable coverage, linear weighted kappa on 0..4 scores, recommendation agreement, language breakdown and observed usage when supplied. `gate_eligible` is a data-completeness hint, **not** an approval. Human reviewers must inspect error cases and sign the gate. Do not label a group with no comparable scores or an undefined kappa as PASS.
-
-The synthetic DeepSeek prompt rehearsal, three-case regression and remaining scoring disagreements are documented in `docs/reviews/synthetic-deepseek-assessment-2026-09-27.md`. Its comparison with one assistant's role-play annotations is diagnostic only; it cannot satisfy G5.
+Retrieval and rubric assessment are separate tasks with separate denominators. `not_evidenced` remains a null score and must not be counted as a zero. A metric is not a gate pass: reviewers inspect disagreements, approve thresholds before holdout, and sign each gate themselves. No new independent HR/IT evaluation has run yet.

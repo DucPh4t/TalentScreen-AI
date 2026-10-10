@@ -21,37 +21,57 @@ from app.db.models.document import SanitizedVersion
 from app.db.models.requisition import Requisition, RequisitionMembership, RubricCriterion, RubricVersion
 from app.domain.authorization import AuthenticatedContext
 from app.domain.enums import AccountRole, CriterionOutcome, Recommendation, SanitizedVersionStatus
+from app.services.assessment.scoring import DEFAULT_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
 
 class ShortlistTier(str, Enum):
     RECOMMEND = "recommend"
-    BORDERLINE = "borderline"
     BELOW_THRESHOLD = "below_threshold"
     CORE_FAIL = "core_fail"
+    NEEDS_CLARIFICATION = "needs_clarification"
+    REVIEW_REQUIRED = "review_required"
     NOT_ASSESSED = "not_assessed"
 
 
 TIER_DISPLAY_NAMES = {
-    ShortlistTier.RECOMMEND.value: "Khuyến nghị ưu tiên (Recommend)",
-    ShortlistTier.BORDERLINE.value: "Cân nhắc / Phỏng vấn thêm (Borderline)",
-    ShortlistTier.BELOW_THRESHOLD.value: "Dưới ngưỡng tiêu chuẩn (Below Threshold)",
-    ShortlistTier.CORE_FAIL.value: "Thiếu kỹ năng cốt lõi (Core Incomplete)",
+    ShortlistTier.RECOMMEND.value: "Đạt ngưỡng tham khảo — HR/IT cân nhắc",
+    ShortlistTier.BELOW_THRESHOLD.value: "Dưới ngưỡng tham khảo — HR/IT xem xét",
+    ShortlistTier.CORE_FAIL.value: "Must-have dưới floor — cần HR/IT xem xét",
+    ShortlistTier.NEEDS_CLARIFICATION.value: "Cần HR làm rõ evidence",
+    ShortlistTier.REVIEW_REQUIRED.value: "Cần HR/IT đối chiếu trực tiếp",
     ShortlistTier.NOT_ASSESSED.value: "Chưa có đánh giá hiện hành (Not Assessed)",
 }
+
+
+def classify_shortlist_tier(
+    *, has_current_assessment: bool, comparable_score: Optional[float],
+    core_failed: bool, threshold: float, recommendation: Optional[str] = None,
+) -> ShortlistTier:
+    """Group for human review; a tier is never an automatic hiring decision."""
+    if not has_current_assessment:
+        return ShortlistTier.NOT_ASSESSED
+    if comparable_score is None:
+        return (
+            ShortlistTier.NEEDS_CLARIFICATION
+            if recommendation == Recommendation.NEEDS_CLARIFICATION.value
+            else ShortlistTier.REVIEW_REQUIRED
+        )
+    if core_failed:
+        return ShortlistTier.CORE_FAIL
+    return ShortlistTier.RECOMMEND if comparable_score >= threshold else ShortlistTier.BELOW_THRESHOLD
 
 
 async def compute_requisition_shortlist(
     db: AsyncSession,
     requisition_id: uuid.UUID,
     ctx: AuthenticatedContext,
-    custom_threshold: Optional[float] = None,
 ) -> dict[str, Any]:
     """Compute ranked shortlist for a requisition.
     Guarantees:
       - Strictly scoped to requisition membership or Admin role.
-      - Incomplete/stale assessment runs are flagged as NOT_ASSESSED and excluded from score ranks.
+      - Missing must-have evidence is shown for HR clarification, never as automatic rejection.
       - Transparent breakdown of core criteria status, missing evidence, and top strengths.
     """
     # 1. Access verification
@@ -76,7 +96,7 @@ async def compute_requisition_shortlist(
             "requisition_id": str(requisition_id),
             "requisition_title": req.title,
             "rubric_version_id": None,
-            "threshold": 70.0,
+            "threshold": float(DEFAULT_THRESHOLD),
             "total_candidates": 0,
             "assessed_candidates": 0,
             "tier_summary": {tier.value: 0 for tier in ShortlistTier},
@@ -95,7 +115,7 @@ async def compute_requisition_shortlist(
 
     criteria_list = sorted(rubric.criteria, key=lambda c: c.criterion_id)
     threshold_config = rubric.threshold_config or {}
-    base_threshold = float(custom_threshold if custom_threshold is not None else threshold_config.get("threshold", 70.0))
+    base_threshold = float(threshold_config.get("threshold", DEFAULT_THRESHOLD))
     core_mins = threshold_config.get("core_minimum_scores", {})
     if not isinstance(core_mins, dict):
         core_mins = {}
@@ -141,7 +161,7 @@ async def compute_requisition_shortlist(
             sv = await db.get(SanitizedVersion, app.current_sanitized_version_id)
             valid = bool(sv and sv.status == SanitizedVersionStatus.APPROVED)
 
-        if not valid or run is None or run.comparable_score is None:
+        if not valid or run is None:
             tier = ShortlistTier.NOT_ASSESSED
             tier_counts[tier.value] += 1
             candidate_records.append({
@@ -166,7 +186,7 @@ async def compute_requisition_shortlist(
             })
             continue
 
-        comp_score = float(run.comparable_score)
+        comp_score = float(run.comparable_score) if run.comparable_score is not None else None
         coverage = float(run.coverage)
         obs_score = float(run.observed_score) if run.observed_score is not None else None
         rec_val = run.recommendation.value if run.recommendation else None
@@ -210,14 +230,13 @@ async def compute_requisition_shortlist(
                     core_failed_criteria.append(c.label_vi)
 
         # Determine Tier
-        if core_failed_criteria:
-            tier = ShortlistTier.CORE_FAIL
-        elif comp_score >= base_threshold:
-            tier = ShortlistTier.RECOMMEND
-        elif comp_score >= max(0.0, base_threshold - 15.0):
-            tier = ShortlistTier.BORDERLINE
-        else:
-            tier = ShortlistTier.BELOW_THRESHOLD
+        tier = classify_shortlist_tier(
+            has_current_assessment=True,
+            comparable_score=comp_score,
+            core_failed=bool(core_failed_criteria),
+            threshold=base_threshold,
+            recommendation=rec_val,
+        )
 
         tier_counts[tier.value] += 1
         candidate_records.append({
@@ -237,7 +256,7 @@ async def compute_requisition_shortlist(
             "criteria_scores": scores_payload,
             "has_decision": bool(app.current_decision_id),
             "received_at": app.received_at.isoformat() if app.received_at else None,
-            "raw_comp_score": comp_score,
+            "raw_comp_score": comp_score if comp_score is not None else -1.0,
             "raw_coverage": coverage,
         })
 
@@ -245,14 +264,15 @@ async def compute_requisition_shortlist(
     # Tier sort order
     tier_order = {
         ShortlistTier.RECOMMEND.value: 1,
-        ShortlistTier.BORDERLINE.value: 2,
-        ShortlistTier.BELOW_THRESHOLD.value: 3,
-        ShortlistTier.CORE_FAIL.value: 4,
-        ShortlistTier.NOT_ASSESSED.value: 5,
+        ShortlistTier.BELOW_THRESHOLD.value: 2,
+        ShortlistTier.CORE_FAIL.value: 3,
+        ShortlistTier.NEEDS_CLARIFICATION.value: 4,
+        ShortlistTier.REVIEW_REQUIRED.value: 5,
+        ShortlistTier.NOT_ASSESSED.value: 6,
     }
 
-    assessed_candidates = [c for c in candidate_records if c["tier"] != ShortlistTier.NOT_ASSESSED.value]
-    unassessed_candidates = [c for c in candidate_records if c["tier"] == ShortlistTier.NOT_ASSESSED.value]
+    assessed_candidates = [c for c in candidate_records if c["tier"] not in {ShortlistTier.NOT_ASSESSED.value, ShortlistTier.NEEDS_CLARIFICATION.value, ShortlistTier.REVIEW_REQUIRED.value}]
+    unranked_candidates = [c for c in candidate_records if c["tier"] in {ShortlistTier.NOT_ASSESSED.value, ShortlistTier.NEEDS_CLARIFICATION.value, ShortlistTier.REVIEW_REQUIRED.value}]
 
     # Sort assessed by: Tier priority (asc), Comparable Score (desc), Coverage (desc)
     assessed_candidates.sort(
@@ -268,14 +288,18 @@ async def compute_requisition_shortlist(
         del c["raw_comp_score"]
         del c["raw_coverage"]
 
-    for c in unassessed_candidates:
+    for c in unranked_candidates:
         del c["raw_comp_score"]
         del c["raw_coverage"]
 
-    final_candidates = assessed_candidates + unassessed_candidates
+    final_candidates = assessed_candidates + unranked_candidates
 
     assessed_scores = [c["comparable_score"] for c in assessed_candidates if c["comparable_score"] is not None]
     avg_score = round(sum(assessed_scores) / len(assessed_scores), 1) if assessed_scores else None
+    clarification_count = sum(
+        1 for candidate in candidate_records
+        if candidate.get("recommendation") == Recommendation.NEEDS_CLARIFICATION.value
+    )
 
     return {
         "requisition_id": str(requisition_id),
@@ -283,8 +307,9 @@ async def compute_requisition_shortlist(
         "rubric_version_id": str(rubric.id),
         "threshold": base_threshold,
         "total_candidates": len(candidate_records),
-        "assessed_candidates": len(assessed_candidates),
-        "shortlisted_candidates": tier_counts[ShortlistTier.RECOMMEND.value] + tier_counts[ShortlistTier.BORDERLINE.value],
+        "assessed_candidates": len(candidate_records) - tier_counts[ShortlistTier.NOT_ASSESSED.value],
+        "shortlisted_candidates": tier_counts[ShortlistTier.RECOMMEND.value],
+        "clarification_candidates": clarification_count,
         "average_score": avg_score,
         "tier_summary": tier_counts,
         "criteria": [

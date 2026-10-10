@@ -269,7 +269,7 @@ class JevHTTPXProvider(BaseLLMProvider):
             reported_model=result.model_version or result.model,
             finish_reason="stop",
             input_tokens=usage.get("input_tokens"),
-            output_tokens=usage.get("output_tokens", 0),
+            output_tokens=usage.get("output_tokens"),
             provider_request_id=None,
             latency_ms=int((time.monotonic() - started) * 1000),
             raw_response=result.model_dump(mode="json"),

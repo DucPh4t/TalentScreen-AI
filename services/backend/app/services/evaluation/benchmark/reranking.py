@@ -1,28 +1,16 @@
-"""Versioned two-provider experiments, separate references and conservative admission."""
+"""Versioned reranking-provider experiments with conservative admission."""
 from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-import hashlib
 import json
-import math
 from typing import Literal
-from pydantic import Field
 from .contracts import Contract,BudgetPlan,RunManifest,MetricsReport
-from .metrics import rate,mean,percentile,paired_cluster_interval
-from app.services.reranking.contracts import PassagePair,RerankPolicy,canonical,OPTIONS
+from app.services.reranking.contracts import RerankPolicy,canonical,OPTIONS
 from app.services.llm.types import CompletionResult
 from app.services.llm.provider import BaseLLMProvider
 
 
-class PairReferenceDataset(Contract):
-    input_pairs:tuple[PassagePair,...]
-    design_labels:dict[str,str]
-    independent_grades:dict[str,int]|None
-    sufficient_groups:dict[str,tuple[tuple[str,...],...]]
-    limiting_pair_ids:tuple[str,...]
-    contradictory_pair_groups:tuple[tuple[str,str],...]
-    hashes:dict[str,str]
 
 
 class MultiProviderBudgetPlan(Contract):
@@ -59,18 +47,6 @@ def load_run_manifest(raw:str)->RunManifest:
     return (RerankRunManifest if obj.get('schema_version')=='ai-benchmark-run.rerank.v1' else RunManifest).model_validate(obj)
 
 
-def load_pair_references(root:Path)->PairReferenceDataset:
-    manifest=json.loads((root/'manifest.json').read_text());hashes={}
-    for name in ('pairs.json','references.json'):
-        path=root/name
-        if path.is_symlink():raise ValueError('RERANK_DATASET_HASH_INVALID')
-        hashes[name]=hashlib.sha256(path.read_bytes()).hexdigest()
-        if manifest['files'].get(name)!=hashes[name]:raise ValueError('RERANK_DATASET_HASH_MISMATCH')
-    pairs=tuple(PassagePair.model_validate(p) for p in json.loads((root/'pairs.json').read_text()))
-    refs=json.loads((root/'references.json').read_text())
-    if set(refs['design_labels'])!={p.pair_id for p in pairs} or set(refs['design_labels'].values())-set(OPTIONS):
-        raise ValueError('RERANK_REFERENCE_INVALID')
-    return PairReferenceDataset(input_pairs=pairs,hashes=hashes,**refs)
 
 
 def verify_provider_bounds(policy:RerankPolicy)->dict:
@@ -124,42 +100,3 @@ class ScriptedJevProvider(BaseLLMProvider):
             requested_model=request.model,reported_model='scripted-jev-v1',input_tokens=0,output_tokens=0,latency_ms=0)
 
 
-def evaluate_rerank_records(dataset:PairReferenceDataset,records:list[dict],*,seed:int)->dict:
-    # Records are evaluator-only: case_id, mode, status, ranked_pair_ids, selected_pair_ids,
-    # unscored_pair_ids, predicted_categories, elapsed_ms and optional paired baseline coverage.
-    complete=[r for r in records if r['status']=='ok'];keys={p.pair_id for p in dataset.input_pairs}
-    for r in records:
-        scope=set(r.get('input_pair_ids',keys))
-        if (not scope or scope-keys or set(r.get('ranked_pair_ids',()))-scope
-            or set(r.get('selected_pair_ids',()))-scope or set(r.get('unscored_pair_ids',()))-scope
-            or set(r.get('predicted_categories',{}))-scope):
-            raise ValueError('RERANK_RECORD_SCOPE_INVALID')
-    exclusions=possible=negative_kept=negative_possible=conflict_kept=conflict_possible=0
-    recall5=[];recall10=[];coverage=[];ndcg=[];pairs=[]
-    for r in complete:
-        selected=set(r['selected_pair_ids']);ranked=r['ranked_pair_ids']
-        scope=set(r.get('input_pair_ids',keys))
-        relevant={pid for pid,label in dataset.design_labels.items() if pid in scope and label in {'substantive_evidence','limiting_evidence'}}
-        limiting=set(dataset.limiting_pair_ids)&scope
-        conflicts=[g for g in dataset.contradictory_pair_groups if set(g)<=scope]
-        sufficient={cid:tuple(g for g in groups if set(g)<=scope) for cid,groups in dataset.sufficient_groups.items()}
-        sufficient={cid:groups for cid,groups in sufficient.items() if groups}
-        possible+=len(relevant);exclusions+=len(relevant-set(ranked))
-        negative_possible+=len(limiting);negative_kept+=len(limiting&selected)
-        conflict_possible+=len(conflicts);conflict_kept+=sum(set(g)<=selected for g in conflicts)
-        recall5.append(rate(len(relevant&set(ranked[:5])),len(relevant)));recall10.append(rate(len(relevant&set(ranked[:10])),len(relevant)))
-        cv_covered=sum(any(set(g)<=selected for g in groups) for groups in sufficient.values())
-        cv_rate=rate(cv_covered,len(sufficient));coverage.append(cv_rate)
-        if cv_rate is not None and r.get('baseline_coverage') is not None:pairs.append((r['case_id'],r['baseline_coverage'],cv_rate))
-        if dataset.independent_grades:
-            grades={pid:g for pid,g in dataset.independent_grades.items() if pid in scope}
-            dcg=sum((2**grades.get(pid,0)-1)/math.log2(i+2) for i,pid in enumerate(ranked[:4]))
-            ideal=sum((2**g-1)/math.log2(i+2) for i,g in enumerate(sorted(grades.values(),reverse=True)[:4]))
-            if ideal:ndcg.append(dcg/ideal)
-    times=[r['elapsed_ms'] for r in complete if r.get('elapsed_ms') is not None]
-    return {'origin':'synthetic_design_expected','planned_records':len(records),'completed_records':len(complete),
-        'failed_records':len(records)-len(complete),'false_exclusion_rate':rate(exclusions,possible),
-        'limiting_retention':rate(negative_kept,negative_possible),'contradictory_group_retention':rate(conflict_kept,conflict_possible),
-        'recall_at_5':mean([v for v in recall5 if v is not None]),'recall_at_10':mean([v for v in recall10 if v is not None]),
-        'sufficient_group_delivery':mean([v for v in coverage if v is not None]),'ndcg_at_4':mean(ndcg),
-        'p50_ms':percentile(times,.5),'p95_ms':percentile(times,.95),'paired_coverage_ci':paired_cluster_interval(pairs,seed=seed)}

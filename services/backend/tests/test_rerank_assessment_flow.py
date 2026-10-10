@@ -80,8 +80,8 @@ async def test_actual_two_multi_criterion_tools_and_repair_share_call_caps(test_
             else:result={'criteria':[{'criterion_id':c['criterion_id'],'status':'insufficient_evidence','score':None,'evidence':[],
                 'rationale':'Synthetic tool/repair contract','missing_information':['Clarify individual responsibility']} for c in body['rubric']]}
             return CompletionResult(content=json.dumps(result),requested_model='mock',reported_model='mock',input_tokens=0,output_tokens=0)
-    root=Path(__file__).resolve().parents[3];inputs=load_inputs(root/'fixtures/ai_benchmark/v2')
-    sel=select_runs(inputs,split=None,case_ids=('v2-node-01',),profiles=('hybrid_agent',),seed=1)
+    root=Path(__file__).resolve().parents[3];inputs=load_inputs(root/'fixtures/ai_benchmark/golden_100')
+    sel=select_runs(inputs,split=None,case_ids=('backend-003',),profiles=('hybrid_agent',),seed=1)
     b=plan_budget(inputs,sel,{'hybrid_agent':benchmark_policy('hybrid_agent',retrieval_version='v2')},model='mock',cap_usd=Decimal('1'),bound=context_bound('mock'))
     p=experiment_policy('rerank','scripted',settings);rb=plan_rerank_budget(b,sel,policy=p,reranker_provider='scripted',cap_usd=Decimal('1'))
     async with test_session_factory() as db:

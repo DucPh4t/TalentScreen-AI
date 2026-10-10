@@ -1,0 +1,13 @@
+{
+  "schema_version": "human-evaluation-package.v1",
+  "source_name": "REPLACE_WITH_AUTHORIZED_SOURCE_NAME",
+  "source_snapshot": "REPLACE_WITH_IMMUTABLE_SOURCE_REVISION_OR_EXPORT_ID",
+  "source_sha256": "REPLACE_WITH_64_HEX_SHA256_OF_PINNED_LOCAL_SOURCE_MANIFEST",
+  "permission_ref": "REPLACE_WITH_LOCAL_APPROVAL_OR_CONSENT_REFERENCE",
+  "files": {
+    "annotations.json": "REPLACE_WITH_64_HEX_SHA256_OF_EXACT_ANNOTATION_BYTES"
+  },
+  "source_files": {
+    "sources/REPLACE_WITH_SOURCE_SHA256.blob": "REPLACE_WITH_THE_SAME_SOURCE_FILE_SHA256"
+  }
+}

@@ -1,6 +1,6 @@
 # 06 — Kiểm thử, đánh giá AI và điều kiện nghiệm thu
 
-> Historical MVP proposal (26 September 2026), retained as the source of the legacy benchmark threshold profile. This is not the current runtime setup or a record of passing gates. See [current readiness](../runbooks/rag-agent-readiness.md), [reproduction](ai-benchmark-reproducibility.md), and the root README for current commands.
+> Historical MVP proposal (26 September 2026), retained as an earlier policy record. It is not current runtime configuration or a gate result. See [current readiness](../runbooks/rag-agent-readiness.md) and the [independent human-labeled evaluation design](independent-human-evaluation-design.md).
 
 Ngày 2026-09-26. Đây là kế hoạch kiểm chứng, không phải báo cáo kết quả. Chưa có corpus CV, HR labels, capability probe, load test hoặc KPI thực tế. Bộ bàn giao ban đầu đã được tinh gọn; nguồn vận hành lịch sử nằm ở [legacy operations](legacy-mvp-operations-policy.md).
 
