@@ -19,8 +19,6 @@ Approved visual redesign in `codex/rag-agent-implementation`: compact recruitmen
 
 UI QA ran on isolated localhost services with synthetic documents and the mock primary provider; Jev was off. No real CVs were uploaded in this redesign task, no live model quality was tested, and no hiring decision was recorded. The preview runs at port 2006 in the worktree, separate from the existing main-checkout service at port 2004.
 
-## Screenshots
+## Visual verification
 
-![Desktop dashboard](hr-redesign-desktop-2026-10-07.jpg)
-
-![Mobile candidate assessment](hr-redesign-mobile-2026-10-07.jpg)
+Desktop and mobile captures used synthetic records on 7 October 2026. Screenshot files are intentionally omitted; the viewport and interaction results above remain the verification record.

@@ -48,7 +48,7 @@ Lần chấm mock đầu tiên của demo thực sự thất bại do thiếu De
 - Readiness `/api/v1/admin/readiness`: HTTP 200, database/storage/schema true. Readiness này không đo AI quality hay worker heartbeat.
 - PDF gốc synthetic `/api/v1/documents/7766f990-246e-4382-b450-87fdfde0572e/raw-preview`: HTTP 200 application/pdf, bytes bắt đầu bằng %PDF với raw grant còn hiệu lực.
 - Browser: đăng nhập → dashboard → đợt có ba hồ sơ → chi tiết hồ sơ → tab Rà soát CV. Văn bản đã che lấy từ PDF; CV gốc được tải sau khi cấp raw_cv, kết xuất lên canvas với điều hướng trang. Thử trực tiếp native iframe cho kết quả trắng nên đã dùng PDF.js. Tab đánh giá ghi rõ mock không đánh giá năng lực, cả sáu tiêu chí N/A, coverage 0; không coi là điểm thật.
-- Ảnh màn hình: [CV demo và văn bản đã che](app-cv-demo-2026-10-05.png), [CV PDF hiển thị trong viewer](app-cv-pdf-viewer-2026-10-05.png).
+- Browser verification used synthetic demo CVs and local PDF rendering; the screenshots were removed, while the interaction and test results remain documented above.
 
 Không kiểm thử lại Docker/cloud/TLS, provider live, DOCX/OCR, PDF nhiều trang, tải 50–100 CV, export hoặc toàn bộ luồng quyết định HR ở browser trong lượt này. Các báo cáo trước có phạm vi và ngày riêng.
 

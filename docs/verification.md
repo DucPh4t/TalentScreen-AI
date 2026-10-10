@@ -45,7 +45,7 @@ This is a map of tests, not a code-coverage percentage or security certification
 
 The [redesign review](reviews/2026-10-07-hr-workspace-redesign.md) records two isolated synthetic deployment smoke runs covering auth/CSRF, JD/rubric approval, upload/worker processing, redacted-text approval, hybrid mock assessment, validation, comparison, role isolation, metrics, and logout.
 
-Browser checks used a disposable synthetic database and mock primary provider; Jev was off. No real CVs or hiring decisions were used. [Desktop](reviews/hr-redesign-desktop-2026-10-07.jpg) and [mobile](reviews/hr-redesign-mobile-2026-10-07.jpg) screenshots are committed with the review.
+Browser checks used a disposable synthetic database and mock primary provider; Jev was off. No real CVs or hiring decisions were used. Desktop and mobile captures used synthetic records; the image files are no longer retained in this repository.
 
 ## Model-quality evidence still required
 

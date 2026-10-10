@@ -83,12 +83,10 @@ MVP vẫn gồm 6 tiêu chí Backend Python và full-text baseline. Rubric đa v
 
 Local `.env` giữ `LLM_PROVIDER=mock` và có key đã cấu hình. Lượt live chạy bằng env staging riêng, không tự bật batch trả phí trên dữ liệu thật. Có thể chuyển provider sau khi kiểm tra chính sách/ngân sách và công việc đang chờ.
 
-## Ảnh nghiệm thử
+## Visual verification
 
-![Desktop assessment synthetic](ux-implementation-2026-10-01.jpg)
-
-Ảnh dài: [toàn bộ trang assessment](ux-implementation-2026-10-01-full.jpg). Không có thông tin ứng viên thật hoặc key trong các ảnh này.
+Desktop and full-page assessment captures used synthetic data and are not retained in the repository. The interaction findings and environment details above remain the record; no real applicant CV or credential was present.
 
 ## Dọn môi trường test
 
-Compose project talentscreen-ux-review cùng network/volumes synthetic đã được dọn sau nghiệm thử; env test chứa khóa cũng đã xóa. Ảnh và metadata không nhạy cảm được giữ trong báo cáo. Reservation outcome_unknown nêu trên là trạng thái quan sát trước khi dọn database staging; chưa đối soát hóa đơn DeepSeek. App local, .env gốc, database và CV thật được giữ.
+Compose project talentscreen-ux-review cùng network/volumes synthetic đã được dọn sau nghiệm thử; env test chứa khóa cũng đã xóa. Reservation outcome_unknown nêu trên là trạng thái quan sát trước khi dọn database staging; chưa đối soát hóa đơn DeepSeek. App local, .env gốc, database và CV thật được giữ.

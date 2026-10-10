@@ -45,9 +45,9 @@ The datetime field needed a native keyboard edit after the browser automation’
 
 Checked **390×844, 820×1180 and 1440×900** layouts; document scroll width matched viewport width at all three. The mobile round selector and question button now stack, and preparation inputs use the shared form styling. Tables/navigation may scroll within their own containers. Temporary viewport overrides were reset.
 
-![Synthetic interview summary on mobile](hr-interview-b-mobile-2026-10-08.png)
+### Visual evidence
 
-![Synthetic human conclusion; no offer created](hr-interview-b-conclusion-2026-10-08.png)
+Mobile interview summary and human-conclusion screens were checked with synthetic records. Screenshot files are not retained in this repository.
 
 ### Integration rulings
 
